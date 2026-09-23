@@ -123,6 +123,18 @@ export const SETTING_GROUPS: SettingGroup[] = [
     description: '自动备份、缓存与数据清理',
     icon: 'database',
   },
+  {
+    key: 'oauth',
+    name: '第三方登录',
+    description: 'GitHub / Gitee / Google / 自定义 OAuth2 登录与账号绑定',
+    icon: 'key-round',
+  },
+  {
+    key: 'hack',
+    name: 'Hack 与成就',
+    description: 'Hack 系统规则、奖励与成就徽章',
+    icon: 'swords',
+  },
 ];
 
 const langOptions = [
@@ -1456,6 +1468,313 @@ export const SETTINGS: SettingField[] = [
     group: 'maintenance',
   },
 ];
+
+/** OAuth2 provider presets: the default endpoints are pre-filled, the admin only
+ *  needs to paste the client id / secret issued by the provider. */
+export interface OAuthPreset {
+  id: string;
+  name: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  userInfoUrl: string;
+  scope: string;
+  hint: string;
+}
+
+export const OAUTH_PRESETS: OAuthPreset[] = [
+  {
+    id: 'github',
+    name: 'GitHub',
+    authorizeUrl: 'https://github.com/login/oauth/authorize',
+    tokenUrl: 'https://github.com/login/oauth/access_token',
+    userInfoUrl: 'https://api.github.com/user',
+    scope: 'read:user user:email',
+    hint: '在 GitHub → Settings → Developer settings → OAuth Apps 创建应用，回调地址填写 {site}/api/auth/oauth/github/callback',
+  },
+  {
+    id: 'gitee',
+    name: 'Gitee 码云',
+    authorizeUrl: 'https://gitee.com/oauth/authorize',
+    tokenUrl: 'https://gitee.com/oauth/token',
+    userInfoUrl: 'https://gitee.com/api/v5/user',
+    scope: 'user_info',
+    hint: '在 Gitee → 设置 → 第三方应用 创建应用，回调地址填写 {site}/api/auth/oauth/gitee/callback',
+  },
+  {
+    id: 'google',
+    name: 'Google',
+    authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    userInfoUrl: 'https://www.googleapis.com/oauth2/v3/userinfo',
+    scope: 'openid email profile',
+    hint: '在 Google Cloud Console → API 和服务 → 凭据 创建 OAuth 客户端，回调地址填写 {site}/api/auth/oauth/google/callback',
+  },
+  {
+    id: 'custom',
+    name: '自定义 OAuth2',
+    authorizeUrl: '',
+    tokenUrl: '',
+    userInfoUrl: '',
+    scope: 'read',
+    hint: '适用于自建 OAuth2 服务（如自建 GitLab、Authentik 等），需填写授权 / 令牌 / 用户信息三个地址；用户信息接口需返回 id、name、email、avatar_url 字段。',
+  },
+];
+
+const oauthFields: SettingField[] = [
+  {
+    key: 'oauth_enabled',
+    label: '启用第三方登录',
+    type: 'boolean',
+    default: true,
+    group: 'oauth',
+    description: '总开关，关闭后所有第三方登录入口都会隐藏',
+    public: true,
+  },
+  {
+    key: 'oauth_auto_register',
+    label: '允许自动注册',
+    type: 'boolean',
+    default: true,
+    group: 'oauth',
+    description: '第三方账号首次登录时自动创建本地账号',
+    public: true,
+  },
+  {
+    key: 'oauth_allow_bind',
+    label: '允许已登录用户绑定',
+    type: 'boolean',
+    default: true,
+    group: 'oauth',
+    public: true,
+  },
+  {
+    key: 'oauth_bind_by_email',
+    label: '按邮箱自动绑定已有账号',
+    type: 'boolean',
+    default: true,
+    group: 'oauth',
+    description: '第三方返回的邮箱与本地账号一致时，自动绑定而不是新建账号',
+  },
+  {
+    key: 'oauth_show_on_login',
+    label: '登录页显示第三方登录按钮',
+    type: 'boolean',
+    default: true,
+    group: 'oauth',
+    public: true,
+  },
+  {
+    key: 'oauth_default_role',
+    label: '自动注册用户的角色',
+    type: 'select',
+    default: 'user',
+    group: 'oauth',
+    options: [
+      { value: 'user', label: '普通用户' },
+      { value: 'admin', label: '普通管理员' },
+    ],
+  },
+  {
+    key: 'oauth_redirect_base',
+    label: '回调地址前缀',
+    type: 'string',
+    default: '',
+    group: 'oauth',
+    description: '留空则使用「站点信息 → 站点地址」，例如 https://oj.example.com',
+    placeholder: 'https://oj.example.com',
+  },
+];
+
+for (const preset of OAUTH_PRESETS) {
+  oauthFields.push(
+    {
+      key: `oauth_${preset.id}_enabled`,
+      label: `${preset.name} 登录`,
+      type: 'boolean',
+      default: false,
+      group: 'oauth',
+      description: preset.hint,
+      public: true,
+    },
+    {
+      key: `oauth_${preset.id}_client_id`,
+      label: `${preset.name} Client ID`,
+      type: 'string',
+      default: '',
+      group: 'oauth',
+    },
+    {
+      key: `oauth_${preset.id}_client_secret`,
+      label: `${preset.name} Client Secret`,
+      type: 'password',
+      default: '',
+      group: 'oauth',
+      secret: true,
+    },
+    {
+      key: `oauth_${preset.id}_scope`,
+      label: `${preset.name} Scope`,
+      type: 'string',
+      default: preset.scope,
+      group: 'oauth',
+    },
+    {
+      key: `oauth_${preset.id}_authorize_url`,
+      label: `${preset.name} 授权地址`,
+      type: 'string',
+      default: preset.authorizeUrl,
+      group: 'oauth',
+      placeholder: preset.authorizeUrl || 'https://example.com/oauth/authorize',
+    },
+    {
+      key: `oauth_${preset.id}_token_url`,
+      label: `${preset.name} 令牌地址`,
+      type: 'string',
+      default: preset.tokenUrl,
+      group: 'oauth',
+      placeholder: preset.tokenUrl || 'https://example.com/oauth/token',
+    },
+    {
+      key: `oauth_${preset.id}_userinfo_url`,
+      label: `${preset.name} 用户信息地址`,
+      type: 'string',
+      default: preset.userInfoUrl,
+      group: 'oauth',
+      placeholder: preset.userInfoUrl || 'https://example.com/oauth/userinfo',
+    },
+  );
+}
+
+const hackFields: SettingField[] = [
+  {
+    key: 'enable_hack',
+    label: '开启 Hack 系统',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_require_contest',
+    label: '仅允许在比赛中 Hack',
+    type: 'boolean',
+    default: false,
+    group: 'hack',
+    description: '关闭后，标记了「允许 Hack」的题目在赛后也可以被 Hack',
+    public: true,
+  },
+  {
+    key: 'hack_open_after_contest',
+    label: '比赛结束后继续开放 Hack',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_target_must_be_ac',
+    label: '只能 Hack 通过的提交',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_allow_self',
+    label: '允许 Hack 自己（测自己的代码）',
+    type: 'boolean',
+    default: false,
+    group: 'hack',
+  },
+  {
+    key: 'hack_success_points',
+    label: 'Hack 成功获得积分',
+    type: 'number',
+    default: 10,
+    min: 0,
+    max: 1000,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_fail_points',
+    label: 'Hack 失败扣除积分',
+    type: 'number',
+    default: 0,
+    min: 0,
+    max: 1000,
+    group: 'hack',
+    description: '0 表示失败不扣分',
+    public: true,
+  },
+  {
+    key: 'hack_rate_limit_seconds',
+    label: '两次 Hack 的最小间隔（秒）',
+    type: 'number',
+    default: 30,
+    min: 0,
+    max: 3600,
+    group: 'hack',
+  },
+  {
+    key: 'hack_max_input_kb',
+    label: 'Hack 数据大小上限 (KB)',
+    type: 'number',
+    default: 64,
+    min: 1,
+    max: 4096,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_add_to_testdata',
+    label: 'Hack 成功的数据并入题库测试数据',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    description: '开启后，成功的 Hack 数据会被用于之后所有该题目的评测',
+  },
+  {
+    key: 'hack_show_input',
+    label: '公开 Hack 数据',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'hack_notify',
+    label: 'Hack 结果发送站内信',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+  },
+  {
+    key: 'achievement_enable',
+    label: '开启成就系统',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+  {
+    key: 'achievement_notify',
+    label: '解锁成就发送站内信',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+  },
+  {
+    key: 'achievement_show_locked',
+    label: '个人主页显示未解锁徽章',
+    type: 'boolean',
+    default: true,
+    group: 'hack',
+    public: true,
+  },
+];
+
+SETTINGS.push(...oauthFields, ...hackFields);
 
 export const SETTING_MAP: Record<string, SettingField> = Object.fromEntries(
   SETTINGS.map((s) => [s.key, s]),

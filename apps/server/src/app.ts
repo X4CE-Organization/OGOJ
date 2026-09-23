@@ -22,6 +22,9 @@ import { registerShopRoutes } from './routes/shop.js';
 import { registerListRoutes } from './routes/lists.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerUploadRoutes } from './routes/uploads.js';
+import { registerOAuthRoutes } from './routes/oauth.js';
+import { registerHackRoutes } from './routes/hacks.js';
+import { registerAchievementRoutes } from './routes/achievements.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   ensureDataDirs();
@@ -134,11 +137,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await registerPublicRoutes(app);
   await registerAuthRoutes(app);
+  await registerOAuthRoutes(app);
   await registerUserRoutes(app);
   await registerProblemRoutes(app);
   await registerSubmissionRoutes(app);
+  await registerHackRoutes(app);
   await registerContestRoutes(app);
   await registerCommunityRoutes(app);
+  await registerAchievementRoutes(app);
   await registerShopRoutes(app);
   await registerListRoutes(app);
   await registerAdminRoutes(app);

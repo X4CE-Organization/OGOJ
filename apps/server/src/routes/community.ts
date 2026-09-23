@@ -7,6 +7,7 @@ import { bool, json as settingJson, num } from '../settings/index.js';
 import { parseId, parsePage, rateLimit, sqlLike } from '../lib/util.js';
 import { sendMessage } from '../lib/notify.js';
 import { addPoints } from '../lib/points.js';
+import { evaluateAchievements } from '../lib/achievements.js';
 
 function checkBannedWords(text: string): void {
   const banned = settingJson<string[]>('banned_words', []);
@@ -213,6 +214,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (points > 0 && bool('enable_points', true)) {
       addPoints(user.id, points, '发布讨论', { refType: 'discussion', refId: discussionId });
     }
+    evaluateAchievements(user.id);
     audit(request, 'discussion.create', { targetType: 'discussion', targetId: discussionId });
     return { ok: true, id: discussionId };
   });
@@ -321,6 +323,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         });
       }
     }
+    evaluateAchievements(user.id, { silent: true });
     return { ok: true, id: Number(info.lastInsertRowid), floor };
   });
 
@@ -394,6 +397,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (points > 0 && bool('enable_points', true)) {
       addPoints(user.id, points, '发布题解', { refType: 'solution', refId: solutionId });
     }
+    evaluateAchievements(user.id);
     audit(request, 'solution.create', { targetType: 'solution', targetId: solutionId });
     return { ok: true, id: solutionId, pending: needApprove };
   });
@@ -556,6 +560,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         body.isPublic === false ? 0 : 1,
       ],
     );
+    evaluateAchievements(user.id);
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 

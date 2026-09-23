@@ -75,3 +75,29 @@ export function randomCode(length = 6, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456
 export function sha256(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
+
+/** Sign an arbitrary JSON payload (used for OAuth `state` and similar tokens). */
+export function signJson(payload: Record<string, unknown>, expiresInSeconds: number): string {
+  const body = { ...payload, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + expiresInSeconds };
+  const encoded = `${base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${base64url(JSON.stringify(body))}`;
+  return `${encoded}.${sign(encoded, config.jwtSecret)}`;
+}
+
+export function verifyJson<T = Record<string, unknown>>(token: string): T | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [header, body, signature] = parts as [string, string, string];
+  const expected = sign(`${header}.${body}`, config.jwtSecret);
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Record<string, unknown> & {
+      exp?: number;
+    };
+    if (!payload.exp || payload.exp * 1000 < Date.now()) return null;
+    return payload as T;
+  } catch {
+    return null;
+  }
+}

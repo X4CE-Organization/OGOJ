@@ -15,6 +15,7 @@ export default function UserProfile() {
   const [solutions, setSolutions] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
   const [discussions, setDiscussions] = useState<any[]>([]);
+  const [badges, setBadges] = useState<{ unlocked: any[]; total: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +43,13 @@ export default function UserProfile() {
       api.get<any>(`/api/users/${username}/discussions`).then((r) => setDiscussions(r.items)).catch(() => undefined);
     }
   }, [tab, username]);
+
+  useEffect(() => {
+    api
+      .get<{ unlocked: any[]; total: number }>(`/api/users/${encodeURIComponent(username)}/achievements`)
+      .then(setBadges)
+      .catch(() => undefined);
+  }, [username]);
 
   const toggleFollow = async () => {
     try {
@@ -181,6 +189,28 @@ export default function UserProfile() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {badges && badges.unlocked.length > 0 && (
+          <div className="card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">成就徽章</h2>
+              <Link to="/achievements" className="text-xs text-primary hover:underline">
+                {badges.unlocked.length} / {badges.total} →
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {badges.unlocked.slice(0, 12).map((badge) => (
+                <span
+                  key={badge.id}
+                  title={`${badge.name}：${badge.description}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+                >
+                  {badge.icon}
+                </span>
+              ))}
             </div>
           </div>
         )}

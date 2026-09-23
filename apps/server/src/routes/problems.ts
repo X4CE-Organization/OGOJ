@@ -197,6 +197,8 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         samples,
         subtasks: JSON.parse(problem.subtasks || '[]'),
         allowLanguages: JSON.parse(problem.allow_languages || '[]'),
+        allowHack: Boolean(problem.allow_hack),
+        hackLanguage: problem.hack_language || 'cpp',
         compareMode: problem.compare_mode,
         isContestOnly: Boolean(problem.is_contest_only),
         testcaseCount,
@@ -210,6 +212,11 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         hasRole(request.user, 'admin') ||
         Boolean(request.user && (problem.owner_id === request.user.id || problem.author_id === request.user.id)),
       spj: hasRole(request.user, 'admin') ? { language: problem.spj_language, code: problem.spj_code } : undefined,
+      hack:
+        hasRole(request.user, 'admin') ||
+        Boolean(request.user && (problem.owner_id === request.user.id || problem.author_id === request.user.id))
+          ? { language: problem.hack_language || 'cpp', code: problem.hack_code || '' }
+          : undefined,
     };
   });
 
@@ -257,8 +264,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       `INSERT INTO problems
         (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
          provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
-         subtasks, samples, allow_languages, source_type, review_status, is_public)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         subtasks, samples, allow_languages, allow_hack, hack_language, hack_code,
+         source_type, review_status, is_public)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         pid,
         title,
@@ -281,6 +289,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         JSON.stringify(normalizeSubtask(body.subtasks)),
         JSON.stringify(normalizeSamples(body.samples)),
         JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
+        body.allowHack ? 1 : 0,
+        String(body.hackLanguage ?? 'cpp'),
+        String(body.hackCode ?? ''),
         isAdmin ? 'official' : 'user',
         needReview ? 'pending' : 'approved',
         isAdmin ? 1 : needReview ? 0 : 1,
@@ -354,6 +365,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (body.allowLanguages !== undefined) {
       set('allow_languages', JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []));
     }
+    if (body.allowHack !== undefined) set('allow_hack', body.allowHack ? 1 : 0);
+    if (body.hackLanguage !== undefined) set('hack_language', String(body.hackLanguage));
+    if (body.hackCode !== undefined) set('hack_code', String(body.hackCode));
     if (body.isPublic !== undefined && hasRole(user, 'admin')) set('is_public', body.isPublic ? 1 : 0);
     if (body.isContestOnly !== undefined && hasRole(user, 'admin')) {
       set('is_contest_only', body.isContestOnly ? 1 : 0);
@@ -407,7 +421,8 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     const problem = findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const rows = all<any>(
-      'SELECT id, idx, subtask_id, score, is_sample, input_file, output_file FROM testcases WHERE problem_id = ? ORDER BY idx',
+      `SELECT id, idx, subtask_id, score, is_sample, is_hack, hack_id, input_file, output_file
+         FROM testcases WHERE problem_id = ? ORDER BY idx`,
       [problem.id],
     );
     return {
@@ -417,6 +432,8 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         subtask: row.subtask_id,
         score: row.score,
         isSample: Boolean(row.is_sample),
+        isHack: Boolean(row.is_hack),
+        hackId: row.hack_id ?? null,
         inputSize: fileSize(row.input_file),
         outputSize: fileSize(row.output_file),
       })),

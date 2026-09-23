@@ -264,6 +264,8 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
         detail,
         contestId: row.contest_id,
         isPublic: Boolean(row.is_public),
+        hacked: Boolean(row.hacked),
+        hackId: row.hack_id ?? null,
         createdAt: row.created_at,
         judgedAt: row.judged_at,
       },

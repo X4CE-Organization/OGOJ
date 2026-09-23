@@ -52,6 +52,8 @@ export default function ContestsPanel() {
         showRank: true,
         password: '',
         rated: true,
+        allowHack: true,
+        openHack: false,
         isPublic: true,
         problemIds: '',
       });
@@ -73,6 +75,8 @@ export default function ContestsPanel() {
           showRank: result.contest.showRank,
           password: '',
           rated: result.contest.rated,
+          allowHack: result.contest.allowHack !== false,
+          openHack: Boolean(result.contest.openHack),
           isPublic: true,
           problemIds: (result.problems ?? [])
             .map((problem: any) => problem.id)
@@ -348,6 +352,8 @@ export default function ContestsPanel() {
               ['needRegister', '需要报名'],
               ['showRank', '公开排行榜'],
               ['rated', '计入积分结算'],
+              ['allowHack', '允许 Hack'],
+              ['openHack', '赛后继续开放 Hack'],
               ['isPublic', '公开比赛'],
             ].map(([key, label]) => (
               <label key={key} className="flex items-center gap-1.5">

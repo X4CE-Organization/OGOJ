@@ -98,6 +98,9 @@ CREATE TABLE IF NOT EXISTS problems (
   review_note     TEXT DEFAULT '',
   is_public       INTEGER NOT NULL DEFAULT 1,
   is_contest_only INTEGER NOT NULL DEFAULT 0,
+  allow_hack      INTEGER NOT NULL DEFAULT 0,          -- 是否允许对本题发起 hack
+  hack_language   TEXT NOT NULL DEFAULT '',            -- 生成 hack 标准答案的参考程序语言
+  hack_code       TEXT NOT NULL DEFAULT '',            -- 参考程序源码
   submit_count    INTEGER NOT NULL DEFAULT 0,
   accepted_count  INTEGER NOT NULL DEFAULT 0,
   favorite_count  INTEGER NOT NULL DEFAULT 0,
@@ -139,6 +142,9 @@ CREATE TABLE IF NOT EXISTS testcases (
   input_file  TEXT NOT NULL,
   output_file TEXT NOT NULL,
   is_sample   INTEGER NOT NULL DEFAULT 0,
+  is_hack     INTEGER NOT NULL DEFAULT 0,
+  hack_id     INTEGER,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   UNIQUE (problem_id, idx)
 );
 
@@ -163,6 +169,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   judge_time_ms  INTEGER,
   is_public      INTEGER NOT NULL DEFAULT 1,
   priority       INTEGER NOT NULL DEFAULT 0,
+  hacked         INTEGER NOT NULL DEFAULT 0,
+  hack_id        INTEGER,
   claimed_at     TEXT,
   judged_at      TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -200,6 +208,8 @@ CREATE TABLE IF NOT EXISTS contests (
   password        TEXT DEFAULT '',
   show_rank       INTEGER NOT NULL DEFAULT 1,
   rated           INTEGER NOT NULL DEFAULT 1,
+  allow_hack      INTEGER NOT NULL DEFAULT 1,
+  open_hack       INTEGER NOT NULL DEFAULT 0,
   allow_languages TEXT NOT NULL DEFAULT '[]',
   origin          TEXT NOT NULL DEFAULT 'official',   -- official | user
   owner_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -546,13 +556,94 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   count      INTEGER NOT NULL DEFAULT 0,
   expires_at TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- 第三方登录（OAuth2）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider          TEXT NOT NULL,                    -- github | gitee | google | custom
+  provider_user_id  TEXT NOT NULL,
+  provider_username TEXT NOT NULL DEFAULT '',
+  provider_email    TEXT NOT NULL DEFAULT '',
+  avatar            TEXT NOT NULL DEFAULT '',
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (provider, provider_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth_accounts(user_id);
+
+-- ---------------------------------------------------------------------------
+-- Hack 系统
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS hacks (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  contest_id           INTEGER REFERENCES contests(id) ON DELETE SET NULL,
+  problem_id           INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  hacker_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  target_user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  testcase_id          INTEGER,
+  verdict              TEXT NOT NULL DEFAULT 'pending',   -- pending | success | fail | error
+  input_file           TEXT NOT NULL DEFAULT '',
+  answer_file          TEXT NOT NULL DEFAULT '',
+  message              TEXT NOT NULL DEFAULT '',
+  detail               TEXT NOT NULL DEFAULT '[]',
+  status_before        TEXT NOT NULL DEFAULT '',
+  status_after         TEXT NOT NULL DEFAULT '',
+  score_delta          INTEGER NOT NULL DEFAULT 0,
+  judged_at            TEXT,
+  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hacks_problem ON hacks(problem_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_hacks_contest ON hacks(contest_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_hacks_hacker ON hacks(hacker_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_hacks_target ON hacks(target_user_id, id DESC);
+
+-- ---------------------------------------------------------------------------
+-- 成就徽章
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS achievements (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  icon        TEXT NOT NULL DEFAULT '🏅',
+  category    TEXT NOT NULL DEFAULT 'milestone',   -- milestone | contest | community | skill | special
+  rarity      TEXT NOT NULL DEFAULT 'common',      -- common | rare | epic | legendary
+  condition   TEXT NOT NULL DEFAULT '{}',          -- {"type":"solved_count","threshold":10}
+  points      INTEGER NOT NULL DEFAULT 0,
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  is_builtin  INTEGER NOT NULL DEFAULT 1,
+  sort        INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_achievements (
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  achievement_id INTEGER NOT NULL REFERENCES achievements(id) ON DELETE CASCADE,
+  unlocked_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  context        TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (user_id, achievement_id)
+);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * Small, idempotent column additions for databases created by older builds.
  * Each entry is executed inside a try/catch (duplicate column errors ignored).
  */
-export const ALTERATIONS_SQL: string[] = [];
+export const ALTERATIONS_SQL: string[] = [
+  `ALTER TABLE problems ADD COLUMN allow_hack INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE problems ADD COLUMN hack_language TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE problems ADD COLUMN hack_code TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE testcases ADD COLUMN is_hack INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE testcases ADD COLUMN hack_id INTEGER`,
+  `ALTER TABLE testcases ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`,
+  `ALTER TABLE submissions ADD COLUMN hacked INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE submissions ADD COLUMN hack_id INTEGER`,
+  `ALTER TABLE contests ADD COLUMN allow_hack INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE contests ADD COLUMN open_hack INTEGER NOT NULL DEFAULT 0`,
+];

@@ -48,6 +48,9 @@ export default function ProblemEditor() {
     spjLanguage: 'cpp',
     spjCode: '',
     interCode: '',
+    allowHack: false,
+    hackLanguage: 'cpp',
+    hackCode: '',
     allowLanguages: [],
     samples: [] as Sample[],
     subtasks: [] as Subtask[],
@@ -95,6 +98,9 @@ export default function ProblemEditor() {
           spjLanguage: data.spj?.language || problem.spjLanguage || 'cpp',
           spjCode: data.spj?.code ?? '',
           interCode: '',
+          allowHack: Boolean(problem.allowHack),
+          hackLanguage: data.hack?.language || 'cpp',
+          hackCode: data.hack?.code ?? '',
           allowLanguages: problem.allowLanguages ?? [],
           samples: problem.samples ?? [],
           subtasks: problem.subtasks ?? [],
@@ -630,6 +636,7 @@ export default function ProblemEditor() {
                           <th className="w-24">子任务</th>
                           <th className="w-20">分值</th>
                           <th className="w-20">样例</th>
+                          <th className="w-24">来源</th>
                           <th className="w-28">输入大小</th>
                           <th className="w-28">输出大小</th>
                           <th className="w-32">操作</th>
@@ -642,6 +649,15 @@ export default function ProblemEditor() {
                             <td>{testcase.subtask || '-'}</td>
                             <td>{testcase.score}</td>
                             <td>{testcase.isSample ? '是' : '否'}</td>
+                            <td>
+                              {testcase.isHack ? (
+                                <span className="rounded bg-violet-100 px-1.5 text-[11px] text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+                                  Hack #{testcase.hackId}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">题库</span>
+                              )}
+                            </td>
                             <td className="text-xs text-slate-500">{formatBytes(testcase.inputSize)}</td>
                             <td className="text-xs text-slate-500">{formatBytes(testcase.outputSize)}</td>
                             <td>
@@ -658,7 +674,7 @@ export default function ProblemEditor() {
                         ))}
                         {!testcases.length && (
                           <tr>
-                            <td colSpan={7} className="py-6 text-center text-sm text-slate-400">
+                            <td colSpan={8} className="py-6 text-center text-sm text-slate-400">
                               还没有测试数据，题目将无法评测
                             </td>
                           </tr>
@@ -745,6 +761,50 @@ export default function ProblemEditor() {
                   />
                 </div>
               )}
+
+              <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.allowHack)}
+                    onChange={(event) => setForm({ ...form, allowHack: event.target.checked })}
+                  />
+                  允许对本题发起 Hack
+                </label>
+                <p className="mt-1 text-xs text-slate-500">
+                  Hack 需要一份<b>参考程序</b>生成标准答案：选手提交 Hack 数据后，系统运行参考程序得到答案，
+                  把数据并入本题测试集并重新评测被 Hack 的提交。请确保参考程序绝对正确。
+                </p>
+                {form.allowHack && (
+                  <div className="mt-3 space-y-2">
+                    <Field label="参考程序语言">
+                      <select
+                        className="input !w-48"
+                        value={form.hackLanguage}
+                        onChange={(event) => setForm({ ...form, hackLanguage: event.target.value })}
+                      >
+                        {['cpp', 'cpp17', 'c', 'python3', 'java', 'node'].map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <div className="text-sm font-medium">参考程序（标准程序）</div>
+                    <CodeEditor
+                      value={form.hackCode}
+                      onChange={(value) => setForm({ ...form, hackCode: value })}
+                      language="cpp"
+                      height="280px"
+                    />
+                    {!form.hackCode?.trim() && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        尚未填写参考程序：Special Judge 题目仍可被 Hack，其他题目会提示「未配置参考程序」。
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

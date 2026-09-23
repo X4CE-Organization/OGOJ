@@ -7,6 +7,7 @@ import { audit } from '../lib/audit.js';
 import { json as settingJson, bool, num, str } from '../settings/index.js';
 import { addPoints } from '../lib/points.js';
 import { levelOf, userBrief } from './helpers.js';
+import { evaluateAchievements } from '../lib/achievements.js';
 
 interface RegisterBody {
   username?: string;
@@ -131,6 +132,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       );
       const userId = Number(info.lastInsertRowid);
       audit(request, 'user.register', { targetType: 'user', targetId: userId, detail: { username } });
+      evaluateAchievements(userId, { silent: true });
 
       const token = signToken({ sub: userId, username, role }, num('session_days', 14) * 86400);
       setAuthCookie(reply, token, num('session_days', 14));

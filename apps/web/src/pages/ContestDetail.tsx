@@ -7,6 +7,7 @@ import { classNames, countdown, formatDuration, formatMs, formatTime, fromNow } 
 import { DifficultyBadge, EmptyState, Loading, Modal, Section, Tabs, UserLink, StatusText } from '../components/ui';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
+import HackList from '../components/HackList';
 
 export default function ContestDetail() {
   const { id = '' } = useParams();
@@ -174,6 +175,7 @@ export default function ContestDetail() {
             { key: 'problems', label: '比赛题目', badge: data.problems.length || undefined },
             { key: 'rank', label: '排行榜' },
             { key: 'records', label: '提交记录' },
+            { key: 'hack', label: 'Hack' },
           ]}
         />
 
@@ -331,6 +333,10 @@ export default function ContestDetail() {
                 </table>
               )}
             </div>
+          )}
+
+          {tab === 'hack' && (
+            <HackList contestId={contest.id} showHackButton />
           )}
         </div>
       </div>

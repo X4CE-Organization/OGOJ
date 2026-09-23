@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  Award,
   BookOpen,
   ChevronDown,
   Github,
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: '/discussions', label: '讨论', icon: Users },
   { to: '/articles', label: '专栏', icon: BookOpen },
   { to: '/rank', label: '排行榜', icon: Trophy },
+  { to: '/achievements', label: '成就', icon: Award },
   { to: '/shop', label: '商店', icon: ShoppingBag },
 ];
 
@@ -186,6 +188,8 @@ function Header() {
                   <MenuItem to={`/user/${encodeURIComponent(user.username)}`}>个人主页</MenuItem>
                   <MenuItem to="/settings">个人设置</MenuItem>
                   <MenuItem to="/shop/orders">我的订单</MenuItem>
+                  <MenuItem to="/hacks">Hack 记录</MenuItem>
+                  <MenuItem to="/achievements">我的成就</MenuItem>
                   <MenuItem to="/messages">
                     站内信
                     {unread > 0 && <span className="ml-1 text-rose-500">({unread})</span>}

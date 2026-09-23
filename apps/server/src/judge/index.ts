@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { all, get, run, tx } from '../db/index.js';
 import { addPoints } from '../lib/points.js';
 import { sendMessage } from '../lib/notify.js';
+import { evaluateAchievements } from '../lib/achievements.js';
 import { bool, json as settingJson, num, str } from '../settings/index.js';
 import { compareOutput, type CompareMode } from './compare.js';
 import { compileSource, ensureDir, removeDir, runSandboxed } from './sandbox.js';
@@ -677,6 +678,16 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
     submission ??
     get<SubmissionRef>('SELECT id, problem_id, user_id, contest_id FROM submissions WHERE id = ?', [id]);
 
+  // Figure out what the submission looked like before this judgement so that
+  // rejudges (and hacks) adjust the counters instead of inflating them.
+  const previous = get<{ status: string; score: number; judged_at: string | null }>(
+    'SELECT status, score, judged_at FROM submissions WHERE id = ?',
+    [id],
+  );
+  const wasJudged = Boolean(previous?.judged_at);
+  const wasAccepted = previous?.status === 'AC';
+  const nowAccepted = outcome.status === 'AC';
+
   run(
     `UPDATE submissions SET status = ?, score = ?, time_ms = ?, memory_kb = ?,
        compile_output = ?, detail = ?, judged_at = datetime('now') WHERE id = ?`,
@@ -700,12 +711,24 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
     );
     const acceptedNow = outcome.status === 'AC' ? 1 : 0;
     if (existing) {
-      run(
-        `UPDATE user_problem_stats SET attempts = attempts + 1, accepted = accepted + ?,
-           first_ac_at = COALESCE(first_ac_at, ?), last_submit_at = ?
-         WHERE user_id = ? AND problem_id = ?`,
-        [acceptedNow, acceptedNow ? now : null, now, ref.user_id, ref.problem_id],
-      );
+      if (wasJudged) {
+        // Rejudge: correct the accepted counter instead of adding to it.
+        const delta = acceptedNow - (wasAccepted ? 1 : 0);
+        run(
+          `UPDATE user_problem_stats SET accepted = MAX(0, accepted + ?),
+             first_ac_at = CASE WHEN accepted + ? > 0 THEN first_ac_at ELSE NULL END,
+             last_submit_at = ?
+           WHERE user_id = ? AND problem_id = ?`,
+          [delta, delta, now, ref.user_id, ref.problem_id],
+        );
+      } else {
+        run(
+          `UPDATE user_problem_stats SET attempts = attempts + 1, accepted = accepted + ?,
+             first_ac_at = COALESCE(first_ac_at, ?), last_submit_at = ?
+           WHERE user_id = ? AND problem_id = ?`,
+          [acceptedNow, acceptedNow ? now : null, now, ref.user_id, ref.problem_id],
+        );
+      }
     } else {
       run(
         `INSERT INTO user_problem_stats (user_id, problem_id, attempts, accepted, first_ac_at, last_submit_at)
@@ -714,15 +737,22 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
       );
     }
 
-    if (outcome.status === 'AC') {
-      run('UPDATE problems SET accepted_count = accepted_count + 1 WHERE id = ?', [ref.problem_id]);
-      run('UPDATE users SET accepted_count = accepted_count + 1 WHERE id = ?', [ref.user_id]);
+    if (nowAccepted !== wasAccepted) {
+      const delta = nowAccepted ? 1 : -1;
+      run('UPDATE problems SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.problem_id]);
+      run('UPDATE users SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.user_id]);
     }
-    run('UPDATE users SET submission_count = submission_count + 1 WHERE id = ?', [ref.user_id]);
+    if (!wasJudged) {
+      run('UPDATE users SET submission_count = submission_count + 1 WHERE id = ?', [ref.user_id]);
+    }
 
-    const isFirstSolve = outcome.status === 'AC' && (existing?.accepted ?? 0) === 0;
+    const isFirstSolve = nowAccepted && !wasAccepted && (existing?.accepted ?? 0) === 0;
+    const lostSolve = wasAccepted && !nowAccepted;
+    if (isFirstSolve || lostSolve) {
+      const delta = isFirstSolve ? 1 : -1;
+      run('UPDATE users SET solved_count = MAX(0, solved_count + ?) WHERE id = ?', [delta, ref.user_id]);
+    }
     if (isFirstSolve) {
-      run('UPDATE users SET solved_count = solved_count + 1 WHERE id = ?', [ref.user_id]);
       const perProblem = num('points_per_accepted', 1);
       if (perProblem > 0 && bool('enable_points', true)) {
         addPoints(ref.user_id, perProblem, `通过题目 ${ref.problem_id}`, {
@@ -743,6 +773,9 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
       }
     }
   });
+
+  // The achievement engine sends its own notification for every new badge.
+  if (nowAccepted) evaluateAchievements(ref.user_id);
 
   if (bool('notify_on_judge', false)) {
     const problem = get<{ pid: string; title: string }>(

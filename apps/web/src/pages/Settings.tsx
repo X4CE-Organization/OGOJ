@@ -4,6 +4,8 @@ import { useAuth } from '../lib/auth';
 import { formatTime } from '../lib/format';
 import { Avatar, Field, Loading, Section } from '../components/ui';
 import { useToast } from '../components/Toast';
+import OAuthButtons from '../components/OAuthButtons';
+import { Link2, Trash2 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, profile, refresh, settings } = useAuth();
@@ -25,6 +27,14 @@ export default function SettingsPage() {
   const [points, setPoints] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [bindings, setBindings] = useState<{ bindings: any[]; providers: any[] } | null>(null);
+
+  const loadBindings = () => {
+    api
+      .get<{ bindings: any[]; providers: any[] }>('/api/auth/oauth/bindings')
+      .then(setBindings)
+      .catch(() => undefined);
+  };
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -45,7 +55,19 @@ export default function SettingsPage() {
       .get<any>(`/api/users/${encodeURIComponent(user.username)}/points`)
       .then(setPoints)
       .catch(() => undefined);
+    loadBindings();
   }, [user, profile]);
+
+  const unbind = async (provider: string) => {
+    if (!window.confirm(`确定要解绑 ${provider} 吗？解绑后就不能用它登录了。`)) return;
+    try {
+      await api.del(`/api/auth/oauth/bindings/${provider}`);
+      toast.success('已解绑');
+      loadBindings();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '解绑失败');
+    }
+  };
 
   const upload = async (file: File, category: 'avatar' | 'banner') => {
     setUploading(true);
@@ -269,6 +291,51 @@ export default function SettingsPage() {
           </div>
         </dl>
       </Section>
+
+      {bindings && bindings.providers.length > 0 && (
+        <Section title="第三方账号绑定">
+          <div className="space-y-3 p-4">
+            <p className="text-xs text-slate-500">
+              绑定后可以直接使用第三方账号登录 OGOJ，无需输入密码。
+            </p>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {bindings.providers.map((provider) => {
+                const bound = bindings.bindings.find((item) => item.provider === provider.id);
+                return (
+                  <li key={provider.id} className="flex items-center gap-3 py-2.5 text-sm">
+                    <Link2 className="h-4 w-4 text-slate-400" />
+                    <span className="flex-1">{provider.name}</span>
+                    {bound ? (
+                      <>
+                        <span className="text-xs text-slate-400">
+                          {bound.provider_username}
+                          {bound.provider_email ? ` · ${bound.provider_email}` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-xs text-rose-500 hover:underline"
+                          onClick={() => unbind(provider.id)}
+                        >
+                          <Trash2 className="mr-0.5 inline h-3.5 w-3.5" />
+                          解绑
+                        </button>
+                      </>
+                    ) : (
+                      <a
+                        href={`/api/auth/oauth/${provider.id}/start?bind=1`}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        去绑定
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <OAuthButtons bind className="pt-1" />
+          </div>
+        </Section>
+      )}
 
       {points && (
         <Section title="积分记录">

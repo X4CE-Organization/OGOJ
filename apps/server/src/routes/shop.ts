@@ -8,6 +8,7 @@ import { parseId, parsePage } from '../lib/util.js';
 import { randomCode } from '../lib/crypto.js';
 import { addPoints, spendPoints } from '../lib/points.js';
 import { sendMessage, notifyAdmins } from '../lib/notify.js';
+import { evaluateAchievements } from '../lib/achievements.js';
 
 function orderNo(): string {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -148,6 +149,7 @@ export async function registerShopRoutes(app: FastifyInstance): Promise<void> {
         refId: orderId,
       });
     }
+    if (autoApprove) evaluateAchievements(user.id);
     return { ok: true, orderId, status: autoApprove ? 'approved' : 'pending' };
   });
 
@@ -314,7 +316,7 @@ export async function registerShopRoutes(app: FastifyInstance): Promise<void> {
         `UPDATE shop_orders SET status = ?, handled_by = ?, handled_at = datetime('now'), note = ? WHERE id = ?`,
         [approve ? 'approved' : 'rejected', admin.id, String(body.note ?? ''), id],
       );
-      if (approve) {
+    if (approve) {
         grantOrder(id);
       } else if (bool('shop_refund_on_reject', true)) {
         addPoints(order.user_id, order.price, `订单被驳回，退还积分（${order.item_name}）`, {
@@ -322,6 +324,7 @@ export async function registerShopRoutes(app: FastifyInstance): Promise<void> {
           refId: id,
         });
       }
+    if (approve) evaluateAchievements(order.user_id);
     });
     sendMessage({
       to: order.user_id,

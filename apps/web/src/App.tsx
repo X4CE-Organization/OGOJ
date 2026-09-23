@@ -33,6 +33,9 @@ import SearchPage from './pages/Search';
 import About from './pages/About';
 import Help from './pages/Help';
 import NotFound from './pages/NotFound';
+import OAuthCallback from './pages/OAuthCallback';
+import Hacks from './pages/Hacks';
+import Achievements from './pages/Achievements';
 
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/Dashboard';
@@ -50,6 +53,8 @@ import AdminSolutions from './pages/admin/SolutionsPanel';
 import AdminJudge from './pages/admin/JudgePanel';
 import AdminLogs from './pages/admin/LogsPanel';
 import AdminBackups from './pages/admin/MaintenancePanel';
+import AdminAchievements from './pages/admin/AchievementsPanel';
+import AdminHacks from './pages/admin/HacksPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -82,6 +87,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/problems" element={<Problems />} />
         <Route path="/problem/:pid" element={<ProblemDetail />} />
         <Route path="/record" element={<Records />} />
@@ -98,6 +104,8 @@ export default function App() {
         <Route path="/article/:id" element={<ArticleDetail />} />
         <Route path="/solution/:id" element={<SolutionDetail />} />
         <Route path="/rank" element={<Rank />} />
+        <Route path="/achievements" element={<Achievements />} />
+        <Route path="/hacks" element={<Hacks />} />
         <Route path="/users" element={<Users />} />
         <Route path="/user/:username" element={<UserProfile />} />
         <Route path="/shop" element={<Shop />} />
@@ -125,6 +133,8 @@ export default function App() {
           <Route path="discussions" element={<AdminDiscussions />} />
           <Route path="solutions" element={<AdminSolutions />} />
           <Route path="judge" element={<AdminJudge />} />
+          <Route path="achievements" element={<AdminAchievements />} />
+          <Route path="hacks" element={<AdminHacks />} />
           <Route path="logs" element={<AdminLogs />} />
           <Route path="maintenance" element={<AdminBackups />} />
         </Route>

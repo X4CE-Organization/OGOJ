@@ -12,6 +12,7 @@ import { hashPassword } from '../lib/crypto.js';
 import { addPoints } from '../lib/points.js';
 import { saveTestcase } from '../lib/storage.js';
 import { invalidateSettings } from '../settings/index.js';
+import { evaluateAchievements, seedAchievements } from '../lib/achievements.js';
 
 interface ProblemSeed {
   pid: string;
@@ -326,6 +327,25 @@ function seedProblems(authorId: number, tagIds: Map<string, number>): number[] {
     });
     // mark solved counts realistically (nobody has submitted yet)
     run('UPDATE problems SET submit_count = 0, accepted_count = 0 WHERE id = ?', [problemId]);
+  }
+
+  // Enable the hack system on the first two problems and give them a reference
+  // solution so that crafted hack data can be turned into an expected answer.
+  const hackable = all<{ id: number; pid: string }>(
+    `SELECT id, pid FROM problems WHERE pid IN ('P1001', 'P1003')`,
+  );
+  for (const problem of hackable) {
+    const references: Record<string, string> = {
+      P1001:
+        '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    long long a, b;\n    if (!(cin >> a >> b)) return 0;\n    cout << a + b << "\\n";\n    return 0;\n}\n',
+      P1003:
+        '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    if (!(cin >> n)) return 0;\n    long long best = LLONG_MIN, cur = 0;\n    for (int i = 0; i < n; ++i) {\n        long long x;\n        cin >> x;\n        cur = cur > 0 ? cur + x : x;\n        best = max(best, cur);\n    }\n    cout << best << "\\n";\n    return 0;\n}\n',
+    };
+    run('UPDATE problems SET allow_hack = 1, hack_language = ?, hack_code = ? WHERE id = ?', [
+      'cpp',
+      references[problem.pid] ?? '',
+      problem.id,
+    ]);
   }
   return created;
 }
@@ -657,6 +677,15 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
   seedShop();
   seedHomepage(userIds.root!);
   seedSubmissions(userIds, problemIds);
+  const newBadges = seedAchievements();
+  // Give the demo accounts the badges they already qualify for.
+  for (const userId of Object.values(userIds)) {
+    try {
+      evaluateAchievements(userId, { silent: true });
+    } catch {
+      /* ignore */
+    }
+  }
 
   if (!options.silent) {
     const stats = {
@@ -666,6 +695,7 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
       contests: count('SELECT COUNT(*) AS c FROM contests'),
       submissions: count('SELECT COUNT(*) AS c FROM submissions'),
       shopItems: count('SELECT COUNT(*) AS c FROM shop_items'),
+      achievements: count('SELECT COUNT(*) AS c FROM achievements'),
     };
     // eslint-disable-next-line no-console
     console.log('OGOJ seed complete:');
@@ -676,6 +706,7 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
         `普通管理员: admin / ${config.seed.rootPassword}\n` +
         `示例用户: alice, bob, carol / ${config.seed.rootPassword}`,
     );
+    if (newBadges > 0) console.log(`已写入 ${newBadges} 个成就徽章定义。`);
   }
 }
 

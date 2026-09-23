@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useToast } from '../components/Toast';
 import { Field } from '../components/ui';
+import OAuthButtons from '../components/OAuthButtons';
 
 export default function Login() {
   const { login, settings } = useAuth();
@@ -16,6 +17,8 @@ export default function Login() {
   const [error, setError] = useState('');
 
   const redirect = new URLSearchParams(location.search).get('redirect');
+  const [searchParams] = useSearchParams();
+  const oauthError = searchParams.get('error');
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -63,9 +66,11 @@ export default function Login() {
           保持登录状态
         </label>
         {error && <p className="text-sm text-rose-500">{error}</p>}
+        {oauthError && <p className="text-sm text-rose-500">{oauthError}</p>}
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? '登录中…' : '登录'}
         </button>
+        <OAuthButtons className="pt-2" />
         {settings.allow_register !== false && (
           <p className="text-center text-xs text-slate-500">
             还没有账号？
