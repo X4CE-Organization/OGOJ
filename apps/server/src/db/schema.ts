@@ -626,10 +626,54 @@ CREATE TABLE IF NOT EXISTS user_achievements (
   context        TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (user_id, achievement_id)
 );
+
+-- ---------------------------------------------------------------------------
+-- 工单 / 支持系统
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tickets (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_no        TEXT NOT NULL UNIQUE,
+  user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category         TEXT NOT NULL DEFAULT 'other',   -- bug | problem | account | contest | report | suggestion | other
+  title            TEXT NOT NULL,
+  content          TEXT NOT NULL,
+  priority         TEXT NOT NULL DEFAULT 'normal',  -- low | normal | high | urgent
+  status           TEXT NOT NULL DEFAULT 'open',    -- open | processing | replied | resolved | closed
+  related_type     TEXT NOT NULL DEFAULT '',        -- problem | submission | contest | discussion | user
+  related_id       INTEGER,
+  related_label    TEXT NOT NULL DEFAULT '',
+  assignee_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_escalated     INTEGER NOT NULL DEFAULT 0,
+  unread_for_admin INTEGER NOT NULL DEFAULT 1,
+  unread_for_user  INTEGER NOT NULL DEFAULT 0,
+  reply_count      INTEGER NOT NULL DEFAULT 0,
+  last_reply_at    TEXT,
+  last_reply_by    TEXT NOT NULL DEFAULT 'user',    -- user | admin
+  resolved_at      TEXT,
+  closed_at        TEXT,
+  rating           INTEGER,
+  rating_comment   TEXT NOT NULL DEFAULT '',
+  rated_at         TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, is_escalated DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets(assignee_id);
+
+CREATE TABLE IF NOT EXISTS ticket_replies (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id   INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content     TEXT NOT NULL,
+  is_internal INTEGER NOT NULL DEFAULT 0,          -- 内部备注，用户不可见
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_replies ON ticket_replies(ticket_id, id);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Small, idempotent column additions for databases created by older builds.

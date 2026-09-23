@@ -86,6 +86,7 @@ interface AuthContextValue {
   profile: any;
   grants: Record<string, number>;
   unread: number;
+  ticketUnread: number;
   loading: boolean;
   meta: Meta | null;
   settings: SiteSettings;
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<any>(null);
   const [grants, setGrants] = useState<Record<string, number>>({});
   const [unread, setUnread] = useState(0);
+  const [ticketUnread, setTicketUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<Meta | null>(null);
 
@@ -137,12 +139,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       setProfile(data.profile);
       setUnread(data.unreadMessages ?? 0);
+      setTicketUnread(data.ticketUnread ?? 0);
       setGrants(data.grants ?? {});
     } catch {
       setUser(null);
       setProfile(null);
       setGrants({});
       setUnread(0);
+      setTicketUnread(0);
     }
   }, []);
 
@@ -229,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       grants,
       unread,
+      ticketUnread,
       loading,
       meta,
       settings,
@@ -240,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
     }),
-    [user, profile, grants, unread, loading, meta, settings, refresh, refreshMeta, login, register, logout],
+    [user, profile, grants, unread, ticketUnread, loading, meta, settings, refresh, refreshMeta, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

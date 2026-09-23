@@ -1,4 +1,7 @@
+import { Link } from 'react-router-dom';
+import { LifeBuoy } from 'lucide-react';
 import { Section } from '../components/ui';
+import { useAuth } from '../lib/auth';
 
 const FAQ: { question: string; answer: string }[] = [
   {
@@ -43,8 +46,28 @@ const FAQ: { question: string; answer: string }[] = [
 ];
 
 export default function Help() {
+  const { user, settings } = useAuth();
+  const showTickets = settings.enable_tickets !== false && settings.ticket_show_entry !== false;
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      {showTickets && (
+        <div className="card flex flex-wrap items-center gap-3 p-4">
+          <span className="rounded-lg bg-primary/10 p-2 text-primary">
+            <LifeBuoy className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">没有找到答案？提交工单</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              题目数据有误、账号异常、发现抄袭或想提功能建议，都可以提交工单，管理员会在后台处理并回复你。
+            </p>
+          </div>
+          <Link to={user ? '/tickets/new' : '/login'} className="btn-primary !py-1.5 text-xs">
+            {user ? '提交工单' : '登录后提交'}
+          </Link>
+        </div>
+      )}
+
       <Section title="帮助中心">
         <div className="space-y-4 p-4">
           {FAQ.map((item) => (

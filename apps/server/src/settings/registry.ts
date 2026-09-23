@@ -135,6 +135,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
     description: 'Hack 系统规则、奖励与成就徽章',
     icon: 'swords',
   },
+  {
+    key: 'ticket',
+    name: '工单与支持',
+    description: '用户工单提交、处理流程与通知',
+    icon: 'life-buoy',
+  },
 ];
 
 const langOptions = [
@@ -1774,7 +1780,126 @@ const hackFields: SettingField[] = [
   },
 ];
 
-SETTINGS.push(...oauthFields, ...hackFields);
+const ticketFields: SettingField[] = [
+  {
+    key: 'enable_tickets',
+    label: '开启工单系统',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+    description: '关闭后用户无法提交新工单，已存在的工单仍可在后台查看',
+    public: true,
+  },
+  {
+    key: 'ticket_show_entry',
+    label: '在前台显示工单入口',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+    description: '顶栏图标、页脚与帮助页的工单入口',
+    public: true,
+  },
+  {
+    key: 'ticket_categories',
+    label: '工单分类',
+    type: 'json',
+    default:
+      '[{"value":"bug","label":"站点故障 / Bug","description":"页面报错、功能异常、评测机问题"},{"value":"problem","label":"题目问题","description":"题面错误、数据有误、缺少题解"},{"value":"account","label":"账号问题","description":"登录异常、密码、封禁申诉、改名"},{"value":"contest","label":"比赛相关","description":"比赛时间、权限、成绩申诉"},{"value":"report","label":"举报违规","description":"抄袭、恶意提交、违规内容"},{"value":"suggestion","label":"功能建议","description":"希望 OGOJ 增加的功能"},{"value":"other","label":"其它","description":"不属于以上分类的问题"}]',
+    group: 'ticket',
+    public: true,
+  },
+  {
+    key: 'ticket_allow_priority',
+    label: '允许用户选择优先级',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+    public: true,
+  },
+  {
+    key: 'ticket_max_content_kb',
+    label: '工单内容长度上限 (KB)',
+    type: 'number',
+    default: 8,
+    min: 1,
+    max: 128,
+    group: 'ticket',
+    public: true,
+  },
+  {
+    key: 'ticket_rate_limit_seconds',
+    label: '两次提交工单的最小间隔（秒）',
+    type: 'number',
+    default: 60,
+    min: 0,
+    max: 86400,
+    group: 'ticket',
+  },
+  {
+    key: 'ticket_max_open',
+    label: '每个用户同时开启的工单上限',
+    type: 'number',
+    default: 5,
+    min: 0,
+    max: 100,
+    group: 'ticket',
+    description: '0 表示不限制',
+    public: true,
+  },
+  {
+    key: 'ticket_auto_close_days',
+    label: '已解决工单自动关闭天数',
+    type: 'number',
+    default: 7,
+    min: 0,
+    max: 365,
+    group: 'ticket',
+    description: '0 表示不自动关闭',
+  },
+  {
+    key: 'ticket_allow_rating',
+    label: '允许用户评价处理结果',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+    public: true,
+  },
+  {
+    key: 'ticket_notify_admin',
+    label: '新工单通知管理员',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+  },
+  {
+    key: 'ticket_notify_user',
+    label: '工单有新回复通知用户',
+    type: 'boolean',
+    default: true,
+    group: 'ticket',
+  },
+  {
+    key: 'ticket_notice',
+    label: '工单页提示文字',
+    type: 'text',
+    default:
+      '提交工单前请先查看帮助中心，并尽量提供题目编号、提交编号、截图与复现步骤，方便我们更快定位问题。',
+    group: 'ticket',
+    public: true,
+  },
+  {
+    key: 'ticket_list_page_size',
+    label: '工单列表每页数量',
+    type: 'number',
+    default: 20,
+    min: 5,
+    max: 100,
+    group: 'ticket',
+    public: true,
+  },
+];
+
+SETTINGS.push(...oauthFields, ...hackFields, ...ticketFields);
 
 export const SETTING_MAP: Record<string, SettingField> = Object.fromEntries(
   SETTINGS.map((s) => [s.key, s]),

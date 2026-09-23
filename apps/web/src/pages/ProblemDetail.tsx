@@ -601,6 +601,13 @@ export default function ProblemDetail() {
             </div>
           </dl>
 
+          <Link
+            to={`/tickets/new?relatedType=problem&relatedId=${problem.id}`}
+            className="mt-3 flex items-center gap-1.5 text-xs text-slate-500 hover:text-primary"
+          >
+            ⚑ 题目数据有误 / 想反馈问题？提交工单
+          </Link>
+
           <div className="mt-3 flex gap-2">
             <button
               type="button"

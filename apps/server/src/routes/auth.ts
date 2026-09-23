@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { all, get, run } from '../db/index.js';
+import { all, count, get, run } from '../db/index.js';
 import { hashPassword, signToken, verifyPassword } from '../lib/crypto.js';
 import { requireUser, setAuthCookie, clearAuthCookie } from '../lib/auth.js';
 import { badRequest, conflict, forbidden, tooMany, unauthorized } from '../lib/errors.js';
@@ -198,6 +198,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       'SELECT COUNT(*) AS c FROM messages WHERE to_id = ? AND is_read = 0',
       [user.id],
     );
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
+    const ticketUnread = isAdmin
+      ? count(`SELECT COUNT(*) AS c FROM tickets WHERE unread_for_admin = 1`)
+      : count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND unread_for_user = 1', [user.id]);
     const grants = all<any>(
       `SELECT kind, SUM(total - used) AS remaining FROM grants
         WHERE user_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))
@@ -219,6 +223,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         lastLoginAt: row.last_login_at,
       },
       unreadMessages: unread?.c ?? 0,
+      ticketUnread,
       level: levelOf(row.solved_count ?? 0),
       grants: Object.fromEntries(grants.map((g) => [g.kind, g.remaining ?? 0])),
     };

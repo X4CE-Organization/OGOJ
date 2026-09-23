@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Github,
   Home,
+  LifeBuoy,
   ListChecks,
   Mail,
   Menu,
@@ -40,7 +41,7 @@ const NAV_ITEMS = [
 const GITHUB_FALLBACK = 'https://github.com/x4ce-organization/OGOJ';
 
 function Header() {
-  const { user, settings, unread, isAdmin, logout, grants } = useAuth();
+  const { user, settings, unread, ticketUnread, isAdmin, logout, grants } = useAuth();
   const { dark, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -143,6 +144,20 @@ function Header() {
 
         {user ? (
           <>
+            {settings.enable_tickets !== false && settings.ticket_show_entry !== false && (
+              <Link
+                to="/tickets"
+                className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+                title="工单 · 问题反馈"
+              >
+                <LifeBuoy className="h-4 w-4" />
+                {ticketUnread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
+                    {ticketUnread > 99 ? '99+' : ticketUnread}
+                  </span>
+                )}
+              </Link>
+            )}
             <Link
               to="/messages"
               className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
@@ -189,6 +204,10 @@ function Header() {
                   <MenuItem to="/settings">个人设置</MenuItem>
                   <MenuItem to="/shop/orders">我的订单</MenuItem>
                   <MenuItem to="/hacks">Hack 记录</MenuItem>
+                  <MenuItem to="/tickets">
+                    我的工单
+                    {ticketUnread > 0 && <span className="ml-1 text-rose-500">({ticketUnread})</span>}
+                  </MenuItem>
                   <MenuItem to="/achievements">我的成就</MenuItem>
                   <MenuItem to="/messages">
                     站内信
@@ -283,11 +302,17 @@ function Footer() {
   const githubUrl = String(settings.github_url ?? GITHUB_FALLBACK) || GITHUB_FALLBACK;
   const links = Array.isArray(settings.footer_links) ? (settings.footer_links as any[]) : [];
   const footerText = String(settings.footer_text ?? 'Powered by OGOJ');
+  const showTickets = settings.enable_tickets !== false && settings.ticket_show_entry !== false;
 
   return (
     <footer className="mt-10 border-t border-slate-200 bg-white py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex max-w-[1440px] flex-col items-center gap-3 px-4 text-center">
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+          {showTickets && (
+            <Link to="/tickets/new" className="hover:text-primary">
+              提交工单
+            </Link>
+          )}
           {links.map((link) => (
             <Link key={String(link.href)} to={String(link.href)} className="hover:text-primary">
               {String(link.label)}

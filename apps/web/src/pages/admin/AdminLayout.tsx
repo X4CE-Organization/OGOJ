@@ -8,6 +8,7 @@ import {
   Flag,
   GaugeCircle,
   Image,
+  LifeBuoy,
   LayoutDashboard,
   ListChecks,
   MessageSquare,
@@ -18,7 +19,9 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
+import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
+import { useEffect, useState } from 'react';
 
 const SECTIONS: { title: string; items: { to: string; label: string; icon: any; superOnly?: boolean }[] }[] = [
   {
@@ -53,12 +56,25 @@ const SECTIONS: { title: string; items: { to: string; label: string; icon: any; 
       { to: '/admin/shop', label: '商品管理', icon: ShoppingBag },
       { to: '/admin/orders', label: '订单审核', icon: Receipt },
       { to: '/admin/judge', label: '评测机状态', icon: GaugeCircle },
+      { to: '/admin/tickets', label: '工单管理', icon: LifeBuoy },
     ],
   },
 ];
 
 export default function AdminLayout() {
   const { isSuperAdmin, user } = useAuth();
+  const [pendingTickets, setPendingTickets] = useState(0);
+
+  useEffect(() => {
+    const load = () =>
+      api
+        .get<any>('/api/admin/tickets?status=unfinished&size=1')
+        .then((data) => setPendingTickets(data.stats?.open ?? 0))
+        .catch(() => undefined);
+    void load();
+    const timer = setInterval(load, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
@@ -97,6 +113,11 @@ export default function AdminLayout() {
                     >
                       <item.icon className="h-4 w-4" />
                       {item.label}
+                      {item.to === '/admin/tickets' && pendingTickets > 0 && (
+                        <span className="ml-auto rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
+                          {pendingTickets > 99 ? '99+' : pendingTickets}
+                        </span>
+                      )}
                     </NavLink>
                   ))}
               </div>

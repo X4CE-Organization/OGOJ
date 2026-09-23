@@ -102,6 +102,14 @@ export default function RecordDetail() {
                   <Crosshair className="h-3.5 w-3.5" /> Hack 这次提交
                 </button>
               )}
+            {user && (
+              <Link
+                to={`/tickets/new?relatedType=submission&relatedId=${data.id}`}
+                className="btn-ghost !px-2.5 !py-1 text-xs"
+              >
+                提交工单
+              </Link>
+            )}
           </div>
         </div>
 

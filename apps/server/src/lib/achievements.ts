@@ -38,6 +38,7 @@ export interface AchievementStats {
   earlyBird: boolean;
   teamCount: number;
   oauthCount: number;
+  ticketCount: number;
   perfectScore: boolean;
 }
 
@@ -112,6 +113,7 @@ export function collectStats(userId: number): AchievementStats {
     earlyBird,
     teamCount: count('SELECT COUNT(*) AS c FROM team_members WHERE user_id = ?', [userId]),
     oauthCount: count('SELECT COUNT(*) AS c FROM oauth_accounts WHERE user_id = ?', [userId]),
+    ticketCount: count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ?', [userId]),
     perfectScore: Boolean(
       get(
         `SELECT 1 AS x FROM submissions WHERE user_id = ? AND status = 'AC' AND score >= 100 LIMIT 1`,
@@ -160,6 +162,8 @@ export function conditionValue(condition: AchievementCondition, stats: Achieveme
       return stats.teamCount;
     case 'oauth_bound':
       return stats.oauthCount;
+    case 'ticket_count':
+      return stats.ticketCount;
     case 'night_owl':
       return flag(stats.nightOwl);
     case 'early_bird':
@@ -334,6 +338,8 @@ export const BUILTIN_ACHIEVEMENTS: {
   { code: 'day_5', name: '爆发的一天', description: '单日通过 5 道题目。', icon: '🚀', category: 'special', rarity: 'rare', condition: { type: 'day_solved', threshold: 5 }, points: 20, sort: 27 },
   { code: 'team_1', name: '并肩作战', description: '加入一个团队。', icon: '🧑‍🤝‍🧑', category: 'special', rarity: 'common', condition: { type: 'team_count', threshold: 1 }, points: 5, sort: 28 },
   { code: 'oauth_bound', name: '快捷登录', description: '绑定一个第三方账号。', icon: '🔗', category: 'special', rarity: 'common', condition: { type: 'oauth_bound', threshold: 1 }, points: 5, sort: 29 },
+  { code: 'ticket_1', name: '反馈达人', description: '提交第一个工单，帮助 OGOJ 变得更好。', icon: '📮', category: 'community', rarity: 'common', condition: { type: 'ticket_count', threshold: 1 }, points: 3, sort: 31 },
+  { code: 'ticket_5', name: '共建者', description: '累计提交 5 个工单。', icon: '🛠️', category: 'community', rarity: 'rare', condition: { type: 'ticket_count', threshold: 5 }, points: 15, sort: 32 },
   { code: 'veteran', name: 'OGOJ 元老', description: '注册满 365 天。', icon: '🏛️', category: 'special', rarity: 'legendary', condition: { type: 'register_days', threshold: 365 }, points: 200, sort: 30 },
 ];
 
