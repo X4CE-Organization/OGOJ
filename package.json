@@ -1,0 +1,31 @@
+{
+  "name": "ogoj",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OGOJ - Oganesson Online Judge",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @ogoj/server",
+    "dev:web": "npm run dev -w @ogoj/web",
+    "build": "npm run build -w @ogoj/server && npm run build -w @ogoj/web",
+    "start": "npm run start -w @ogoj/server",
+    "judge": "npm run judge -w @ogoj/server",
+    "migrate": "npm run migrate -w @ogoj/server",
+    "seed": "npm run seed -w @ogoj/server",
+    "reset": "npm run reset -w @ogoj/server",
+    "seed:prod": "node apps/server/dist/db/seed.js",
+    "migrate:prod": "node apps/server/dist/db/migrate.js",
+    "typecheck": "npm run typecheck -w @ogoj/server && npm run typecheck -w @ogoj/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
