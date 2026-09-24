@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Award, Calendar, Camera, MapPin, MessageSquarePlus, UserMinus, UserPlus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { classNames, DIFFICULTY_COLORS, DIFFICULTY_NAMES, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
+import { classNames, DIFFICULTY_COLORS, DIFFICULTY_COLORS_DARK, DIFFICULTY_NAMES, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
 import { Avatar, DifficultyBadge, EmptyState, Loading, Modal, StatusText, Tabs, TagBadge } from '../components/ui';
 import ImageUploadField from '../components/ImageUploadField';
 import { useToast } from '../components/Toast';
@@ -206,10 +206,11 @@ export default function UserProfile() {
                     <span className="w-24 shrink-0 truncate text-slate-500">{name}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                       <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-full [background-color:var(--bar)] dark:[background-color:var(--bar-dark)]"
                         style={{
                           width: `${(count / maxDifficulty) * 100}%`,
-                          backgroundColor: DIFFICULTY_COLORS[index],
+                          ['--bar' as string]: DIFFICULTY_COLORS[index],
+                          ['--bar-dark' as string]: DIFFICULTY_COLORS_DARK[index],
                         }}
                       />
                     </div>

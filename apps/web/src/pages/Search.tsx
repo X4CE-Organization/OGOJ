@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, query } from '../lib/api';
-import { difficultyColor, difficultyName, fromNow } from '../lib/format';
+import { difficultyColor, difficultyDarkColor, difficultyName, fromNow } from '../lib/format';
 import { Avatar, EmptyState, Loading, Section } from '../components/ui';
 
 export default function SearchPage() {
@@ -58,10 +58,10 @@ export default function SearchPage() {
                       {problem.title}
                     </Link>
                     <span
-                      className="rounded px-1.5 py-0.5 text-xs [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
+                      className="rounded px-1.5 py-0.5 text-xs [background-color:color-mix(in_srgb,var(--difficulty)_16%,transparent)] [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[background-color:color-mix(in_srgb,var(--difficulty-dark)_18%,transparent)] dark:[color:var(--difficulty-dark)]"
                       style={{
-                        backgroundColor: `color-mix(in srgb, ${difficultyColor(problem.difficulty)} 16%, transparent)`,
                         ['--difficulty' as string]: difficultyColor(problem.difficulty),
+                        ['--difficulty-dark' as string]: difficultyDarkColor(problem.difficulty),
                       }}
                     >
                       {difficultyName(problem.difficulty)}

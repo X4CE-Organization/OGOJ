@@ -12,12 +12,22 @@ export const DIFFICULTY_NAMES = [
 ];
 
 export const DIFFICULTY_COLORS = [
-  '#22c55e', // 入门 - 绿
-  '#14b8a6', // 普及 - 青
-  '#3b82f6', // 提高 - 蓝
-  '#8b5cf6', // NOIP - 紫
-  '#f97316', // NOI  - 橙
-  '#ef4444', // IOI  - 红
+  '#52c41a', // 入门 - 绿
+  '#3498db', // 普及 - 蓝
+  '#9d3dcf', // 提高 - 紫
+  '#f39c11', // NOIP - 橙
+  '#fe4c61', // NOI  - 红
+  '#111827', // IOI  - 黑
+];
+
+/** 深色模式下使用的配色：黑色在深底上不可读，换成浅灰 */
+export const DIFFICULTY_COLORS_DARK = [
+  '#52c41a',
+  '#3498db',
+  '#9d3dcf',
+  '#f39c11',
+  '#fe4c61',
+  '#e5e7eb',
 ];
 
 export interface UserBrief {
@@ -87,6 +97,7 @@ export function problemSummary(row: any, options: { tags?: any[]; showRate?: boo
     difficulty: row.difficulty,
     difficultyName: DIFFICULTY_NAMES[row.difficulty - 1] ?? DIFFICULTY_NAMES[0],
     difficultyColor: DIFFICULTY_COLORS[row.difficulty - 1] ?? DIFFICULTY_COLORS[0],
+    difficultyColorDark: DIFFICULTY_COLORS_DARK[row.difficulty - 1] ?? DIFFICULTY_COLORS_DARK[0],
     tags: options.tags ?? [],
     provider: row.provider ?? '',
     submitCount: total,

@@ -331,10 +331,10 @@ export default function ProblemDetail() {
               </h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <span
-                  className="rounded px-1.5 py-0.5 text-xs [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
+                  className="rounded px-1.5 py-0.5 text-xs [background-color:color-mix(in_srgb,var(--difficulty)_16%,transparent)] [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[background-color:color-mix(in_srgb,var(--difficulty-dark)_18%,transparent)] dark:[color:var(--difficulty-dark)]"
                   style={{
-                    backgroundColor: `color-mix(in srgb, ${problem.difficultyColor} 16%, transparent)`,
                     ['--difficulty' as string]: problem.difficultyColor,
+                    ['--difficulty-dark' as string]: problem.difficultyColorDark ?? problem.difficultyColor,
                   }}
                 >
                   {problem.difficultyName}

@@ -37,12 +37,22 @@ export const DIFFICULTY_NAMES = [
 ];
 
 export const DIFFICULTY_COLORS = [
-  '#22c55e', // 入门 - 绿
-  '#14b8a6', // 普及 - 青
-  '#3b82f6', // 提高 - 蓝
-  '#8b5cf6', // NOIP - 紫
-  '#f97316', // NOI  - 橙
-  '#ef4444', // IOI  - 红
+  '#52c41a', // 入门 - 绿
+  '#3498db', // 普及 - 蓝
+  '#9d3dcf', // 提高 - 紫
+  '#f39c11', // NOIP - 橙
+  '#fe4c61', // NOI  - 红
+  '#111827', // IOI  - 黑
+];
+
+/** 深色模式下使用的配色：黑色在深底上不可读，换成浅灰 */
+export const DIFFICULTY_COLORS_DARK = [
+  '#52c41a',
+  '#3498db',
+  '#9d3dcf',
+  '#f39c11',
+  '#fe4c61',
+  '#e5e7eb',
 ];
 
 export function statusStyle(status: string) {
@@ -132,6 +142,10 @@ export function difficultyName(value: number): string {
 
 export function difficultyColor(value: number): string {
   return DIFFICULTY_COLORS[Math.max(0, Math.min(5, (value || 1) - 1))]!;
+}
+
+export function difficultyDarkColor(value: number): string {
+  return DIFFICULTY_COLORS_DARK[Math.max(0, Math.min(5, (value || 1) - 1))]!;
 }
 
 export function initials(name?: string | null): string {

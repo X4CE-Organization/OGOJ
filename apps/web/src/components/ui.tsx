@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   classNames,
   difficultyColor,
+  difficultyDarkColor,
   difficultyName,
   formatMemory,
   formatMs,
@@ -93,12 +94,13 @@ export function TagBadge({ tag }: { tag: { name: string; color?: string } }) {
 
 export function DifficultyBadge({ value, compact = false }: { value: number; compact?: boolean }) {
   const color = difficultyColor(value);
+  const darkColor = difficultyDarkColor(value);
   return (
     <span
       // 浅色模式下把文字色调深一点，保证小字号也有足够对比度；
       // 深色模式保持原色（深底浅字本来就清晰）。
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
-      style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, ['--difficulty' as string]: color }}
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [background-color:color-mix(in_srgb,var(--difficulty)_14%,transparent)] [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[background-color:color-mix(in_srgb,var(--difficulty-dark)_18%,transparent)] dark:[color:var(--difficulty-dark)]"
+      style={{ ['--difficulty' as string]: color, ['--difficulty-dark' as string]: darkColor }}
       title={difficultyName(value)}
     >
       {compact ? difficultyName(value) : `${value}. ${difficultyName(value)}`}
