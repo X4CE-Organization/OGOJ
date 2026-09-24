@@ -302,6 +302,29 @@ sudo systemctl enable --now ogoj
 
 如需 Nginx 反向代理 + HTTPS，把 `location /` 代理到 `http://127.0.0.1:8080` 即可（记得上传体积限制 `client_max_body_size 128m;`）。
 
+### 7.1 日常启停（项目自带脚本）
+
+```bash
+./scripts/ogoj.sh start     # 后台启动（关掉终端也不会退出）
+./scripts/ogoj.sh status    # 查看运行状态、端口与健康检查
+./scripts/ogoj.sh logs      # 跟踪日志（Ctrl+C 退出）
+./scripts/ogoj.sh restart   # 重启
+./scripts/ogoj.sh stop      # 停止
+./scripts/ogoj.sh run       # 前台运行，交给 systemd / launchd 时使用
+```
+
+脚本会读取 `.env` 中的 `PORT`，日志写到 `data/logs/ogoj.log`。
+
+### 7.2 macOS 开机自启（launchd）
+
+仓库里带了一份 launchd 模板 [`deploy/com.ogoj.server.plist`](./deploy/com.ogoj.server.plist)：
+
+1. 把文件里的 `USERNAME` 和 node 路径改成自己的；
+2. `cp deploy/com.ogoj.server.plist ~/Library/LaunchAgents/`
+3. `launchctl load -w ~/Library/LaunchAgents/com.ogoj.server.plist`
+
+之后开机自动启动，进程崩溃也会被自动拉起。
+
 ### 8. 独立评测机（可选，多机 / 高并发）
 
 评测任务保存在数据库队列中，因此可以在一台更强的机器上单独运行评测 worker：
