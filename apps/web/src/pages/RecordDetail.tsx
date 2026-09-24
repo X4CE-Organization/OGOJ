@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Crosshair, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { LANGUAGE_NAMES, formatMemory, formatMs, formatTime, classNames } from '../lib/format';
 import { EmptyState, Loading, StatusText, UserLink } from '../components/ui';
 import CodeEditor from '../components/CodeEditor';
 import { useToast } from '../components/Toast';
-import HackDialog from '../components/HackDialog';
 
 export default function RecordDetail() {
   const { id = '' } = useParams();
@@ -17,7 +16,6 @@ export default function RecordDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCode, setShowCode] = useState(false);
-  const [hackOpen, setHackOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -83,25 +81,11 @@ export default function RecordDetail() {
           </div>
           <div className="flex items-center gap-3">
             <StatusText status={data.status} score={data.score} />
-            {data.hacked && (
-              <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">
-                <Crosshair className="h-3 w-3" /> 已被 Hack
-              </span>
-            )}
             {isAdmin && (
               <button type="button" className="btn-ghost !px-2.5 !py-1 text-xs" onClick={rejudge}>
                 <RotateCcw className="h-3.5 w-3.5" /> 重测
               </button>
             )}
-            {settings.enable_hack !== false &&
-              user &&
-              data.status === 'AC' &&
-              !data.hacked &&
-              (data.user.id !== user.id || isAdmin) && (
-                <button type="button" className="btn-ghost !px-2.5 !py-1 text-xs" onClick={() => setHackOpen(true)}>
-                  <Crosshair className="h-3.5 w-3.5" /> Hack 这次提交
-                </button>
-              )}
             {user && (
               <Link
                 to={`/tickets/new?relatedType=submission&relatedId=${data.id}`}
@@ -240,20 +224,6 @@ export default function RecordDetail() {
         </div>
       </div>
 
-      {data.hackId && (
-        <div className="card p-4 text-sm">
-          <Link to="/hacks" className="link inline-flex items-center gap-1.5">
-            <Crosshair className="h-4 w-4" /> 查看相关 Hack 记录 #{data.hackId}
-          </Link>
-        </div>
-      )}
-
-      <HackDialog
-        submissionId={data.id}
-        open={hackOpen}
-        onClose={() => setHackOpen(false)}
-        onDone={load}
-      />
     </div>
   );
 }

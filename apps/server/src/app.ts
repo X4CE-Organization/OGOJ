@@ -23,7 +23,6 @@ import { registerListRoutes } from './routes/lists.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerOAuthRoutes } from './routes/oauth.js';
-import { registerHackRoutes } from './routes/hacks.js';
 import { registerAchievementRoutes } from './routes/achievements.js';
 import { registerTicketRoutes } from './routes/tickets.js';
 import { registerMessageRoutes } from './routes/messages.js';
@@ -179,7 +178,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerUserRoutes(app);
   await registerProblemRoutes(app);
   await registerSubmissionRoutes(app);
-  await registerHackRoutes(app);
   await registerContestRoutes(app);
   await registerCommunityRoutes(app);
   await registerAchievementRoutes(app);

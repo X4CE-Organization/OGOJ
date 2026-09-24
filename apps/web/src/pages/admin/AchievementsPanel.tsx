@@ -17,8 +17,6 @@ const CONDITION_TYPES = [
   { value: 'article_count', label: '发布文章数' },
   { value: 'discussion_count', label: '发帖数' },
   { value: 'reply_count', label: '回复数' },
-  { value: 'hack_count', label: '发起 Hack 次数' },
-  { value: 'hack_success', label: 'Hack 成功次数' },
   { value: 'shop_order', label: '商店兑换次数' },
   { value: 'difficulty_clear', label: '通过的最高难度（1-7）' },
   { value: 'day_solved', label: '单日最多通过题数' },
@@ -241,7 +239,7 @@ export default function AchievementsPanel() {
 
       <Section title="可用条件类型">
         <p className="p-4 text-xs text-slate-500">
-          条件由「类型 + 阈值」组成，系统在通过题目、参加比赛、发布内容、Hack、兑换商品等事件后自动检查；
+          条件由「类型 + 阈值」组成，系统在通过题目、参加比赛、发布内容、兑换商品等事件后自动检查；
           也可以由用户在成就页点击「检查我的成就」手动触发。
         </p>
         <div className="flex flex-wrap gap-1.5 px-4 pb-4">

@@ -4,7 +4,7 @@
  * Every badge declares a machine-readable condition, for example
  *   {"type":"solved_count","threshold":50}
  * and the engine evaluates all active definitions for a user whenever
- * something meaningful happens (AC, contest, hack, post, purchase, ...).
+ * something meaningful happens (AC, contest, post, purchase, ...).
  */
 import { all, count, get, run, tx } from '../db/index.js';
 import { addPoints } from './points.js';
@@ -29,8 +29,6 @@ export interface AchievementStats {
   articleCount: number;
   discussionCount: number;
   replyCount: number;
-  hackCount: number;
-  hackSuccessCount: number;
   orderCount: number;
   maxDifficulty: number;
   bestDaySolved: number;
@@ -104,8 +102,6 @@ export function collectStats(userId: number): AchievementStats {
     articleCount: count('SELECT COUNT(*) AS c FROM articles WHERE author_id = ? AND is_deleted = 0', [userId]),
     discussionCount: count('SELECT COUNT(*) AS c FROM discussions WHERE author_id = ? AND is_deleted = 0', [userId]),
     replyCount: count('SELECT COUNT(*) AS c FROM discussion_replies WHERE author_id = ? AND is_deleted = 0', [userId]),
-    hackCount: count('SELECT COUNT(*) AS c FROM hacks WHERE hacker_id = ?', [userId]),
-    hackSuccessCount: count(`SELECT COUNT(*) AS c FROM hacks WHERE hacker_id = ? AND verdict = 'success'`, [userId]),
     orderCount: count(`SELECT COUNT(*) AS c FROM shop_orders WHERE user_id = ? AND status IN ('approved','completed')`, [userId]),
     maxDifficulty,
     bestDaySolved,
@@ -148,10 +144,6 @@ export function conditionValue(condition: AchievementCondition, stats: Achieveme
       return stats.discussionCount;
     case 'reply_count':
       return stats.replyCount;
-    case 'hack_count':
-      return stats.hackCount;
-    case 'hack_success':
-      return stats.hackSuccessCount;
     case 'shop_order':
       return stats.orderCount;
     case 'difficulty_clear':
@@ -316,19 +308,17 @@ export const BUILTIN_ACHIEVEMENTS: {
   { code: 'solved_100', name: '百题斩', description: '累计通过 100 道题目。', icon: '💯', category: 'milestone', rarity: 'rare', condition: { type: 'solved_count', threshold: 100 }, points: 50, sort: 5 },
   { code: 'solved_300', name: '题海行者', description: '累计通过 300 道题目。', icon: '🌊', category: 'milestone', rarity: 'epic', condition: { type: 'solved_count', threshold: 300 }, points: 120, sort: 6 },
   { code: 'solved_700', name: '登峰造极', description: '累计通过 700 道题目。', icon: '🏔️', category: 'milestone', rarity: 'legendary', condition: { type: 'solved_count', threshold: 700 }, points: 300, sort: 7 },
-  { code: 'difficulty_5', name: '挑战省选', description: '通过一道难度达到「提高+/省选−」及以上的题目。', icon: '⚔️', category: 'skill', rarity: 'rare', condition: { type: 'difficulty_clear', threshold: 5 }, points: 15, sort: 8 },
-  { code: 'difficulty_6', name: '省选选手', description: '通过一道「省选/NOI−」或更难的题目。', icon: '🐉', category: 'skill', rarity: 'epic', condition: { type: 'difficulty_clear', threshold: 6 }, points: 40, sort: 9 },
-  { code: 'difficulty_7', name: '征服 NOI', description: '通过一道「NOI/NOI+/CTSC」级别的题目。', icon: '👑', category: 'skill', rarity: 'legendary', condition: { type: 'difficulty_clear', threshold: 7 }, points: 100, sort: 10 },
+  { code: 'difficulty_4', name: '挑战 NOIP', description: '通过一道难度为「NOIP」的题目。', icon: '⚔️', category: 'skill', rarity: 'rare', condition: { type: 'difficulty_clear', threshold: 4 }, points: 15, sort: 8 },
+  { code: 'difficulty_5', name: '省选水平', description: '通过一道难度为「NOI」的题目。', icon: '🐉', category: 'skill', rarity: 'epic', condition: { type: 'difficulty_clear', threshold: 5 }, points: 40, sort: 9 },
+  { code: 'difficulty_6', name: '国际赛场', description: '通过一道难度为「IOI」的题目。', icon: '👑', category: 'skill', rarity: 'legendary', condition: { type: 'difficulty_clear', threshold: 6 }, points: 100, sort: 10 },
   { code: 'first_blood_1', name: '一血猎人', description: '拿到一次全站首杀。', icon: '🩸', category: 'skill', rarity: 'rare', condition: { type: 'first_blood', threshold: 1 }, points: 10, sort: 11 },
   { code: 'first_blood_10', name: '首杀大师', description: '累计拿到 10 次全站首杀。', icon: '🗡️', category: 'skill', rarity: 'epic', condition: { type: 'first_blood', threshold: 10 }, points: 60, sort: 12 },
-  { code: 'hack_1', name: '第一位猎人', description: '成功 Hack 一次他人的提交。', icon: '🏹', category: 'skill', rarity: 'rare', condition: { type: 'hack_success', threshold: 1 }, points: 15, sort: 13 },
-  { code: 'hack_10', name: '造数据专家', description: '成功 Hack 10 次，让假算法无处遁形。', icon: '🧪', category: 'skill', rarity: 'epic', condition: { type: 'hack_success', threshold: 10 }, points: 80, sort: 14 },
   { code: 'contest_1', name: '初次登场', description: '参加第一场比赛。', icon: '🎫', category: 'contest', rarity: 'common', condition: { type: 'contest_count', threshold: 1 }, points: 5, sort: 15 },
   { code: 'contest_10', name: '赛场常客', description: '累计参加 10 场比赛。', icon: '🏟️', category: 'contest', rarity: 'rare', condition: { type: 'contest_count', threshold: 10 }, points: 30, sort: 16 },
   { code: 'contest_30', name: '比赛狂人', description: '累计参加 30 场比赛。', icon: '🎖️', category: 'contest', rarity: 'epic', condition: { type: 'contest_count', threshold: 30 }, points: 90, sort: 17 },
   { code: 'solution_1', name: '授人以渔', description: '发布第一篇题解。', icon: '📝', category: 'community', rarity: 'common', condition: { type: 'solution_count', threshold: 1 }, points: 5, sort: 18 },
   { code: 'solution_20', name: '题解作者', description: '累计发布 20 篇题解。', icon: '📚', category: 'community', rarity: 'rare', condition: { type: 'solution_count', threshold: 20 }, points: 40, sort: 19 },
-  { code: 'article_5', name: '专栏作家', description: '累计发布 5 篇文章。', icon: '✍️', category: 'community', rarity: 'rare', condition: { type: 'article_count', threshold: 5 }, points: 30, sort: 20 },
+  { code: 'article_5', name: '专栏作家', description: '在文章广场累计发布 5 篇文章。', icon: '✍️', category: 'community', rarity: 'rare', condition: { type: 'article_count', threshold: 5 }, points: 30, sort: 20 },
   { code: 'discussion_10', name: '社区活跃者', description: '发布 10 个讨论帖。', icon: '💬', category: 'community', rarity: 'common', condition: { type: 'discussion_count', threshold: 10 }, points: 20, sort: 21 },
   { code: 'reply_50', name: '热心解答', description: '累计回复 50 次。', icon: '🤝', category: 'community', rarity: 'rare', condition: { type: 'reply_count', threshold: 50 }, points: 30, sort: 22 },
   { code: 'points_500', name: '积分富豪', description: '积分达到 500。', icon: '💰', category: 'special', rarity: 'epic', condition: { type: 'points', threshold: 500 }, points: 0, sort: 23 },

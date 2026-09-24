@@ -2,7 +2,6 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   Award,
   BookOpen,
-  Crosshair,
   Database,
   FileText,
   Flag,
@@ -43,7 +42,6 @@ const SECTIONS: { title: string; items: { to: string; label: string; icon: any; 
       { to: '/admin/problems', label: '题目管理', icon: BookOpen },
       { to: '/admin/contests', label: '比赛管理', icon: Trophy },
       { to: '/admin/solutions', label: '题解审核', icon: ListChecks },
-      { to: '/admin/hacks', label: 'Hack 管理', icon: Crosshair },
       { to: '/admin/achievements', label: '成就管理', icon: Award },
       { to: '/admin/discussions', label: '帖子管理', icon: MessageSquare },
       { to: '/admin/announcements', label: '公告管理', icon: Flag },

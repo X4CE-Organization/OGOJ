@@ -153,8 +153,6 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
         hasPassword: Boolean(contest.password),
         showRank: Boolean(contest.show_rank),
         rated: Boolean(contest.rated),
-        allowHack: Boolean(contest.allow_hack),
-        openHack: Boolean(contest.open_hack),
         allowLanguages: JSON.parse(contest.allow_languages || '[]'),
         origin: contest.origin,
         reviewStatus: contest.review_status,
@@ -218,8 +216,8 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const info = run(
       `INSERT INTO contests
         (title, subtitle, description, rules, start_time, end_time, freeze_minutes, is_public, need_register,
-         password, show_rank, rated, allow_hack, open_hack, allow_languages, origin, owner_id, author_id, review_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         password, show_rank, rated, allow_languages, origin, owner_id, author_id, review_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title,
         String(body.subtitle ?? ''),
@@ -233,8 +231,6 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
         String(body.password ?? ''),
         body.showRank === undefined ? (bool('contest_show_rank_default', true) ? 1 : 0) : body.showRank ? 1 : 0,
         body.rated === false ? 0 : 1,
-        body.allowHack === false ? 0 : 1,
-        body.openHack ? 1 : 0,
         JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
         isAdmin ? 'official' : 'user',
         user.id,
@@ -291,8 +287,6 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     if (body.password !== undefined) set('password', String(body.password ?? ''));
     if (body.showRank !== undefined) set('show_rank', body.showRank ? 1 : 0);
     if (body.rated !== undefined) set('rated', body.rated ? 1 : 0);
-    if (body.allowHack !== undefined) set('allow_hack', body.allowHack ? 1 : 0);
-    if (body.openHack !== undefined) set('open_hack', body.openHack ? 1 : 0);
     if (body.allowLanguages !== undefined) {
       set('allow_languages', JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []));
     }

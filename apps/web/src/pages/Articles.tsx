@@ -43,7 +43,7 @@ export default function Articles() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">专栏</h1>
+        <h1 className="text-lg font-semibold">文章广场</h1>
         {user && (
           <Link to="/article/new" className="btn-primary !px-3 !py-1.5 text-sm">
             <PenLine className="h-4 w-4" /> 写文章

@@ -34,7 +34,6 @@ import About from './pages/About';
 import Help from './pages/Help';
 import NotFound from './pages/NotFound';
 import OAuthCallback from './pages/OAuthCallback';
-import Hacks from './pages/Hacks';
 import Achievements from './pages/Achievements';
 import Tickets from './pages/Tickets';
 import TicketNew from './pages/TicketNew';
@@ -57,7 +56,6 @@ import AdminJudge from './pages/admin/JudgePanel';
 import AdminLogs from './pages/admin/LogsPanel';
 import AdminBackups from './pages/admin/MaintenancePanel';
 import AdminAchievements from './pages/admin/AchievementsPanel';
-import AdminHacks from './pages/admin/HacksPanel';
 import AdminTickets from './pages/admin/TicketsPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -109,7 +107,6 @@ export default function App() {
         <Route path="/solution/:id" element={<SolutionDetail />} />
         <Route path="/rank" element={<Rank />} />
         <Route path="/achievements" element={<Achievements />} />
-        <Route path="/hacks" element={<Hacks />} />
         <Route path="/tickets" element={<RequireAuth><Tickets /></RequireAuth>} />
         <Route path="/tickets/new" element={<RequireAuth><TicketNew /></RequireAuth>} />
         <Route path="/tickets/:id" element={<RequireAuth><TicketDetail /></RequireAuth>} />
@@ -141,7 +138,6 @@ export default function App() {
           <Route path="solutions" element={<AdminSolutions />} />
           <Route path="judge" element={<AdminJudge />} />
           <Route path="achievements" element={<AdminAchievements />} />
-          <Route path="hacks" element={<AdminHacks />} />
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="logs" element={<AdminLogs />} />
           <Route path="maintenance" element={<AdminBackups />} />

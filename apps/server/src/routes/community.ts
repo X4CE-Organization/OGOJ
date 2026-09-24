@@ -477,7 +477,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     return { ok: true, vote: value };
   });
 
-  /* ----------------------------------------------------------------- 专栏 */
+  /* ------------------------------------------------------------- 文章广场 */
   app.get('/api/articles', async (request) => {
     if (!bool('enable_article', true)) return { items: [], total: 0, page: 1, size: 0 };
     const query = request.query as any;
@@ -540,7 +540,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
 
   app.post('/api/articles', async (request) => {
     const user = requireUser(request);
-    if (!bool('enable_article', true)) throw forbidden('专栏已关闭');
+    if (!bool('enable_article', true)) throw forbidden('文章广场已关闭');
     const body = (request.body ?? {}) as any;
     const title = String(body.title ?? '').trim();
     const content = String(body.content ?? '').trim();

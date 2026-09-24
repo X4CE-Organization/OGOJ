@@ -679,7 +679,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
     get<SubmissionRef>('SELECT id, problem_id, user_id, contest_id FROM submissions WHERE id = ?', [id]);
 
   // Figure out what the submission looked like before this judgement so that
-  // rejudges (and hacks) adjust the counters instead of inflating them.
+  // Rejudges adjust the counters instead of inflating them.
   const previous = get<{ status: string; score: number; judged_at: string | null }>(
     'SELECT status, score, judged_at FROM submissions WHERE id = ?',
     [id],

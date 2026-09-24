@@ -188,7 +188,7 @@ export default function UserProfile() {
           )}
           {settings.show_rating !== false && (
             <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2 text-sm">
-              <span className="text-amber-600 dark:text-amber-400">咕值</span>
+              <span className="text-amber-600 dark:text-amber-400">等级分</span>
               <span className="font-semibold text-amber-600 dark:text-amber-400">{profile.rating}</span>
             </div>
           )}
@@ -301,7 +301,7 @@ export default function UserProfile() {
               { key: 'submissions', label: '提交记录' },
               { key: 'contests', label: '比赛记录' },
               { key: 'solutions', label: '题解' },
-              { key: 'articles', label: '专栏' },
+              { key: 'articles', label: '文章广场' },
               { key: 'discussions', label: '讨论' },
             ]}
           />

@@ -4,22 +4,20 @@ import { json as settingJson, num, str } from '../settings/index.js';
 
 export const DIFFICULTY_NAMES = [
   '入门',
-  '普及−',
-  '普及/提高−',
-  '普及+/提高',
-  '提高+/省选−',
-  '省选/NOI−',
-  'NOI/NOI+/CTSC',
+  '普及',
+  '提高',
+  'NOIP',
+  'NOI',
+  'IOI',
 ];
 
 export const DIFFICULTY_COLORS = [
-  '#fe4c61',
-  '#f39c11',
-  '#ffc116',
-  '#52c41a',
-  '#3498db',
-  '#9d3dcf',
-  '#0e1d69',
+  '#fe4c61', // 入门
+  '#f39c11', // 普及
+  '#ffc116', // 提高
+  '#52c41a', // NOIP
+  '#3498db', // NOI
+  '#9d3dcf', // IOI
 ];
 
 export interface UserBrief {

@@ -8,7 +8,6 @@ import { EmptyState, Loading, Section, StatusText, Tabs, TagBadge, UserLink, Mod
 import CodeEditor from '../components/CodeEditor';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
-import HackList from '../components/HackList';
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 
 function SampleBlock({ index, sample }: { index: number; sample: { input: string; output: string; explanation?: string } }) {
@@ -360,7 +359,6 @@ export default function ProblemDetail() {
               { key: 'records', label: '评测记录' },
               { key: 'discussions', label: '讨论' },
               { key: 'statistics', label: '统计' },
-              { key: 'hack', label: 'Hack' },
             ]}
           />
 
@@ -579,10 +577,6 @@ export default function ProblemDetail() {
                   </ul>
                 </div>
               </div>
-            )}
-
-            {tab === 'hack' && (
-              <HackList problemId={problem.id} showHackButton />
             )}
           </div>
         </div>

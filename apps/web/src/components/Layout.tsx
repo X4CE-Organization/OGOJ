@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { to: '/contests', label: '比赛', icon: Trophy },
   { to: '/training', label: '训练', icon: ListChecks },
   { to: '/discussions', label: '讨论', icon: Users },
-  { to: '/articles', label: '专栏', icon: BookOpen },
+  { to: '/articles', label: '文章广场', icon: BookOpen },
   { to: '/rank', label: '排行榜', icon: Trophy },
   { to: '/achievements', label: '成就', icon: Award },
   { to: '/shop', label: '商店', icon: ShoppingBag },
@@ -228,7 +228,6 @@ function Header() {
                   </button>
                   <MenuItem to="/settings">个人设置</MenuItem>
                   <MenuItem to="/shop/orders">我的订单</MenuItem>
-                  <MenuItem to="/hacks">Hack 记录</MenuItem>
                   <MenuItem to="/tickets">
                     我的工单
                     {ticketUnread > 0 && <span className="ml-1 text-rose-500">({ticketUnread})</span>}

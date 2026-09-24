@@ -93,7 +93,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   {
     key: 'community',
     name: '讨论与社区',
-    description: '讨论区、题解、专栏、评论与敏感词',
+    description: '讨论区、题解、文章广场、评论与敏感词',
     icon: 'messages-square',
   },
   {
@@ -133,10 +133,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
     icon: 'key-round',
   },
   {
-    key: 'hack',
-    name: 'Hack 与成就',
-    description: 'Hack 系统规则、奖励与成就徽章',
-    icon: 'swords',
+    key: 'achievement',
+    name: '成就徽章',
+    description: '徽章解锁条件、奖励与通知',
+    icon: 'award',
   },
   {
     key: 'ticket',
@@ -540,7 +540,7 @@ export const SETTINGS: SettingField[] = [
   },
   {
     key: 'show_rating',
-    label: '显示用户咕值',
+    label: '显示用户等级分',
     type: 'boolean',
     default: true,
     group: 'user',
@@ -1044,7 +1044,7 @@ export const SETTINGS: SettingField[] = [
   },
   {
     key: 'enable_article',
-    label: '开启专栏功能',
+    label: '开启文章广场',
     type: 'boolean',
     default: true,
     group: 'community',
@@ -1705,116 +1705,13 @@ for (const preset of OAUTH_PRESETS) {
   );
 }
 
-const hackFields: SettingField[] = [
-  {
-    key: 'enable_hack',
-    label: '开启 Hack 系统',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_require_contest',
-    label: '仅允许在比赛中 Hack',
-    type: 'boolean',
-    default: false,
-    group: 'hack',
-    description: '关闭后，标记了「允许 Hack」的题目在赛后也可以被 Hack',
-    public: true,
-  },
-  {
-    key: 'hack_open_after_contest',
-    label: '比赛结束后继续开放 Hack',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_target_must_be_ac',
-    label: '只能 Hack 通过的提交',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_allow_self',
-    label: '允许 Hack 自己（测自己的代码）',
-    type: 'boolean',
-    default: false,
-    group: 'hack',
-  },
-  {
-    key: 'hack_success_points',
-    label: 'Hack 成功获得积分',
-    type: 'number',
-    default: 10,
-    min: 0,
-    max: 1000,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_fail_points',
-    label: 'Hack 失败扣除积分',
-    type: 'number',
-    default: 0,
-    min: 0,
-    max: 1000,
-    group: 'hack',
-    description: '0 表示失败不扣分',
-    public: true,
-  },
-  {
-    key: 'hack_rate_limit_seconds',
-    label: '两次 Hack 的最小间隔（秒）',
-    type: 'number',
-    default: 30,
-    min: 0,
-    max: 3600,
-    group: 'hack',
-  },
-  {
-    key: 'hack_max_input_kb',
-    label: 'Hack 数据大小上限 (KB)',
-    type: 'number',
-    default: 64,
-    min: 1,
-    max: 4096,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_add_to_testdata',
-    label: 'Hack 成功的数据并入题库测试数据',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-    description: '开启后，成功的 Hack 数据会被用于之后所有该题目的评测',
-  },
-  {
-    key: 'hack_show_input',
-    label: '公开 Hack 数据',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-    public: true,
-  },
-  {
-    key: 'hack_notify',
-    label: 'Hack 结果发送站内信',
-    type: 'boolean',
-    default: true,
-    group: 'hack',
-  },
+const achievementFields: SettingField[] = [
   {
     key: 'achievement_enable',
     label: '开启成就系统',
     type: 'boolean',
     default: true,
-    group: 'hack',
+    group: 'achievement',
     public: true,
   },
   {
@@ -1822,14 +1719,14 @@ const hackFields: SettingField[] = [
     label: '解锁成就发送站内信',
     type: 'boolean',
     default: true,
-    group: 'hack',
+    group: 'achievement',
   },
   {
     key: 'achievement_show_locked',
     label: '个人主页显示未解锁徽章',
     type: 'boolean',
     default: true,
-    group: 'hack',
+    group: 'achievement',
     public: true,
   },
 ];
@@ -1953,7 +1850,7 @@ const ticketFields: SettingField[] = [
   },
 ];
 
-SETTINGS.push(...oauthFields, ...hackFields, ...ticketFields);
+SETTINGS.push(...oauthFields, ...achievementFields, ...ticketFields);
 
 export const SETTING_MAP: Record<string, SettingField> = Object.fromEntries(
   SETTINGS.map((s) => [s.key, s]),

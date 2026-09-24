@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
   gender         INTEGER NOT NULL DEFAULT 0,          -- 0 保密 1 男 2 女
   ccf_level      TEXT DEFAULT '',
   points         INTEGER NOT NULL DEFAULT 0,          -- 积分 (商店货币)
-  rating         INTEGER NOT NULL DEFAULT 1500,       -- 咕值 / 比赛 rating
+  rating         INTEGER NOT NULL DEFAULT 1500,       -- 等级分 / 比赛 rating
   is_banned      INTEGER NOT NULL DEFAULT 0,
   ban_reason     TEXT,
   is_private     INTEGER NOT NULL DEFAULT 0,          -- 隐藏提交记录 / 通过题目
@@ -98,9 +98,6 @@ CREATE TABLE IF NOT EXISTS problems (
   review_note     TEXT DEFAULT '',
   is_public       INTEGER NOT NULL DEFAULT 1,
   is_contest_only INTEGER NOT NULL DEFAULT 0,
-  allow_hack      INTEGER NOT NULL DEFAULT 0,          -- 是否允许对本题发起 hack
-  hack_language   TEXT NOT NULL DEFAULT '',            -- 生成 hack 标准答案的参考程序语言
-  hack_code       TEXT NOT NULL DEFAULT '',            -- 参考程序源码
   submit_count    INTEGER NOT NULL DEFAULT 0,
   accepted_count  INTEGER NOT NULL DEFAULT 0,
   favorite_count  INTEGER NOT NULL DEFAULT 0,
@@ -142,8 +139,6 @@ CREATE TABLE IF NOT EXISTS testcases (
   input_file  TEXT NOT NULL,
   output_file TEXT NOT NULL,
   is_sample   INTEGER NOT NULL DEFAULT 0,
-  is_hack     INTEGER NOT NULL DEFAULT 0,
-  hack_id     INTEGER,
   created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   UNIQUE (problem_id, idx)
 );
@@ -169,8 +164,6 @@ CREATE TABLE IF NOT EXISTS submissions (
   judge_time_ms  INTEGER,
   is_public      INTEGER NOT NULL DEFAULT 1,
   priority       INTEGER NOT NULL DEFAULT 0,
-  hacked         INTEGER NOT NULL DEFAULT 0,
-  hack_id        INTEGER,
   claimed_at     TEXT,
   judged_at      TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -208,8 +201,6 @@ CREATE TABLE IF NOT EXISTS contests (
   password        TEXT DEFAULT '',
   show_rank       INTEGER NOT NULL DEFAULT 1,
   rated           INTEGER NOT NULL DEFAULT 1,
-  allow_hack      INTEGER NOT NULL DEFAULT 1,
-  open_hack       INTEGER NOT NULL DEFAULT 0,
   allow_languages TEXT NOT NULL DEFAULT '[]',
   origin          TEXT NOT NULL DEFAULT 'official',   -- official | user
   owner_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -578,33 +569,6 @@ CREATE TABLE IF NOT EXISTS oauth_accounts (
 CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth_accounts(user_id);
 
 -- ---------------------------------------------------------------------------
--- Hack 系统
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS hacks (
-  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-  contest_id           INTEGER REFERENCES contests(id) ON DELETE SET NULL,
-  problem_id           INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
-  hacker_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  target_submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-  target_user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  testcase_id          INTEGER,
-  verdict              TEXT NOT NULL DEFAULT 'pending',   -- pending | success | fail | error
-  input_file           TEXT NOT NULL DEFAULT '',
-  answer_file          TEXT NOT NULL DEFAULT '',
-  message              TEXT NOT NULL DEFAULT '',
-  detail               TEXT NOT NULL DEFAULT '[]',
-  status_before        TEXT NOT NULL DEFAULT '',
-  status_after         TEXT NOT NULL DEFAULT '',
-  score_delta          INTEGER NOT NULL DEFAULT 0,
-  judged_at            TEXT,
-  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_hacks_problem ON hacks(problem_id, id DESC);
-CREATE INDEX IF NOT EXISTS idx_hacks_contest ON hacks(contest_id, id DESC);
-CREATE INDEX IF NOT EXISTS idx_hacks_hacker ON hacks(hacker_id, id DESC);
-CREATE INDEX IF NOT EXISTS idx_hacks_target ON hacks(target_user_id, id DESC);
-
--- ---------------------------------------------------------------------------
 -- 成就徽章
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS achievements (
@@ -684,16 +648,18 @@ export const SCHEMA_VERSION = 3;
  * Each entry is executed inside a try/catch (duplicate column errors ignored).
  */
 export const ALTERATIONS_SQL: string[] = [
-  `ALTER TABLE problems ADD COLUMN allow_hack INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE problems ADD COLUMN hack_language TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE problems ADD COLUMN hack_code TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE testcases ADD COLUMN is_hack INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE testcases ADD COLUMN hack_id INTEGER`,
   `ALTER TABLE testcases ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL`,
-  `ALTER TABLE submissions ADD COLUMN hacked INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE submissions ADD COLUMN hack_id INTEGER`,
-  `ALTER TABLE contests ADD COLUMN allow_hack INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE contests ADD COLUMN open_hack INTEGER NOT NULL DEFAULT 0`,
+  // Hack 系统已移除：清理旧库里的相关列与表
+  `DROP TABLE IF EXISTS hacks`,
+  `ALTER TABLE submissions DROP COLUMN hacked`,
+  `ALTER TABLE submissions DROP COLUMN hack_id`,
+  `ALTER TABLE problems DROP COLUMN allow_hack`,
+  `ALTER TABLE problems DROP COLUMN hack_language`,
+  `ALTER TABLE problems DROP COLUMN hack_code`,
+  `ALTER TABLE testcases DROP COLUMN is_hack`,
+  `ALTER TABLE testcases DROP COLUMN hack_id`,
+  `ALTER TABLE contests DROP COLUMN allow_hack`,
+  `ALTER TABLE contests DROP COLUMN open_hack`,
   `ALTER TABLE messages ADD COLUMN conversation_key TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE messages ADD COLUMN parent_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_key, id DESC)`,

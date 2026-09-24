@@ -363,24 +363,6 @@ function seedProblems(authorId: number, tagIds: Map<string, number>): number[] {
     run('UPDATE problems SET submit_count = 0, accepted_count = 0 WHERE id = ?', [problemId]);
   }
 
-  // Enable the hack system on the first two problems and give them a reference
-  // solution so that crafted hack data can be turned into an expected answer.
-  const hackable = all<{ id: number; pid: string }>(
-    `SELECT id, pid FROM problems WHERE pid IN ('P1001', 'P1003')`,
-  );
-  for (const problem of hackable) {
-    const references: Record<string, string> = {
-      P1001:
-        '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    long long a, b;\n    if (!(cin >> a >> b)) return 0;\n    cout << a + b << "\\n";\n    return 0;\n}\n',
-      P1003:
-        '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    int n;\n    if (!(cin >> n)) return 0;\n    long long best = LLONG_MIN, cur = 0;\n    for (int i = 0; i < n; ++i) {\n        long long x;\n        cin >> x;\n        cur = cur > 0 ? cur + x : x;\n        best = max(best, cur);\n    }\n    cout << best << "\\n";\n    return 0;\n}\n',
-    };
-    run('UPDATE problems SET allow_hack = 1, hack_language = ?, hack_code = ? WHERE id = ?', [
-      'cpp',
-      references[problem.pid] ?? '',
-      problem.id,
-    ]);
-  }
   return created;
 }
 
@@ -451,7 +433,7 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
       authorId: userIds.root,
       title: '欢迎来到 OGOJ！',
       content:
-        'OGOJ（Oganesson Online Judge）是一个完全开源的在线评测系统。\n\n**你可以做什么：**\n\n- 在题库中刷题，通过题目获得积分\n- 参加比赛，与其他人一较高下\n- 在商店用积分兑换「创建比赛」「出题」等特权\n- 发布题解与专栏，分享你的思路\n\n遇到问题欢迎在本帖回复。',
+        'OGOJ（Oganesson Online Judge）是一个完全开源的在线评测系统。\n\n**你可以做什么：**\n\n- 在题库中刷题，通过题目获得积分\n- 参加比赛，与其他人一较高下\n- 在商店用积分兑换「创建比赛」「出题」等特权\n- 发布题解与文章，分享你的思路\n\n遇到问题欢迎在本帖回复。',
       replies: [
         { author: userIds.alice, content: '界面很清爽，已经开始刷题啦！' },
         { author: userIds.bob, content: '请问子任务计分是怎么算的？' },
@@ -634,7 +616,7 @@ function seedHomepage(ownerId: number): void {
       `INSERT INTO announcements (title, content, type, is_pinned, is_public, author_id) VALUES (?, ?, 'important', 1, 1, ?)`,
       [
         'OGOJ 正式上线，欢迎使用！',
-        'OGOJ 是一个完全开源的在线评测系统，支持题目、评测、比赛、讨论、题解、专栏、题单、团队与积分商店。\n\n站点还提供 Hack 系统、成就徽章与工单支持，欢迎体验；遇到问题可以随时提交工单。',
+        'OGOJ 是一个完全开源的在线评测系统，支持题目、评测、比赛、讨论、题解、文章广场、题单、团队与积分商店。\n\n站点还提供成就徽章与工单支持，欢迎体验；遇到问题可以随时提交工单。',
         ownerId,
       ],
     );

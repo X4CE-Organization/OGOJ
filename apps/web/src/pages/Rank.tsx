@@ -47,7 +47,7 @@ export default function Rank() {
           <select className="input !w-40" value={sort} onChange={(event) => update({ sort: event.target.value })}>
             <option value="solved">按通过题数</option>
             <option value="points">按积分</option>
-            {settings.show_rating !== false && <option value="rating">按咕值</option>}
+            {settings.show_rating !== false && <option value="rating">按等级分</option>}
             <option value="submissions">按提交数</option>
           </select>
           <input
@@ -76,7 +76,7 @@ export default function Rank() {
                   <th>用户</th>
                   <th className="w-24">通过题目</th>
                   {settings.enable_points !== false && <th className="w-24">积分</th>}
-                  {settings.show_rating !== false && <th className="w-24">咕值</th>}
+                  {settings.show_rating !== false && <th className="w-24">等级分</th>}
                   <th className="w-28">提交 / 通过</th>
                 </tr>
               </thead>

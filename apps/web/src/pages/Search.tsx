@@ -104,7 +104,7 @@ export default function SearchPage() {
           )}
 
           {data.articles.length > 0 && (
-            <Section title={`专栏（${data.articles.length}）`}>
+            <Section title={`文章广场（${data.articles.length}）`}>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {data.articles.map((article: any) => (
                   <li key={article.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">

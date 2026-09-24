@@ -29,12 +29,11 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 
 export const DIFFICULTY_NAMES = [
   '入门',
-  '普及−',
-  '普及/提高−',
-  '普及+/提高',
-  '提高+/省选−',
-  '省选/NOI−',
-  'NOI/NOI+/CTSC',
+  '普及',
+  '提高',
+  'NOIP',
+  'NOI',
+  'IOI',
 ];
 
 export const DIFFICULTY_COLORS = [
@@ -44,7 +43,6 @@ export const DIFFICULTY_COLORS = [
   '#52c41a',
   '#3498db',
   '#9d3dcf',
-  '#0e1d69',
 ];
 
 export function statusStyle(status: string) {
@@ -129,11 +127,11 @@ export function formatMs(ms?: number | null): string {
 }
 
 export function difficultyName(value: number): string {
-  return DIFFICULTY_NAMES[Math.max(0, Math.min(6, (value || 1) - 1))]!;
+  return DIFFICULTY_NAMES[Math.max(0, Math.min(5, (value || 1) - 1))]!;
 }
 
 export function difficultyColor(value: number): string {
-  return DIFFICULTY_COLORS[Math.max(0, Math.min(6, (value || 1) - 1))]!;
+  return DIFFICULTY_COLORS[Math.max(0, Math.min(5, (value || 1) - 1))]!;
 }
 
 export function initials(name?: string | null): string {
