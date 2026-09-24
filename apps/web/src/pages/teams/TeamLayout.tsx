@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Settings2,
   Trophy,
+  KeyRound,
   Users2,
 } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -15,6 +16,8 @@ import { useAuth } from '../../lib/auth';
 import { classNames, fromNow } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import TeamPolicyBadge from '../../components/TeamPolicyBadge';
+import { teamPolicy } from '../../lib/team';
 
 export interface TeamContextValue {
   team: any;
@@ -25,12 +28,6 @@ export interface TeamContextValue {
   pendingApplication: any;
   reload: () => Promise<void>;
 }
-
-const POLICY_LABEL: Record<string, string> = {
-  open: '自由加入',
-  approval: '加入需要审核',
-  closed: '不允许加入',
-};
 
 export default function TeamLayout() {
   const { slug = '' } = useParams();
@@ -138,13 +135,14 @@ export default function TeamLayout() {
                 </span>
               )}
               {!team.isPublic && (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                  私有团队
+                <span
+                  title="该团队主页仅成员可见"
+                  className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                >
+                  主页仅成员可见
                 </span>
               )}
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
-                {POLICY_LABEL[team.joinPolicy] ?? team.joinPolicy}
-              </span>
+              <TeamPolicyBadge policy={team.joinPolicy} />
               {membership && (
                 <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
                   {membership.role === 'owner' ? '团长' : membership.role === 'admin' ? '管理员' : '成员'}
@@ -183,7 +181,7 @@ export default function TeamLayout() {
               <span className="text-xs text-amber-500">加入申请审核中</span>
             ) : team.joinPolicy === 'closed' ? (
               <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={() => setApplyOpen(true)}>
-                输入邀请码加入
+                <KeyRound className="h-3.5 w-3.5" /> 输入邀请码加入
               </button>
             ) : team.joinPolicy === 'approval' ? (
               <button type="button" className="btn-primary !py-1.5 text-xs" onClick={() => setApplyOpen(true)}>
@@ -210,7 +208,7 @@ export default function TeamLayout() {
         )}
         {!isMember && (
           <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800">
-            加入团队后可以看到团队公告、讨论区内容、作业与团队文件。
+            {teamPolicy(team.joinPolicy).description} 加入团队后可以看到团队公告、作业与团队文件。
           </div>
         )}
       </div>
@@ -246,7 +244,13 @@ export default function TeamLayout() {
 
       <Modal
         open={applyOpen}
-        title={team.joinPolicy === 'approval' ? '申请加入团队' : '输入邀请码加入'}
+        title={
+          team.joinPolicy === 'approval'
+            ? '申请加入团队'
+            : team.joinPolicy === 'closed'
+              ? '输入邀请码加入'
+              : '加入团队'
+        }
         onClose={() => setApplyOpen(false)}
         footer={
           <>

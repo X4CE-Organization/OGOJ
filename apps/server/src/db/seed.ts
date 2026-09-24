@@ -517,6 +517,30 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
       '欢迎加入 OGOJ 官方团队！',
     ]);
   }
+
+  // 三种公开程度各准备一支示例团队，方便在团队页面直接看到不同徽章
+  if (!get('SELECT id FROM teams WHERE slug = ?', ['night-sail'])) {
+    const info = run(
+      `INSERT INTO teams (name, slug, description, category, join_policy, is_public, member_count, owner_id)
+       VALUES (?, ?, ?, ?, ?, 1, 1, ?)`,
+      [
+        '夜航算法社',
+        'night-sail',
+        '邀请制的小社团，专注冬令营与省选方向的专题训练。',
+        '集训队',
+        'closed',
+        userIds.carol!,
+      ],
+    );
+    const teamId = Number(info.lastInsertRowid);
+    run(`INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'owner')`, [teamId, userIds.carol!]);
+    run('INSERT INTO team_announcements (team_id, author_id, title, content) VALUES (?, ?, ?, ?)', [
+      teamId,
+      userIds.carol!,
+      '社团成立',
+      '本社团采用邀请制，想要加入的同学请先联系社团成员。',
+    ]);
+  }
 }
 
 function seedShop(): void {

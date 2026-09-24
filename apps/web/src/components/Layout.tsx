@@ -17,6 +17,7 @@ import {
   Sun,
   Trophy,
   Users,
+  Users2,
   X,
 } from 'lucide-react';
 import { useAuth, useTheme } from '../lib/auth';
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { to: '/record', label: '评测记录', icon: ListChecks },
   { to: '/contests', label: '比赛', icon: Trophy },
   { to: '/training', label: '训练', icon: ListChecks },
+  { to: '/teams', label: '团队', icon: Users2 },
   { to: '/discussions', label: '讨论', icon: Users },
   { to: '/articles', label: '文章广场', icon: BookOpen },
   { to: '/rank', label: '排行榜', icon: Trophy },

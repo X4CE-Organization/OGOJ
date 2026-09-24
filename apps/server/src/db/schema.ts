@@ -382,7 +382,7 @@ CREATE TABLE IF NOT EXISTS teams (
   avatar      TEXT DEFAULT '',
   background  TEXT NOT NULL DEFAULT '',
   announcement TEXT NOT NULL DEFAULT '',          -- 团队公告（成员可见）
-  join_policy TEXT NOT NULL DEFAULT 'open',       -- open 自由加入 | approval 需要审核 | closed 不允许加入
+  join_policy TEXT NOT NULL DEFAULT 'open',       -- open 公开团队 | approval 保护团队 | closed 私有团队
   category    TEXT NOT NULL DEFAULT '',           -- 团队分类，例如 竞赛 / 学校 / 兴趣
   max_members INTEGER NOT NULL DEFAULT 0,         -- 0 表示不限
   allow_member_invite INTEGER NOT NULL DEFAULT 1, -- 是否允许普通成员邀请

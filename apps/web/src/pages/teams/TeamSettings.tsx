@@ -3,6 +3,8 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames, fromNow } from '../../lib/format';
+import { TEAM_POLICIES } from '../../lib/team';
+import TeamPolicyBadge from '../../components/TeamPolicyBadge';
 import { EmptyState, Field, Loading, Modal, Section, UserLink } from '../../components/ui';
 import ImageUploadField from '../../components/ImageUploadField';
 import { useToast } from '../../components/Toast';
@@ -186,16 +188,36 @@ export default function TeamSettings() {
               </Field>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              <Field label="公开程度">
-                <select
-                  className="input"
-                  value={form.joinPolicy}
-                  onChange={(event) => setForm({ ...form, joinPolicy: event.target.value })}
-                >
-                  <option value="open">自由加入</option>
-                  <option value="approval">加入需要审核</option>
-                  <option value="closed">不允许加入（凭邀请码）</option>
-                </select>
+              <Field label="公开程度" hint="公开团队任何人可直接加入；保护团队需要审核；私有团队凭邀请码">
+                <div className="space-y-2">
+                  {TEAM_POLICIES.map((item, index) => {
+                    const value = ['open', 'approval', 'closed'][index]!;
+                    return (
+                      <label
+                        key={value}
+                        className={classNames(
+                          'flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm',
+                          form.joinPolicy === value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-slate-200 dark:border-slate-700',
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          className="mt-0.5"
+                          checked={form.joinPolicy === value}
+                          onChange={() => setForm({ ...form, joinPolicy: value })}
+                        />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2">
+                            <TeamPolicyBadge policy={value} full />
+                          </span>
+                          <span className="mt-0.5 block text-xs text-slate-400">{item.description}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </Field>
               <Field label="团队分类">
                 <input

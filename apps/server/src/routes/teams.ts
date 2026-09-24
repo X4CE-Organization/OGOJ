@@ -2,7 +2,7 @@
  * 团队 2.0
  *
  * 板块：讨论区 / 题目 / 作业 / 题单 / 比赛 / 成员 / 文件
- * 设置：名称、头像、介绍、公告、公开程度（自由加入 / 需要审核 / 不允许加入）、
+ * 设置：名称、头像、介绍、公告、公开程度（公开团队 / 保护团队 / 私有团队）、
  *       成员上限、邀请、组别（自定义权限组）、成员管理、黑名单
  */
 import fs from 'node:fs';
@@ -164,6 +164,84 @@ function teamBrief(team: any, viewer: any) {
   };
 }
 
+/**
+ * 加入团队：三种公开程度的行为都在这里
+ *  - open     公开团队：直接加入
+ *  - approval 保护团队：提交申请，等待管理员审核
+ *  - closed   私有团队：必须凭邀请码
+ */
+async function applyJoin(request: FastifyRequest, team: any, body: Record<string, any>) {
+  const user = requireUser(request);
+  if (isBlacklisted(team.id, user.id)) throw forbidden('你已被该团队列入黑名单');
+  if (get('SELECT 1 AS x FROM team_members WHERE team_id = ? AND user_id = ?', [team.id, user.id])) {
+    throw conflict(`你已经在团队「${team.name}」中了`);
+  }
+  const max = team.max_members;
+  if (max > 0 && count('SELECT COUNT(*) AS c FROM team_members WHERE team_id = ?', [team.id]) >= max) {
+    throw conflict('团队人数已满');
+  }
+  const invited = body.inviteCode && String(body.inviteCode) === team.invite_code;
+
+  if (team.join_policy === 'closed' && !invited) throw forbidden('这是私有团队，需要邀请码才能加入');
+  if (team.join_policy === 'approval' && !invited) {
+    const pending = get(
+      `SELECT id FROM team_applications WHERE team_id = ? AND user_id = ? AND status = 'pending'`,
+      [team.id, user.id],
+    );
+    if (pending) throw conflict('你已提交申请，请等待管理员审核');
+    run(`INSERT INTO team_applications (team_id, user_id, message, status) VALUES (?, ?, ?, 'pending')`, [
+      team.id,
+      user.id,
+      String(body.message ?? '').slice(0, 500),
+    ]);
+    for (const admin of all<{ user_id: number }>(
+      `SELECT user_id FROM team_members WHERE team_id = ? AND role IN ('owner','admin')`,
+      [team.id],
+    )) {
+      sendMessage({
+        to: admin.user_id,
+        title: `团队「${team.name}」有新的加入申请`,
+        content: `${user.username} 申请加入团队。${body.message ? `\n\n申请留言：${body.message}` : ''}`,
+        type: 'system',
+        refType: 'team',
+        refId: team.id,
+      });
+    }
+    audit(request, 'team.apply', { targetType: 'team', targetId: team.id });
+    return {
+      ok: true,
+      status: 'pending',
+      team: { id: team.id, name: team.name, slug: team.slug },
+      message: '申请已提交，等待管理员审核',
+    };
+  }
+
+  tx(() => {
+    const group = get<{ id: number }>('SELECT id FROM team_groups WHERE team_id = ? AND is_default = 1 LIMIT 1', [
+      team.id,
+    ]);
+    run(`INSERT INTO team_members (team_id, user_id, role, group_id) VALUES (?, ?, 'member', ?)`, [
+      team.id,
+      user.id,
+      group?.id ?? null,
+    ]);
+    run(
+      `UPDATE team_applications SET status = 'approved', handled_at = datetime('now')
+        WHERE team_id = ? AND user_id = ? AND status = 'pending'`,
+      [team.id, user.id],
+    );
+  });
+  refreshCounters(team.id);
+  audit(request, 'team.join', { targetType: 'team', targetId: team.id });
+  evaluateAchievements(user.id, { silent: true });
+  return {
+    ok: true,
+    status: 'joined',
+    team: { id: team.id, name: team.name, slug: team.slug },
+    message: `已加入团队「${team.name}」`,
+  };
+}
+
 export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   /* ============================================================= 团队列表 */
   app.get('/api/teams', async (request) => {
@@ -197,7 +275,9 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         ? 't.id DESC'
         : query.sort === 'problems'
           ? 't.problem_count DESC, t.id ASC'
-          : 't.member_count DESC, t.experience DESC, t.id ASC';
+          : query.sort === 'top'
+            ? 't.experience DESC, t.member_count DESC, t.problem_count DESC, t.id ASC'
+            : 't.member_count DESC, t.experience DESC, t.id ASC';
     const where = `WHERE ${conditions.join(' AND ')}`;
     const rows = all<any>(
       `SELECT t.*, u.username AS owner_username, u.display_name AS owner_display, u.avatar AS owner_avatar
@@ -420,64 +500,28 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
 
   /* ============================================================= 加入退出 */
   app.post('/api/teams/:slug/join', async (request) => {
-    const user = requireUser(request);
     const ctx = context(request, String((request.params as any).slug));
-    if (ctx.membership) throw conflict('你已经是团队成员');
-    if (isBlacklisted(ctx.team.id, user.id)) throw forbidden('你已被该团队列入黑名单');
-    const max = ctx.team.max_members;
-    if (max > 0 && count('SELECT COUNT(*) AS c FROM team_members WHERE team_id = ?', [ctx.team.id]) >= max) {
-      throw conflict('团队人数已满');
-    }
+    return applyJoin(request, ctx.team, (request.body ?? {}) as any);
+  });
+
+  /** 按团队名称加入：用户只需要输入团队名称，再按该团队的公开程度处理 */
+  app.post('/api/teams/join-by-name', async (request) => {
+    const user = requireUser(request);
     const body = (request.body ?? {}) as any;
-    const invited = body.inviteCode && String(body.inviteCode) === ctx.team.invite_code;
-
-    if (ctx.team.join_policy === 'closed' && !invited) throw forbidden('该团队不允许加入，需要邀请码');
-    if (ctx.team.join_policy === 'approval' && !invited) {
-      const pending = get(
-        `SELECT id FROM team_applications WHERE team_id = ? AND user_id = ? AND status = 'pending'`,
-        [ctx.team.id, user.id],
-      );
-      if (pending) throw conflict('你已提交申请，请等待审核');
-      run(
-        `INSERT INTO team_applications (team_id, user_id, message, status) VALUES (?, ?, ?, 'pending')`,
-        [ctx.team.id, user.id, String(body.message ?? '').slice(0, 500)],
-      );
-      const admins = all<{ user_id: number }>(
-        `SELECT user_id FROM team_members WHERE team_id = ? AND role IN ('owner','admin')`,
-        [ctx.team.id],
-      );
-      for (const admin of admins) {
-        sendMessage({
-          to: admin.user_id,
-          title: `团队「${ctx.team.name}」有新的加入申请`,
-          content: `${user.username} 申请加入团队。${body.message ? `\n\n申请留言：${body.message}` : ''}`,
-          type: 'system',
-          refType: 'team',
-          refId: ctx.team.id,
-        });
-      }
-      audit(request, 'team.apply', { targetType: 'team', targetId: ctx.team.id });
-      return { ok: true, status: 'pending', message: '申请已提交，等待管理员审核' };
-    }
-
-    tx(() => {
-      const group = get<{ id: number }>('SELECT id FROM team_groups WHERE team_id = ? AND is_default = 1 LIMIT 1', [
-        ctx.team.id,
+    const name = String(body.name ?? '').trim();
+    if (!name) throw badRequest('请输入团队名称');
+    const team =
+      get<any>('SELECT * FROM teams WHERE is_deleted = 0 AND (name = ? COLLATE NOCASE OR slug = ? COLLATE NOCASE)', [
+        name,
+        name,
+      ]) ??
+      get<any>('SELECT * FROM teams WHERE is_deleted = 0 AND name LIKE ? COLLATE NOCASE ORDER BY member_count DESC LIMIT 1', [
+        `%${name}%`,
       ]);
-      run(`INSERT INTO team_members (team_id, user_id, role, group_id) VALUES (?, ?, 'member', ?)`, [
-        ctx.team.id,
-        user.id,
-        group?.id ?? null,
-      ]);
-      run(`UPDATE team_applications SET status = 'approved', handled_at = datetime('now') WHERE team_id = ? AND user_id = ? AND status = 'pending'`, [
-        ctx.team.id,
-        user.id,
-      ]);
-    });
-    refreshCounters(ctx.team.id);
-    audit(request, 'team.join', { targetType: 'team', targetId: ctx.team.id });
-    evaluateAchievements(user.id, { silent: true });
-    return { ok: true, status: 'joined' };
+    if (!team) throw notFound(`没有找到名为「${name}」的团队`);
+    const membership = get('SELECT 1 AS x FROM team_members WHERE team_id = ? AND user_id = ?', [team.id, user.id]);
+    if (membership) throw conflict(`你已经在团队「${team.name}」中了`);
+    return applyJoin(request, team, { ...body, name: team.name });
   });
 
   app.post('/api/teams/:slug/leave', async (request) => {
