@@ -38,9 +38,9 @@
 | --- | --- |
 | ![商店](./docs/screenshot-shop.png) | ![系统设置](./docs/screenshot-admin-settings.png) |
 
-| 题库（难度：入门 / 普及 / 提高 / NOIP / NOI / IOI） | 文章广场 |
-| --- | --- |
-| ![题库](./docs/screenshot-problems.png) | ![文章广场](./docs/screenshot-articles.png) |
+| 题库（难度：入门 / 普及 / 提高 / NOIP / NOI / IOI） | 深色模式 | 文章广场 |
+| --- | --- | --- |
+| ![题库](./docs/screenshot-problems.png) | ![深色模式](./docs/screenshot-problems-dark.png) | ![文章广场](./docs/screenshot-articles.png) |
 
 | 工单详情 | 工单管理（控制面板） |
 | --- | --- |
@@ -53,6 +53,10 @@
 | 团队主页 | 团队设置 |
 | --- | --- |
 | ![团队](./docs/screenshot-team.png) | ![团队设置](./docs/screenshot-team-settings.png) |
+
+| 团队成员 | 成就徽章 |
+| --- | --- |
+| ![团队成员](./docs/screenshot-team-members.png) | ![成就](./docs/screenshot-achievements.png) |
 
 ---
 
@@ -292,7 +296,7 @@ npm run seed
 
 1. 创建全部数据表（幂等，可重复执行）；
 2. 创建超级管理员 `root / ogoj123456`；
-3. 写入演示内容：示例用户（`admin`、`alice`、`bob`、`carol`）、5 道示例题目（含子任务与 Special Judge 示例）、2 场示例比赛、商店商品、公告、轮播图、讨论帖、题单、团队等。
+3. 写入演示内容：示例用户（`admin`、`alice`、`bob`、`carol`、`dave`）、5 道示例题目（含子任务与 Special Judge 示例）、2 场示例比赛、商店商品、公告、轮播图、讨论帖、题单，以及三支覆盖「公开 / 保护 / 私有」三种公开程度的示例团队。
 
 > 如果想要一个全新的空站：`npm run reset`（清空全部数据后重新初始化）。
 

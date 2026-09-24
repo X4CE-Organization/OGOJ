@@ -318,7 +318,7 @@ export const BUILTIN_ACHIEVEMENTS: {
   { code: 'contest_30', name: '比赛狂人', description: '累计参加 30 场比赛。', icon: '🎖️', category: 'contest', rarity: 'epic', condition: { type: 'contest_count', threshold: 30 }, points: 90, sort: 17 },
   { code: 'solution_1', name: '授人以渔', description: '发布第一篇题解。', icon: '📝', category: 'community', rarity: 'common', condition: { type: 'solution_count', threshold: 1 }, points: 5, sort: 18 },
   { code: 'solution_20', name: '题解作者', description: '累计发布 20 篇题解。', icon: '📚', category: 'community', rarity: 'rare', condition: { type: 'solution_count', threshold: 20 }, points: 40, sort: 19 },
-  { code: 'article_5', name: '专栏作家', description: '在文章广场累计发布 5 篇文章。', icon: '✍️', category: 'community', rarity: 'rare', condition: { type: 'article_count', threshold: 5 }, points: 30, sort: 20 },
+  { code: 'article_5', name: '文章作家', description: '在文章广场累计发布 5 篇文章。', icon: '✍️', category: 'community', rarity: 'rare', condition: { type: 'article_count', threshold: 5 }, points: 30, sort: 20 },
   { code: 'discussion_10', name: '社区活跃者', description: '发布 10 个讨论帖。', icon: '💬', category: 'community', rarity: 'common', condition: { type: 'discussion_count', threshold: 10 }, points: 20, sort: 21 },
   { code: 'reply_50', name: '热心解答', description: '累计回复 50 次。', icon: '🤝', category: 'community', rarity: 'rare', condition: { type: 'reply_count', threshold: 50 }, points: 30, sort: 22 },
   { code: 'points_500', name: '积分富豪', description: '积分达到 500。', icon: '💰', category: 'special', rarity: 'epic', condition: { type: 'points', threshold: 500 }, points: 0, sort: 23 },

@@ -1,21 +1,42 @@
 node_modules/
 dist/
 build/
+
+# 环境变量（示例文件例外）
 .env
 .env.local
-*.log
-.DS_Store
+.env.*
+!.env.example
 
-# runtime data
+# 运行期数据：数据库 / 上传文件 / 评测数据 / 备份，全部不入库
 data/*
 !data/.gitkeep
 !data/README.md
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
-# editors
+# 日志与缓存
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+.cache/
+
+# 编辑器
 .idea/
 .vscode/*
 !.vscode/extensions.json
 
-# test scratch
+# 本地临时文件
 tmp/
+temp/
 coverage/
+
+# 系统垃圾文件
+**/.DS_Store
+.DS_Store
+Thumbs.db
