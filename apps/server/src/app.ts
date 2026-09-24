@@ -137,6 +137,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     root: config.paths.uploads,
     prefix: '/uploads/',
     decorateReply: false,
+    cacheControl: false,
+    setHeaders: (reply) => {
+      // Uploaded files get a random name on every upload, so they never change.
+      reply.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
   });
   if (fs.existsSync(config.paths.webDist)) {
     await app.register(fastifyStatic, {
@@ -144,11 +149,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       prefix: '/',
       decorateReply: false,
       wildcard: false,
+      // The plugin's own `Cache-Control: public, max-age=0` would override the
+      // header rules below, so switch it off and set them ourselves.
+      cacheControl: false,
       setHeaders: (reply, filePath) => {
         // Hashed assets never change, but the SPA shell must always be
         // revalidated: otherwise a redeploy (which deletes the old hashed
         // bundles) leaves cached HTML pointing at files that no longer exist.
-        if (/[.-][A-Za-z0-9_]{8,}\.(js|css)$/.test(filePath) || /\.(woff2?|ttf|png|jpg|svg)$/.test(filePath)) {
+        if (/[.-][A-Za-z0-9_-]{8,}\.(js|css)$/.test(filePath) || /\.(woff2?|ttf|png|jpg|svg)$/.test(filePath)) {
           reply.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else {
           reply.setHeader('Cache-Control', 'no-cache, must-revalidate');
