@@ -17,7 +17,7 @@ export const DIFFICULTY_COLORS = [
   '#9d3dcf', // 提高 - 紫
   '#f39c11', // NOIP - 橙
   '#fe4c61', // NOI  - 红
-  '#111827', // IOI  - 黑
+  '#0e1d69', // IOI  - 深色
 ];
 
 /** 深色模式下使用的配色：黑色在深底上不可读，换成浅灰 */
@@ -27,7 +27,7 @@ export const DIFFICULTY_COLORS_DARK = [
   '#9d3dcf',
   '#f39c11',
   '#fe4c61',
-  '#e5e7eb',
+  '#a5b4fc', // 第六级在深色模式下换成浅靛蓝，保证深底可读
 ];
 
 export interface UserBrief {
