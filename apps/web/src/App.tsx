@@ -25,8 +25,17 @@ import Users from './pages/Users';
 import UserProfile from './pages/UserProfile';
 import Shop from './pages/Shop';
 import Orders from './pages/Orders';
-import Teams from './pages/Teams';
-import TeamDetail from './pages/TeamDetail';
+import TeamList from './pages/teams/TeamList';
+import TeamLayout from './pages/teams/TeamLayout';
+import TeamOverview from './pages/teams/TeamOverview';
+import TeamDiscussions from './pages/teams/TeamDiscussions';
+import TeamProblems from './pages/teams/TeamProblems';
+import TeamAssignments from './pages/teams/TeamAssignments';
+import TeamLists from './pages/teams/TeamLists';
+import TeamContests from './pages/teams/TeamContests';
+import TeamMembers from './pages/teams/TeamMembers';
+import TeamFiles from './pages/teams/TeamFiles';
+import TeamSettings from './pages/teams/TeamSettings';
 import Messages from './pages/Messages';
 import SettingsPage from './pages/Settings';
 import SearchPage from './pages/Search';
@@ -114,8 +123,21 @@ export default function App() {
         <Route path="/user/:username" element={<UserProfile />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/shop/orders" element={<RequireAuth><Orders /></RequireAuth>} />
-        <Route path="/teams" element={<Teams />} />
-        <Route path="/team/:slug" element={<TeamDetail />} />
+        <Route path="/teams" element={<TeamList />} />
+        <Route path="/team/:slug" element={<TeamLayout />}>
+          <Route index element={<TeamOverview />} />
+          <Route path="discussions" element={<TeamDiscussions />} />
+          <Route path="discussions/:id" element={<TeamDiscussions />} />
+          <Route path="problems" element={<TeamProblems />} />
+          <Route path="assignments" element={<TeamAssignments />} />
+          <Route path="assignments/:id" element={<TeamAssignments />} />
+          <Route path="lists" element={<TeamLists />} />
+          <Route path="lists/:id" element={<TeamLists />} />
+          <Route path="contests" element={<TeamContests />} />
+          <Route path="members" element={<TeamMembers />} />
+          <Route path="files" element={<TeamFiles />} />
+          <Route path="settings" element={<TeamSettings />} />
+        </Route>
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/search" element={<SearchPage />} />

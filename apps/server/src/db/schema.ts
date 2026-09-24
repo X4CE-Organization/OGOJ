@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS contests (
   show_rank       INTEGER NOT NULL DEFAULT 1,
   rated           INTEGER NOT NULL DEFAULT 1,
   allow_languages TEXT NOT NULL DEFAULT '[]',
+  team_id         INTEGER REFERENCES teams(id) ON DELETE CASCADE,  -- 团队内部比赛
   origin          TEXT NOT NULL DEFAULT 'official',   -- official | user
   owner_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
   author_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -379,9 +380,24 @@ CREATE TABLE IF NOT EXISTS teams (
   slug        TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
   avatar      TEXT DEFAULT '',
+  background  TEXT NOT NULL DEFAULT '',
+  announcement TEXT NOT NULL DEFAULT '',          -- 团队公告（成员可见）
+  join_policy TEXT NOT NULL DEFAULT 'open',       -- open 自由加入 | approval 需要审核 | closed 不允许加入
+  category    TEXT NOT NULL DEFAULT '',           -- 团队分类，例如 竞赛 / 学校 / 兴趣
+  max_members INTEGER NOT NULL DEFAULT 0,         -- 0 表示不限
+  allow_member_invite INTEGER NOT NULL DEFAULT 1, -- 是否允许普通成员邀请
+  invite_code TEXT NOT NULL DEFAULT '',           -- 邀请码，凭码可直接加入
+  experience  INTEGER NOT NULL DEFAULT 0,         -- 团队经验值（由成员活跃自动累积）
   owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   is_public   INTEGER NOT NULL DEFAULT 1,
   member_count INTEGER NOT NULL DEFAULT 1,
+  problem_count INTEGER NOT NULL DEFAULT 0,
+  discuss_count INTEGER NOT NULL DEFAULT 0,
+  assignment_count INTEGER NOT NULL DEFAULT 0,
+  contest_count INTEGER NOT NULL DEFAULT 0,
+  list_count  INTEGER NOT NULL DEFAULT 0,
+  file_count  INTEGER NOT NULL DEFAULT 0,
+  is_deleted  INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -389,6 +405,9 @@ CREATE TABLE IF NOT EXISTS team_members (
   team_id   INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role      TEXT NOT NULL DEFAULT 'member',   -- owner | admin | member
+  group_id  INTEGER,                          -- 自定义组别（见 team_groups）
+  nickname  TEXT NOT NULL DEFAULT '',         -- 团队内昵称
+  contribution INTEGER NOT NULL DEFAULT 0,    -- 贡献度：解题 / 发布内容 / 上传文件累积
   joined_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (team_id, user_id)
 );
@@ -406,9 +425,154 @@ CREATE TABLE IF NOT EXISTS team_problems (
   team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   problem_id INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
   added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  note       TEXT NOT NULL DEFAULT '',
+  order_no   INTEGER NOT NULL DEFAULT 0,
+  is_pinned  INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (team_id, problem_id)
 );
+
+-- ---------------------------------------------------------------------------
+-- 团队 2.0
+-- ---------------------------------------------------------------------------
+
+-- 自定义组别：给成员分组，并逐项控制管理权限
+CREATE TABLE IF NOT EXISTS team_groups (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id                 INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  name                    TEXT NOT NULL,
+  color                   TEXT NOT NULL DEFAULT '#60a5fa',
+  description             TEXT NOT NULL DEFAULT '',
+  can_manage_members      INTEGER NOT NULL DEFAULT 0,
+  can_manage_problems     INTEGER NOT NULL DEFAULT 0,
+  can_manage_assignments  INTEGER NOT NULL DEFAULT 0,
+  can_manage_contests     INTEGER NOT NULL DEFAULT 0,
+  can_manage_lists        INTEGER NOT NULL DEFAULT 0,
+  can_manage_files        INTEGER NOT NULL DEFAULT 0,
+  can_manage_discussions  INTEGER NOT NULL DEFAULT 0,
+  can_manage_settings     INTEGER NOT NULL DEFAULT 0,
+  can_review_applications INTEGER NOT NULL DEFAULT 0,
+  sort                    INTEGER NOT NULL DEFAULT 0,
+  is_default              INTEGER NOT NULL DEFAULT 0,
+  created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_team_groups ON team_groups(team_id, sort);
+
+-- 加入申请
+CREATE TABLE IF NOT EXISTS team_applications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message    TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected
+  handled_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  handled_at TEXT,
+  note       TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (team_id, user_id, status)
+);
+CREATE INDEX IF NOT EXISTS idx_team_applications ON team_applications(team_id, status, id DESC);
+
+-- 黑名单
+CREATE TABLE IF NOT EXISTS team_blacklist (
+  team_id    INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason     TEXT NOT NULL DEFAULT '',
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (team_id, user_id)
+);
+
+-- 团队讨论区
+CREATE TABLE IF NOT EXISTS team_discussions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id       INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  author_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category      TEXT NOT NULL DEFAULT 'general',  -- general | solution | help | announcement
+  title         TEXT NOT NULL,
+  content       TEXT NOT NULL DEFAULT '',
+  is_pinned     INTEGER NOT NULL DEFAULT 0,
+  is_locked     INTEGER NOT NULL DEFAULT 0,
+  is_deleted    INTEGER NOT NULL DEFAULT 0,
+  views         INTEGER NOT NULL DEFAULT 0,
+  reply_count   INTEGER NOT NULL DEFAULT 0,
+  last_reply_at TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_team_discussions ON team_discussions(team_id, is_deleted, is_pinned DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS team_discussion_replies (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  discussion_id INTEGER NOT NULL REFERENCES team_discussions(id) ON DELETE CASCADE,
+  author_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content       TEXT NOT NULL,
+  floor         INTEGER NOT NULL DEFAULT 1,
+  is_deleted    INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_team_replies ON team_discussion_replies(discussion_id, id);
+
+-- 团队题单
+CREATE TABLE IF NOT EXISTS team_lists (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id     INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_public   INTEGER NOT NULL DEFAULT 0,     -- 是否对非成员可见
+  is_deleted  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS team_list_items (
+  list_id    INTEGER NOT NULL REFERENCES team_lists(id) ON DELETE CASCADE,
+  problem_id INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  order_no   INTEGER NOT NULL DEFAULT 0,
+  note       TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (list_id, problem_id)
+);
+
+-- 作业
+CREATE TABLE IF NOT EXISTS team_assignments (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id     INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  start_time  TEXT,
+  end_time    TEXT,
+  target_group_id INTEGER REFERENCES team_groups(id) ON DELETE SET NULL,  -- 空 = 全体成员
+  is_deleted  INTEGER NOT NULL DEFAULT 0,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_team_assignments ON team_assignments(team_id, is_deleted, id DESC);
+
+CREATE TABLE IF NOT EXISTS team_assignment_problems (
+  assignment_id INTEGER NOT NULL REFERENCES team_assignments(id) ON DELETE CASCADE,
+  problem_id    INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+  order_no      INTEGER NOT NULL DEFAULT 0,
+  score         INTEGER NOT NULL DEFAULT 100,
+  PRIMARY KEY (assignment_id, problem_id)
+);
+
+-- 文件
+CREATE TABLE IF NOT EXISTS team_files (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  team_id     INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  uploader_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  name        TEXT NOT NULL,
+  filename    TEXT NOT NULL,
+  path        TEXT NOT NULL,          -- 相对 data/uploads 的路径
+  size        INTEGER NOT NULL DEFAULT 0,
+  mimetype    TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  downloads   INTEGER NOT NULL DEFAULT 0,
+  is_public   INTEGER NOT NULL DEFAULT 0,
+  is_deleted  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_team_files ON team_files(team_id, is_deleted, id DESC);
 
 -- ---------------------------------------------------------------------------
 -- 商店 / 积分 / 权限配额
@@ -641,7 +805,7 @@ CREATE INDEX IF NOT EXISTS idx_ticket_replies ON ticket_replies(ticket_id, id);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Small, idempotent column additions for databases created by older builds.
@@ -663,4 +827,28 @@ export const ALTERATIONS_SQL: string[] = [
   `ALTER TABLE messages ADD COLUMN conversation_key TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE messages ADD COLUMN parent_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_key, id DESC)`,
+  // 团队 2.0
+  `ALTER TABLE teams ADD COLUMN background TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE teams ADD COLUMN announcement TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE teams ADD COLUMN join_policy TEXT NOT NULL DEFAULT 'open'`,
+  `ALTER TABLE teams ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE teams ADD COLUMN max_members INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN allow_member_invite INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE teams ADD COLUMN invite_code TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE teams ADD COLUMN experience INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN problem_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN discuss_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN assignment_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN contest_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN list_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN file_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE teams ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE team_members ADD COLUMN group_id INTEGER`,
+  `ALTER TABLE team_members ADD COLUMN nickname TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE team_members ADD COLUMN contribution INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE team_problems ADD COLUMN note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE team_problems ADD COLUMN order_no INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE team_problems ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE contests ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE`,
+  `CREATE INDEX IF NOT EXISTS idx_contests_team ON contests(team_id, id DESC)`,
 ];
