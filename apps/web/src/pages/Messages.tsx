@@ -40,6 +40,8 @@ export default function Messages() {
   const [compose, setCompose] = useState({ to: '', content: '' });
   const [recipients, setRecipients] = useState<any[]>([]);
   const [openedNotification, setOpenedNotification] = useState<any>(null);
+  /** 未读汇总：用于标签页上的红点（与顶栏图标同源） */
+  const [summary, setSummary] = useState({ unread: 0, unreadSystem: 0, unreadPrivate: 0 });
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const toParam = params.get('to');
@@ -56,6 +58,20 @@ export default function Messages() {
     }
   }, []);
 
+  /** 未读汇总：顶栏图标与页内标签页都用它，保证数字一致 */
+  const loadSummary = useCallback(async () => {
+    try {
+      const data = await api.get<any>('/api/messages/summary');
+      setSummary({
+        unread: data.unread ?? 0,
+        unreadSystem: data.unreadSystem ?? 0,
+        unreadPrivate: data.unreadPrivate ?? 0,
+      });
+    } catch {
+      /* 忽略 */
+    }
+  }, []);
+
   const openConversation = useCallback(
     async (username: string) => {
       if (!username) return;
@@ -65,6 +81,7 @@ export default function Messages() {
         setPeer(data.user);
         setThread(data.messages ?? []);
         void loadConversations('');
+        void loadSummary();
         void refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : '无法打开会话');
@@ -75,7 +92,7 @@ export default function Messages() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [loadConversations],
+    [loadConversations, loadSummary],
   );
 
   const loadNotifications = useCallback(async () => {
@@ -91,11 +108,13 @@ export default function Messages() {
 
   useEffect(() => {
     void loadConversations('');
-  }, [loadConversations]);
+    void loadSummary();
+  }, [loadConversations, loadSummary]);
 
   useEffect(() => {
     if (tab === 'system') void loadNotifications();
-  }, [tab, loadNotifications]);
+    void loadSummary();
+  }, [tab, loadNotifications, loadSummary]);
 
   // `/messages?to=someone` opens that conversation directly (profile button).
   useEffect(() => {
@@ -158,6 +177,7 @@ export default function Messages() {
       setRecipients([]);
       setTab('private');
       await openConversation(target);
+      void loadSummary();
       toast.success('私信已发送');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发送失败');
@@ -184,6 +204,7 @@ export default function Messages() {
       toast.success('全部标记为已读');
       void loadNotifications();
       void loadConversations('');
+      void loadSummary();
       void refresh();
     } catch {
       /* ignore */
@@ -195,6 +216,7 @@ export default function Messages() {
       const data = await api.get<any>(`/api/messages/${message.id}`);
       setOpenedNotification(data.message);
       void loadNotifications();
+      void loadSummary();
       void refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '无法打开消息');
@@ -221,24 +243,35 @@ export default function Messages() {
 
       <div className="card flex items-center gap-1 p-2">
         {[
-          { key: 'private', label: '私信' },
-          { key: 'system', label: '系统通知' },
+          { key: 'private', label: '私信', unread: summary.unreadPrivate },
+          { key: 'system', label: '系统通知', unread: summary.unreadSystem },
         ].map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => setTab(item.key)}
             className={classNames(
-              'rounded-lg px-3 py-1.5 text-sm',
+              'relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm',
               tab === item.key
                 ? 'bg-primary text-white'
                 : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800',
             )}
           >
+            {/* 该分类有未读时显示红点计数（与顶栏图标一致） */}
+            {item.unread > 0 && (
+              <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-label="有未读消息" />
+            )}
             {item.label}
-            {item.key === 'private' && conversations.some((entry) => entry.unread > 0) ? ' •' : ''}
+            {item.unread > 0 && (
+              <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
+                {item.unread > 99 ? '99+' : item.unread}
+              </span>
+            )}
           </button>
         ))}
+        <span className="ml-auto pr-1 text-[11px] text-slate-400">
+          未读 {summary.unread} 条（私信 {summary.unreadPrivate} · 系统 {summary.unreadSystem}）
+        </span>
       </div>
 
       {tab === 'private' ? (
@@ -442,7 +475,7 @@ export default function Messages() {
                     <span
                       className={classNames(
                         'mt-1 h-2 w-2 shrink-0 rounded-full',
-                        message.is_read ? 'bg-transparent' : 'bg-primary',
+                        message.is_read ? 'bg-transparent' : 'bg-rose-500',
                       )}
                     />
                     <div className="min-w-0 flex-1">
