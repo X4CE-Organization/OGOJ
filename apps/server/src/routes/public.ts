@@ -196,7 +196,7 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       : [];
     const users = include('users')
       ? all<any>(
-          `SELECT id, username, display_name, avatar, solved_count, role FROM users
+          `SELECT id, username, display_name, avatar, solved_count FROM users
             WHERE (username LIKE ? ESCAPE '\\' OR display_name LIKE ? ESCAPE '\\') AND is_banned = 0
             ORDER BY solved_count DESC LIMIT ?`,
           [like, like, limit],

@@ -42,7 +42,7 @@ export const config = {
   seed: {
     rootUsername: process.env.ROOT_USERNAME ?? 'root',
     rootPassword: process.env.ROOT_PASSWORD ?? 'ogoj123456',
-    rootEmail: process.env.ROOT_EMAIL ?? 'webmaster@ogoj.local',
+    rootEmail: process.env.ROOT_EMAIL ?? 'root@ogoj.local',
   },
 
   paths: {

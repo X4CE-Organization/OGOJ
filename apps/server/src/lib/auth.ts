@@ -73,6 +73,31 @@ export function isSuperAdmin(user: AuthUser | null): boolean {
   return hasRole(user, 'superadmin');
 }
 
+/**
+ * Whether a viewer is allowed to know another account's real role.
+ *
+ * Guests and ordinary users must not be able to tell who the site
+ * administrators are (that would point straight at the default admin
+ * account), so the role is only exposed to administrators - and always to the
+ * account itself.
+ */
+export function canSeeRoles(viewer: AuthUser | null): boolean {
+  return hasRole(viewer, 'admin');
+}
+
+export function displayRole(role: string, viewer: AuthUser | null, isSelf = false): string {
+  if (isSelf || canSeeRoles(viewer)) return role;
+  return 'user';
+}
+
+/** Same idea for staff badges inside a discussion/ticket thread. */
+export function displayStaffRole(role: string, viewer: AuthUser | null, isSelf = false): string {
+  if (isSelf || canSeeRoles(viewer)) return role;
+  // Ordinary users may see that a reply came from "the staff", but not which
+  // member of staff is the super administrator.
+  return role === 'user' ? 'user' : 'admin';
+}
+
 export function setAuthCookie(reply: FastifyReply, token: string, days: number): void {
   reply.setCookie('ogoj_token', token, {
     path: '/',

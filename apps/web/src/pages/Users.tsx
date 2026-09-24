@@ -3,8 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, query } from '../lib/api';
 import { fromNow } from '../lib/format';
 import { Avatar, EmptyState, Loading, Pagination } from '../components/ui';
+import { useAuth } from '../lib/auth';
 
 export default function Users() {
+  const { isAdmin } = useAuth();
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -43,12 +45,14 @@ export default function Users() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">用户</h1>
         <div className="flex items-center gap-2">
-          <select className="input !w-32" value={role} onChange={(event) => update({ role: event.target.value })}>
-            <option value="">全部角色</option>
-            <option value="user">普通用户</option>
-            <option value="admin">管理员</option>
-            <option value="superadmin">超级管理员</option>
-          </select>
+          {isAdmin && (
+            <select className="input !w-32" value={role} onChange={(event) => update({ role: event.target.value })}>
+              <option value="">全部角色</option>
+              <option value="user">普通用户</option>
+              <option value="admin">管理员</option>
+              <option value="superadmin">超级管理员</option>
+            </select>
+          )}
           <select className="input !w-32" value={sort} onChange={(event) => update({ sort: event.target.value })}>
             <option value="solved">按通过题数</option>
             <option value="points">按积分</option>
@@ -80,8 +84,8 @@ export default function Users() {
               <div className="min-w-0">
                 <div className="truncate font-medium">
                   {item.display_name || item.username}
-                  {item.role === 'superadmin' && <span className="ml-1 text-xs text-rose-500">超管</span>}
-                  {item.role === 'admin' && <span className="ml-1 text-xs text-amber-500">管理员</span>}
+                  {isAdmin && item.role === 'superadmin' && <span className="ml-1 text-xs text-rose-500">超管</span>}
+                  {isAdmin && item.role === 'admin' && <span className="ml-1 text-xs text-amber-500">管理员</span>}
                 </div>
                 <div className="mt-0.5 truncate text-xs text-slate-400">
                   {item.level?.name} · {item.solved_count} 题 · {item.points} 积分

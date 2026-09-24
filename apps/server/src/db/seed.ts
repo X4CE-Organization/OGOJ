@@ -35,21 +35,14 @@ interface ProblemSeed {
 }
 
 /**
- * Remove every visible trace of the default administrator account name from
- * existing data. The credentials themselves are only documented in the README
- * and in the deployment environment - never on the site itself.
+ * Keep the *credentials* of the default administrator out of the site content.
+ *
+ * The account itself is a perfectly normal user as far as visitors are
+ * concerned - what must never show up in the site is the announcement telling
+ * everyone that "the super administrator is <name> / <password>".
  */
 function cleanDefaultAdminTraces(): void {
   const username = config.seed.rootUsername;
-  const admin = get<any>('SELECT id, display_name, email FROM users WHERE username = ?', [username]);
-  if (admin) {
-    if (!admin.display_name || admin.display_name === username) {
-      run('UPDATE users SET display_name = ? WHERE id = ?', ['站长', admin.id]);
-    }
-    if (String(admin.email ?? '').toLowerCase() === `${username}@ogoj.local`) {
-      run('UPDATE users SET email = ? WHERE id = ?', ['webmaster@ogoj.local', admin.id]);
-    }
-  }
   for (const phrase of [
     `默认超级管理员账号为 \`${username}\`，请首次登录后立即修改密码。`,
     '默认超级管理员账号为 `root`，请首次登录后立即修改密码。',
@@ -59,23 +52,20 @@ function cleanDefaultAdminTraces(): void {
       '如需反馈问题，可以随时提交工单，管理员会尽快处理。',
     ]);
   }
-  const banned = get<{ value: string }>(`SELECT value FROM settings WHERE key = 'banned_usernames'`);
-  if (banned?.value) {
-    try {
-      const list = JSON.parse(banned.value) as string[];
-      if (Array.isArray(list) && list.includes(username)) {
-        run(`UPDATE settings SET value = ? WHERE key = 'banned_usernames'`, [
-          JSON.stringify(list.filter((item) => item !== username)),
-        ]);
-      }
-    } catch {
-      /* ignore malformed value */
-    }
-  }
-  // The control panel shows the actor of every admin action.
-  if (admin) {
-    run(`UPDATE audit_logs SET actor_name = ? WHERE actor_name = ?`, ['站长', username]);
-  }
+  // Restore the account name/email if an earlier build anonymised them.
+  run(`UPDATE users SET display_name = username WHERE username = ? AND display_name = '站长'`, [username]);
+  run(`UPDATE users SET email = ? WHERE username = ? AND email = 'webmaster@ogoj.local'`, [
+    `${username}@ogoj.local`,
+    username,
+  ]);
+  run(`UPDATE audit_logs SET actor_name = ? WHERE actor_name = '站长'`, [username]);
+  // Older seeds described these accounts by their staff role in the bio, which
+  // already told every visitor who the administrators were.
+  run(`UPDATE users SET bio = ? WHERE username = ? AND bio = 'OGOJ 系统管理员。'`, [
+    '欢迎来到 OGOJ，祝你刷题愉快。',
+    username,
+  ]);
+  run(`UPDATE users SET bio = ? WHERE username = 'admin' AND bio = '题目管理员。'`, ['喜欢出题与维护题库。']);
 }
 
 const TAGS: { name: string; color: string; category: string }[] = [
@@ -265,10 +255,10 @@ async function seedUsers(): Promise<Record<string, number>> {
       username: config.seed.rootUsername,
       email: config.seed.rootEmail,
       role: 'superadmin',
-      bio: 'OGOJ 系统管理员。',
+      bio: '欢迎来到 OGOJ，祝你刷题愉快。',
       school: 'OGOJ',
     },
-    { username: 'admin', email: 'admin@ogoj.local', role: 'admin', bio: '题目管理员。', school: 'OGOJ' },
+    { username: 'admin', email: 'admin@ogoj.local', role: 'admin', bio: '喜欢出题与维护题库。', school: 'OGOJ' },
     { username: 'alice', email: 'alice@ogoj.local', role: 'user', bio: '正在学习动态规划。', school: '示例中学' },
     { username: 'bob', email: 'bob@ogoj.local', role: 'user', bio: '喜欢图论与数据结构。', school: '样例大学' },
     { username: 'carol', email: 'carol@ogoj.local', role: 'user', bio: 'OGOJ 新人，请多指教。', school: '' },
@@ -287,16 +277,7 @@ async function seedUsers(): Promise<Record<string, number>> {
     const info = run(
       `INSERT INTO users (username, email, password_hash, role, display_name, bio, school, points)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        user.username,
-        user.email,
-        hash,
-        user.role,
-        user.role === 'superadmin' ? '站长' : user.username,
-        user.bio,
-        user.school,
-        0,
-      ],
+      [user.username, user.email, hash, user.role, user.username, user.bio, user.school, 0],
     );
     ids[user.username] = Number(info.lastInsertRowid);
   }

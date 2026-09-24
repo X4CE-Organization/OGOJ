@@ -463,7 +463,7 @@ export const SETTINGS: SettingField[] = [
     key: 'banned_usernames',
     label: '禁止注册的用户名',
     type: 'json',
-    default: '["admin","administrator","system","ogoj","official","support","moderator"]',
+    default: '["admin","administrator","root","system","ogoj","official","support","moderator"]',
     group: 'account',
   },
   {

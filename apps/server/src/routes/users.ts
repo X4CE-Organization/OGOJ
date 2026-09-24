@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { all, count, get, run } from '../db/index.js';
-import { hasRole, requireUser } from '../lib/auth.js';
+import { canSeeRoles, displayRole, hasRole, requireUser } from '../lib/auth.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { bool, num } from '../settings/index.js';
 import { parseId, parsePage, sqlLike } from '../lib/util.js';
@@ -28,7 +28,9 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const like = sqlLike(String(query.q));
       params.push(like, like);
     }
-    if (query.role) {
+    // Only administrators may filter by role, otherwise anybody could look up
+    // which accounts are staff members.
+    if (query.role && canSeeRoles(request.user)) {
       conditions.push('role = ?');
       params.push(String(query.role));
     }
@@ -49,11 +51,17 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       [...params, page.size, page.offset],
     );
     const total = count(`SELECT COUNT(*) AS c FROM users WHERE ${conditions.join(' AND ')}`, params);
+    const viewer = request.user;
     return {
-      items: rows.map((row) => ({ ...row, level: levelOf(row.solved_count ?? 0) })),
+      items: rows.map((row) => ({
+        ...row,
+        role: displayRole(row.role, viewer, viewer?.id === row.id),
+        level: levelOf(row.solved_count ?? 0),
+      })),
       total,
       page: page.page,
       size: page.size,
+      canSeeRoles: canSeeRoles(viewer),
     };
   });
 
@@ -119,6 +127,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
     return {
       profile: {
         ...publicUser(row),
+        role: displayRole(row.role, viewer, isSelf),
         email: isSelf || isAdmin ? row.email : row.show_email ? row.email : null,
         createdAt: row.created_at,
         lastLoginAt: row.last_login_at,

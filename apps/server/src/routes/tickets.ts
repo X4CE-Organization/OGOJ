@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { all, count, get, run, tx } from '../db/index.js';
-import { hasRole, requireAdmin, requireSuperAdmin, requireUser } from '../lib/auth.js';
+import { displayStaffRole, hasRole, requireAdmin, requireSuperAdmin, requireUser } from '../lib/auth.js';
 import { badRequest, conflict, forbidden, notFound, tooMany } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { bool, json as settingJson, num, str } from '../settings/index.js';
@@ -319,7 +319,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
           username: reply.username,
           display_name: reply.display_name,
           avatar: reply.avatar,
-          role: reply.role,
+          role: displayStaffRole(reply.role, user, reply.author_id === user.id),
         },
       })),
     };

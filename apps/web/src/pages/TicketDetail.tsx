@@ -164,7 +164,7 @@ export default function TicketDetail() {
               {ticket.assignee && (
                 <span className="inline-flex items-center gap-1 text-primary">
                   <UserCheck className="h-3 w-3" />
-                  处理人 {ticket.assignee.display_name || ticket.assignee.username}
+                  {isAdmin ? `处理人 ${ticket.assignee.display_name || ticket.assignee.username}` : '已由管理员受理'}
                 </span>
               )}
               {ticket.relatedLabel && <span>关联：{ticket.relatedLabel}</span>}
@@ -244,9 +244,9 @@ export default function TicketDetail() {
                     <span className="font-medium text-slate-700 dark:text-slate-200">
                       {item.author.display_name || item.author.username}
                     </span>
-                    {isStaff && (
+                    {isStaff && isAdmin && (
                       <span className="rounded bg-primary/10 px-1.5 text-primary">
-                        {item.author.role === 'superadmin' ? '超级管理员' : '管理员'}
+                        管理员
                       </span>
                     )}
                     <span className="text-slate-400">{formatTime(item.createdAt)}</span>

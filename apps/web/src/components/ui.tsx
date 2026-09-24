@@ -10,6 +10,7 @@ import {
   statusStyle,
 } from '../lib/format';
 import type { SiteUser } from '../lib/auth';
+import { useAuth } from '../lib/auth';
 
 export function Avatar({
   user,
@@ -56,10 +57,13 @@ export function UserLink({
   className?: string;
 }) {
   if (!user?.username) return <span className="text-slate-400">未知用户</span>;
+  // Staff highlighting is only shown to administrators: ordinary visitors must
+  // not be able to tell which accounts are administrators.
+  const { isAdmin } = useAuth();
   const roleColor =
-    user.role === 'superadmin'
+    isAdmin && user.role === 'superadmin'
       ? 'text-rose-600 dark:text-rose-400 font-semibold'
-      : user.role === 'admin'
+      : isAdmin && user.role === 'admin'
         ? 'text-amber-600 dark:text-amber-400 font-semibold'
         : 'text-slate-700 dark:text-slate-200';
   return (

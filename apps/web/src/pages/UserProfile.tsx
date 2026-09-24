@@ -92,14 +92,13 @@ export default function UserProfile() {
             <Avatar user={profile} size={72} className="ring-4 ring-white dark:ring-slate-900" />
             <h1 className="mt-2 text-lg font-bold">
               {profile.display_name || profile.username}
-              {profile.role === 'superadmin' && <span className="ml-1 text-xs text-rose-500">超级管理员</span>}
-              {profile.role === 'admin' && <span className="ml-1 text-xs text-amber-500">管理员</span>}
+              {(profile.isSelf || viewer?.role === 'admin' || viewer?.role === 'superadmin') &&
+                profile.role === 'superadmin' && <span className="ml-1 text-xs text-rose-500">超级管理员</span>}
+              {(profile.isSelf || viewer?.role === 'admin' || viewer?.role === 'superadmin') &&
+                profile.role === 'admin' && <span className="ml-1 text-xs text-amber-500">管理员</span>}
             </h1>
             <p className="text-xs text-slate-400">
-              {/* The account name is only shown to its owner and to admins. */}
-              {profile.isSelf || viewer?.role === 'admin' || viewer?.role === 'superadmin'
-                ? `@${profile.username} · UID ${profile.id}`
-                : `UID ${profile.id}`}
+              @{profile.username} · UID {profile.id}
             </p>
             <p className="mt-1 text-xs text-slate-500">{profile.level?.name}</p>
             {profile.bio && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{profile.bio}</p>}

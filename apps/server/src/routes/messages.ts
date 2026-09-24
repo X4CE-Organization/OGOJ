@@ -6,7 +6,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { all, count, get, run, tx } from '../db/index.js';
-import { requireUser } from '../lib/auth.js';
+import { displayRole, requireUser } from '../lib/auth.js';
 import { badRequest, forbidden, notFound, tooMany } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { bool, num } from '../settings/index.js';
@@ -115,7 +115,7 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
           username: row.peer_username,
           display_name: row.peer_display,
           avatar: row.peer_avatar,
-          role: row.peer_role,
+          role: displayRole(row.peer_role, user),
         },
         unread: row.unread ?? 0,
         lastMessage: {
@@ -164,7 +164,7 @@ export async function registerMessageRoutes(app: FastifyInstance): Promise<void>
         username: peer.username,
         display_name: peer.display_name,
         avatar: peer.avatar,
-        role: peer.role,
+        role: displayRole(peer.role, user),
         solved_count: peer.solved_count,
         last_login_at: peer.last_login_at,
       },
