@@ -125,6 +125,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const indexPath = path.join(config.paths.webDist, 'index.html');
     if (fs.existsSync(indexPath)) {
+      reply.header('Cache-Control', 'no-cache, must-revalidate');
       reply.type('text/html').send(fs.readFileSync(indexPath, 'utf8'));
       return;
     }
@@ -143,6 +144,16 @@ export async function buildApp(): Promise<FastifyInstance> {
       prefix: '/',
       decorateReply: false,
       wildcard: false,
+      setHeaders: (reply, filePath) => {
+        // Hashed assets never change, but the SPA shell must always be
+        // revalidated: otherwise a redeploy (which deletes the old hashed
+        // bundles) leaves cached HTML pointing at files that no longer exist.
+        if (/[.-][A-Za-z0-9_]{8,}\.(js|css)$/.test(filePath) || /\.(woff2?|ttf|png|jpg|svg)$/.test(filePath)) {
+          reply.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          reply.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        }
+      },
     });
   }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { classNames } from '../lib/format';
 
 type Side = 'top' | 'bottom' | 'left' | 'right';
@@ -28,13 +28,33 @@ export default function Tooltip({
   children: ReactNode;
   className?: string;
 }) {
+  const wrapper = useRef<HTMLSpanElement>(null);
+  // After a click the pointer usually still rests on the icon, so the label
+  // would stay visible even though the user already navigated. Suppress it
+  // until the pointer leaves the icon again.
+  const [dismissed, setDismissed] = useState(false);
+
   return (
-    <span className={classNames('group/tip relative inline-flex', className)}>
+    <span
+      ref={wrapper}
+      className={classNames('group/tip relative inline-flex', className)}
+      onMouseLeave={() => setDismissed(false)}
+      onClick={() => {
+        setDismissed(true);
+        // Links keep focus after being clicked, which used to keep the tooltip
+        // open forever because the header stays mounted between routes.
+        const active = document.activeElement as HTMLElement | null;
+        if (active && wrapper.current?.contains(active)) active.blur();
+      }}
+    >
       {children}
       <span
         role="tooltip"
         className={classNames(
-          'pointer-events-none absolute z-50 hidden w-max max-w-[16rem] flex-col gap-0.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-xs leading-snug text-white shadow-lg group-hover/tip:flex group-focus-within/tip:flex dark:bg-slate-700',
+          'pointer-events-none absolute z-50 hidden w-max max-w-[16rem] flex-col gap-0.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-xs leading-snug text-white shadow-lg dark:bg-slate-700',
+          // Keyboard users still get the hint: Tab focuses the icon, which is a
+          // `:focus-visible` focus, unlike the focus left behind by a click.
+          !dismissed && 'group-hover/tip:flex group-has-[:focus-visible]/tip:flex',
           SIDE_STYLES[side],
         )}
       >
