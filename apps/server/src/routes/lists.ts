@@ -195,7 +195,7 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  /* 团队相关接口见 routes/teams.ts（团队 2.0） */
+  /* 团队相关接口见 routes/teams.ts */
 }
 
 function setListProblems(listId: number, problemIds: unknown[]): void {

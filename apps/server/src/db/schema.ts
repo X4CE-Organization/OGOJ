@@ -433,7 +433,7 @@ CREATE TABLE IF NOT EXISTS team_problems (
 );
 
 -- ---------------------------------------------------------------------------
--- 团队 2.0
+-- 团队
 -- ---------------------------------------------------------------------------
 
 -- 自定义组别：给成员分组，并逐项控制管理权限
@@ -827,7 +827,7 @@ export const ALTERATIONS_SQL: string[] = [
   `ALTER TABLE messages ADD COLUMN conversation_key TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE messages ADD COLUMN parent_id INTEGER`,
   `CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_key, id DESC)`,
-  // 团队 2.0
+  // 团队
   `ALTER TABLE teams ADD COLUMN background TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE teams ADD COLUMN announcement TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE teams ADD COLUMN join_policy TEXT NOT NULL DEFAULT 'open'`,
