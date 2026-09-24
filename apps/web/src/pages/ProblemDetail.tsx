@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Check, Copy, Heart, Pencil, Plus, Send, ThumbsUp } from 'lucide-react';
 import { api, query } from '../lib/api';
@@ -9,6 +9,7 @@ import CodeEditor from '../components/CodeEditor';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 import HackList from '../components/HackList';
+import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 
 function SampleBlock({ index, sample }: { index: number; sample: { input: string; output: string; explanation?: string } }) {
   const [copied, setCopied] = useState<'in' | 'out' | null>(null);
@@ -72,6 +73,14 @@ export default function ProblemDetail() {
   const [language, setLanguage] = useState('');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  /** 代码来源提示：draft = 上次没提交的草稿，last = 上次提交的代码 */
+  const [codeSource, setCodeSource] = useState<{ kind: 'draft' | 'last'; at?: string; id?: number } | null>(
+    null,
+  );
+  /** 编辑器初始内容（模板 / 草稿 / 上次提交），用于判断用户是否真的改过代码 */
+  const baseline = useRef('');
+  const edited = useRef(false);
+  const initializedFor = useRef<number | null>(null);
   const [solutions, setSolutions] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [discussions, setDiscussions] = useState<any[]>([]);
@@ -113,16 +122,71 @@ export default function ProblemDetail() {
     void load();
   }, [load]);
 
+  /**
+   * 进入题目时自动回填代码（每道题只初始化一次），优先级：
+   *   1. 浏览器里保存的草稿（正在写、还没提交）
+   *   2. 你在这道题上最后一次提交的代码
+   *   3. 语言的默认模板
+   */
   useEffect(() => {
-    if (!data || !languages.length) return;
+    if (!data || !languages.length) return undefined;
+    const problemId = data.problem.id;
+    if (initializedFor.current === problemId) return undefined;
+    initializedFor.current = problemId;
+    edited.current = false;
+
     const allowed: string[] = data.problem.allowLanguages ?? [];
     const available = allowed.length ? languages.filter((item) => allowed.includes(item.id)) : languages;
     const preferred = available.find((item) => item.id === 'cpp') ?? available[0];
-    if (preferred && !language) {
-      setLanguage(preferred.id);
-      setCode(preferred.template || '');
+    if (!preferred) return undefined;
+    const pickLanguage = (wanted: string) =>
+      available.find((item) => item.id === wanted) ? wanted : preferred.id;
+
+    const draft = loadDraft(user?.id ?? null, problemId);
+    if (draft) {
+      setLanguage(pickLanguage(draft.language));
+      setCode(draft.code);
+      baseline.current = draft.code;
+      setCodeSource({ kind: 'draft', at: new Date(draft.updatedAt).toISOString() });
+      return undefined;
     }
-  }, [data, languages, language]);
+
+    const template = preferred.template || '';
+    setLanguage(preferred.id);
+    setCode(template);
+    baseline.current = template;
+    if (!user) return undefined;
+
+    api
+      .get<{ submission: any }>(`/api/problems/${problemId}/last-code`)
+      .then((result) => {
+        // 期间切换了题目就丢弃结果
+        if (initializedFor.current !== problemId || edited.current) return;
+        const past = result.submission;
+        if (!past?.code) return;
+        setLanguage(pickLanguage(past.language));
+        setCode(past.code);
+        baseline.current = past.code;
+        setCodeSource({ kind: 'last', at: past.createdAt, id: past.id });
+      })
+      .catch(() => undefined);
+    return undefined;
+  }, [data, languages, user]);
+
+  // 边写边存草稿（防抖）：内容与初始值相同就不存，避免把模板本身存成草稿
+  useEffect(() => {
+    if (!data || !language || !code.trim()) return undefined;
+    const problemId = data.problem.id;
+    const timer = setTimeout(() => {
+      if (code === baseline.current) {
+        if (edited.current) clearDraft(user?.id ?? null, problemId);
+        return;
+      }
+      edited.current = true;
+      saveDraft(user?.id ?? null, problemId, { code, language });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [code, language, data, user]);
 
   useEffect(() => {
     if (!data) return undefined;
@@ -182,6 +246,7 @@ export default function ProblemDetail() {
         contestId: contestId ? Number(contestId) : undefined,
       });
       toast.success(`提交成功，编号 #${result.id}`);
+      clearDraft(user.id, data.problem.id);
       navigate(`/record/${result.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '提交失败');
@@ -555,6 +620,32 @@ export default function ProblemDetail() {
                 language={languages.find((item) => item.id === language)?.editor ?? 'cpp'}
                 height="300px"
               />
+              {codeSource && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-200">
+                  <span className="min-w-0 flex-1">
+                    {codeSource.kind === 'draft'
+                      ? `已恢复你上次未提交的草稿${codeSource.at ? `（${fromNow(codeSource.at)}）` : ''}`
+                      : `已载入你上次提交的代码${codeSource.id ? ` #${codeSource.id}` : ''}${
+                          codeSource.at ? `（${fromNow(codeSource.at)}）` : ''
+                        }`}
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 underline decoration-dotted hover:text-sky-600"
+                    onClick={() => {
+                      if (!data) return;
+                      clearDraft(user?.id ?? null, data.problem.id);
+                      const template = languages.find((item) => item.id === language)?.template ?? '';
+                      setCode(template);
+                      baseline.current = template;
+                      edited.current = false;
+                      setCodeSource(null);
+                    }}
+                  >
+                    清空
+                  </button>
+                </div>
+              )}
               <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
                 <span>{code.length} 字符</span>
                 {user && (

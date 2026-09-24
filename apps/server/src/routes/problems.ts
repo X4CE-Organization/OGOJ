@@ -628,6 +628,33 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   /* ------------------------------------------------------------------ misc */
+  /**
+   * 当前用户在这道题上最后一次提交的代码（用于进入题目时自动回填编辑器）。
+   * 只返回自己的提交，因此不受「比赛期间隐藏代码」「关闭他人代码可见性」影响。
+   */
+  app.get('/api/problems/:id/last-code', async (request) => {
+    const user = requireUser(request);
+    const problem = findProblem(String((request.params as any).id));
+    const submission = get<any>(
+      `SELECT id, language, code, status, score, created_at
+         FROM submissions
+        WHERE problem_id = ? AND user_id = ?
+        ORDER BY id DESC LIMIT 1`,
+      [problem.id, user.id],
+    );
+    if (!submission) return { submission: null };
+    return {
+      submission: {
+        id: submission.id,
+        language: submission.language,
+        code: submission.code,
+        status: submission.status,
+        score: submission.score,
+        createdAt: submission.created_at,
+      },
+    };
+  });
+
   app.post('/api/problems/:id/favorite', async (request) => {
     const user = requireUser(request);
     const problem = findProblem(String((request.params as any).id));

@@ -148,7 +148,13 @@ export async function buildApp(): Promise<FastifyInstance> {
       root: config.paths.webDist,
       prefix: '/',
       decorateReply: false,
-      wildcard: false,
+      // NOTE: keep the default `wildcard: true`.
+      // With `wildcard: false` the plugin globs the directory **at startup** and
+      // registers one route per file, so rebuilding the frontend (new hashed
+      // asset names) leaves every asset request unhandled until the server is
+      // restarted - they used to fall through to the SPA handler and return
+      // index.html, which the browser refuses to execute as a module (blank page).
+      wildcard: true,
       // The plugin's own `Cache-Control: public, max-age=0` would override the
       // header rules below, so switch it off and set them ourselves.
       cacheControl: false,
