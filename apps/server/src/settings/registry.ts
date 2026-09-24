@@ -1434,8 +1434,9 @@ export const SETTINGS: SettingField[] = [
     key: 'copyright',
     label: '版权信息',
     type: 'string',
-    default: 'OGOJ - Oganesson Online Judge',
+    default: '',
     group: 'legal',
+    description: '显示在页脚「Powered by OGOJ」右侧，留空则不显示（可填 © 2026 你的组织）',
     public: true,
   },
   {

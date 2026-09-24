@@ -371,44 +371,37 @@ function Footer() {
 
   return (
     <footer className="mt-10 border-t border-slate-200 bg-white py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex max-w-[1440px] flex-col items-center gap-3 px-4 text-center">
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-          {showTickets && (
-            <Link to="/tickets/new" className="hover:text-primary">
-              提交工单
-            </Link>
-          )}
-          {links.map((link) => (
-            <Link key={String(link.href)} to={String(link.href)} className="hover:text-primary">
-              {String(link.label)}
-            </Link>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 text-xs text-center">
+        {showTickets && (
+          <Link to="/tickets/new" className="hover:text-primary">
+            提交工单
+          </Link>
+        )}
+        {links.map((link) => (
+          <Link key={String(link.href)} to={String(link.href)} className="hover:text-primary">
+            {String(link.label)}
+          </Link>
+        ))}
+        <a
+          href={githubUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-primary hover:underline"
+        >
+          {footerText}
+        </a>
+        {settings.copyright ? <span>{String(settings.copyright)}</span> : null}
+        {settings.icp_record ? (
           <a
-            href={githubUrl}
+            href="https://beian.miit.gov.cn/"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-primary hover:underline"
+            className="hover:text-primary"
           >
-            {footerText}
+            {String(settings.icp_record)}
           </a>
-          {settings.copyright ? <span>{String(settings.copyright)}</span> : null}
-          {settings.icp_record ? (
-            <a
-              href="https://beian.miit.gov.cn/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-primary"
-            >
-              {String(settings.icp_record)}
-            </a>
-          ) : null}
-          {settings.police_record ? <span>{String(settings.police_record)}</span> : null}
-        </div>
-        <p className="text-xs text-slate-400">
-          本站基于开源项目 OGOJ 构建 · {String(settings.site_full_name ?? 'Oganesson Online Judge')}
-        </p>
+        ) : null}
+        {settings.police_record ? <span>{String(settings.police_record)}</span> : null}
       </div>
     </footer>
   );

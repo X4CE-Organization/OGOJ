@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
+import { indentUnit } from '@codemirror/language';
 import { basicSetup } from 'codemirror';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { cpp } from '@codemirror/lang-cpp';
@@ -55,6 +56,10 @@ export default function CodeEditor({
     const state = EditorState.create({
       doc: value,
       extensions: [
+        // 代码缩进统一为 4 个空格（Tab 与回车自动缩进都用它），
+        // 必须放在 basicSetup 前面，因为 indentUnit / tabSize 取第一个值。
+        indentUnit.of('    '),
+        EditorState.tabSize.of(4),
         basicSetup,
         keymap.of([indentWithTab]),
         languageExtension(language),
