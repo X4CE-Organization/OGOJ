@@ -13,7 +13,8 @@ export type SettingType =
   | 'select'
   | 'color'
   | 'password'
-  | 'json';
+  | 'json'
+  | 'image';
 
 export interface SettingField {
   key: string;
@@ -29,6 +30,8 @@ export interface SettingField {
   public?: boolean;
   secret?: boolean;
   placeholder?: string;
+  /** Upload sub-directory used by `type: 'image'` fields. */
+  uploadCategory?: string;
 }
 
 export interface SettingGroup {
@@ -195,20 +198,21 @@ export const SETTINGS: SettingField[] = [
   {
     key: 'site_logo',
     label: '站点 Logo',
-    type: 'string',
+    type: 'image',
     default: '',
     group: 'site',
-    description: '图片地址，留空则显示文字 Logo',
+    description: '可直接上传图片，留空则显示文字 Logo',
     public: true,
-    placeholder: '/uploads/logo.png',
+    uploadCategory: 'site',
   },
   {
     key: 'site_favicon',
     label: '站点图标 (favicon)',
-    type: 'string',
+    type: 'image',
     default: '',
     group: 'site',
     public: true,
+    uploadCategory: 'site',
   },
   {
     key: 'site_url',
@@ -303,6 +307,26 @@ export const SETTINGS: SettingField[] = [
     default: true,
     group: 'appearance',
     public: true,
+  },
+  {
+    key: 'home_hero_image',
+    label: '首页首屏大图',
+    type: 'image',
+    default: '',
+    group: 'appearance',
+    description: '显示在首页顶部（轮播关闭时作为主视觉图），留空使用主题渐变背景',
+    public: true,
+    uploadCategory: 'site',
+  },
+  {
+    key: 'home_background_image',
+    label: '首页背景图',
+    type: 'image',
+    default: '',
+    group: 'appearance',
+    description: '平铺在首页内容区底层的背景图，留空使用默认纯色',
+    public: true,
+    uploadCategory: 'site',
   },
   {
     key: 'carousel_interval',
@@ -439,7 +463,7 @@ export const SETTINGS: SettingField[] = [
     key: 'banned_usernames',
     label: '禁止注册的用户名',
     type: 'json',
-    default: '["admin","administrator","root","system","ogoj","official","support","moderator"]',
+    default: '["admin","administrator","system","ogoj","official","support","moderator"]',
     group: 'account',
   },
   {
@@ -1035,6 +1059,34 @@ export const SETTINGS: SettingField[] = [
     public: true,
   },
   {
+    key: 'enable_private_message',
+    label: '开启私信功能',
+    type: 'boolean',
+    default: true,
+    group: 'community',
+    description: '用户之间可以互相发送私信',
+    public: true,
+  },
+  {
+    key: 'pm_rate_limit_seconds',
+    label: '两次发送私信的最小间隔（秒）',
+    type: 'number',
+    default: 10,
+    min: 0,
+    max: 3600,
+    group: 'community',
+  },
+  {
+    key: 'pm_max_length',
+    label: '单条私信长度上限（字符）',
+    type: 'number',
+    default: 2000,
+    min: 100,
+    max: 20000,
+    group: 'community',
+    public: true,
+  },
+  {
     key: 'discussion_page_size',
     label: '讨论列表每页数量',
     type: 'number',
@@ -1257,10 +1309,11 @@ export const SETTINGS: SettingField[] = [
     key: 'rate_limit_per_minute',
     label: 'API 每分钟请求上限',
     type: 'number',
-    default: 300,
+    default: 1200,
     min: 30,
-    max: 10000,
+    max: 100000,
     group: 'security',
+    description: '每个 IP 每分钟允许的请求数，浏览器浏览一个页面通常会发起 5~10 个请求',
   },
   {
     key: 'max_upload_size_mb',

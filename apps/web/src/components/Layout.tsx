@@ -24,6 +24,9 @@ import { api } from '../lib/api';
 import { classNames } from '../lib/format';
 import { Avatar } from './ui';
 import { useToast } from './Toast';
+import Tooltip from './Tooltip';
+import ImageUploadField from './ImageUploadField';
+import { Modal } from './ui';
 
 const NAV_ITEMS = [
   { to: '/', label: '首页', icon: Home },
@@ -41,11 +44,13 @@ const NAV_ITEMS = [
 const GITHUB_FALLBACK = 'https://github.com/x4ce-organization/OGOJ';
 
 function Header() {
-  const { user, settings, unread, ticketUnread, isAdmin, logout, grants } = useAuth();
+  const { user, settings, unread, ticketUnread, isAdmin, logout, grants, refresh } = useAuth();
   const { dark, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
@@ -76,7 +81,8 @@ function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+    <>
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4">
         <a
           href={githubUrl}
@@ -120,56 +126,64 @@ function Header() {
         </form>
 
         {settings.enable_dark_mode !== false && (
-          <button
-            type="button"
-            onClick={toggle}
-            title={dark ? '切换到浅色模式' : '切换到深色模式'}
-            className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
-          >
-            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
+          <Tooltip label={dark ? '切换到浅色模式' : '切换到深色模式'} description="切换网站配色">
+            <button
+              type="button"
+              aria-label={dark ? '切换到浅色模式' : '切换到深色模式'}
+              onClick={toggle}
+              className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+            >
+              {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </Tooltip>
         )}
 
         {settings.show_github_link !== false && (
-          <a
-            href={githubUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
-            title="GitHub 仓库"
-          >
-            <Github className="h-4 w-4" />
-          </a>
+          <Tooltip label="开源仓库" description="在 GitHub 上查看 OGOJ 源码">
+            <a
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub 仓库"
+              className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          </Tooltip>
         )}
 
         {user ? (
           <>
             {settings.enable_tickets !== false && settings.ticket_show_entry !== false && (
+              <Tooltip label="工单 · 问题反馈" description="遇到问题或想提建议，提交工单给管理员">
+                <Link
+                  to="/tickets"
+                  aria-label="工单"
+                  className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+                >
+                  <LifeBuoy className="h-4 w-4" />
+                  {ticketUnread > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
+                      {ticketUnread > 99 ? '99+' : ticketUnread}
+                    </span>
+                  )}
+                </Link>
+              </Tooltip>
+            )}
+            <Tooltip label="站内信 · 私信" description="系统通知与用户私信都在这里">
               <Link
-                to="/tickets"
+                to="/messages"
+                aria-label="站内信"
                 className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
-                title="工单 · 问题反馈"
               >
-                <LifeBuoy className="h-4 w-4" />
-                {ticketUnread > 0 && (
+                <Mail className="h-4 w-4" />
+                {unread > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
-                    {ticketUnread > 99 ? '99+' : ticketUnread}
+                    {unread > 99 ? '99+' : unread}
                   </span>
                 )}
               </Link>
-            )}
-            <Link
-              to="/messages"
-              className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
-              title="站内信"
-            >
-              <Mail className="h-4 w-4" />
-              {unread > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
-                  {unread > 99 ? '99+' : unread}
-                </span>
-              )}
-            </Link>
+            </Tooltip>
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
@@ -201,6 +215,17 @@ function Header() {
                     )}
                   </div>
                   <MenuItem to={`/user/${encodeURIComponent(user.username)}`}>个人主页</MenuItem>
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                    onClick={() => {
+                      setAvatarDraft(user.avatar ?? '');
+                      setAvatarOpen(true);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    更换头像
+                  </button>
                   <MenuItem to="/settings">个人设置</MenuItem>
                   <MenuItem to="/shop/orders">我的订单</MenuItem>
                   <MenuItem to="/hacks">Hack 记录</MenuItem>
@@ -282,7 +307,47 @@ function Header() {
           </div>
         </nav>
       )}
-    </header>
+
+      </header>
+
+      <Modal
+        open={avatarOpen}
+        title="更换头像"
+        onClose={() => setAvatarOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setAvatarOpen(false)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={async () => {
+                try {
+                  await api.put('/api/auth/profile', { avatar: avatarDraft });
+                  await refresh();
+                  setAvatarOpen(false);
+                  toast.success('头像已更新');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : '更新失败');
+                }
+              }}
+            >
+              保存
+            </button>
+          </>
+        }
+      >
+        <ImageUploadField
+          value={avatarDraft}
+          onChange={setAvatarDraft}
+          category="avatar"
+          previewClassName="h-20 w-20"
+          rounded="rounded-full"
+          hint="支持 jpg / png / gif / webp / svg，建议正方形图片"
+        />
+      </Modal>
+    </>
   );
 }
 

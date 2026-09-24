@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Award, Calendar, MapPin, UserMinus, UserPlus } from 'lucide-react';
+import { Award, Calendar, Camera, MapPin, MessageSquarePlus, UserMinus, UserPlus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, DIFFICULTY_COLORS, DIFFICULTY_NAMES, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
-import { Avatar, DifficultyBadge, EmptyState, Loading, StatusText, Tabs, TagBadge } from '../components/ui';
+import { Avatar, DifficultyBadge, EmptyState, Loading, Modal, StatusText, Tabs, TagBadge } from '../components/ui';
+import ImageUploadField from '../components/ImageUploadField';
+import { useToast } from '../components/Toast';
 
 export default function UserProfile() {
   const { username = '' } = useParams();
-  const { user: viewer, settings } = useAuth();
+  const { user: viewer, settings, refresh } = useAuth();
+  const toast = useToast();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('solved');
@@ -16,6 +19,9 @@ export default function UserProfile() {
   const [articles, setArticles] = useState<any[]>([]);
   const [discussions, setDiscussions] = useState<any[]>([]);
   const [badges, setBadges] = useState<{ unlocked: any[]; total: number } | null>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState('');
+  const [bannerDraft, setBannerDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -90,7 +96,10 @@ export default function UserProfile() {
               {profile.role === 'admin' && <span className="ml-1 text-xs text-amber-500">管理员</span>}
             </h1>
             <p className="text-xs text-slate-400">
-              @{profile.username} · UID {profile.id}
+              {/* The account name is only shown to its owner and to admins. */}
+              {profile.isSelf || viewer?.role === 'admin' || viewer?.role === 'superadmin'
+                ? `@${profile.username} · UID ${profile.id}`
+                : `UID ${profile.id}`}
             </p>
             <p className="mt-1 text-xs text-slate-500">{profile.level?.name}</p>
             {profile.bio && <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{profile.bio}</p>}
@@ -111,26 +120,46 @@ export default function UserProfile() {
             </div>
 
             {viewer && !profile.isSelf && (
-              <button
-                type="button"
-                className={classNames('mt-3 w-full', profile.isFollowing ? 'btn-ghost' : 'btn-primary')}
-                onClick={toggleFollow}
-              >
-                {profile.isFollowing ? (
-                  <>
-                    <UserMinus className="h-4 w-4" /> 取消关注
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4" /> 关注
-                  </>
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  className={classNames('w-full', profile.isFollowing ? 'btn-ghost' : 'btn-primary')}
+                  onClick={toggleFollow}
+                >
+                  {profile.isFollowing ? (
+                    <>
+                      <UserMinus className="h-4 w-4" /> 取消关注
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" /> 关注
+                    </>
+                  )}
+                </button>
+                {settings.enable_private_message !== false && (
+                  <Link to={`/messages?to=${encodeURIComponent(profile.username)}`} className="btn-ghost w-full">
+                    <MessageSquarePlus className="h-4 w-4" /> 发私信
+                  </Link>
                 )}
-              </button>
+              </div>
             )}
             {profile.isSelf && (
-              <Link to="/settings" className="btn-ghost mt-3 w-full">
-                编辑资料
-              </Link>
+              <div className="mt-3 space-y-2">
+                <Link to="/settings" className="btn-ghost w-full">
+                  编辑资料
+                </Link>
+                <button
+                  type="button"
+                  className="btn-primary w-full"
+                  onClick={() => {
+                    setAvatarDraft(profile.avatar ?? '');
+                    setBannerDraft(profile.banner ?? '');
+                    setAvatarOpen(true);
+                  }}
+                >
+                  <Camera className="h-4 w-4" /> 更换头像 / 背景
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -215,6 +244,53 @@ export default function UserProfile() {
           </div>
         )}
       </aside>
+
+      <Modal
+        open={avatarOpen}
+        title="更换头像与主页背景"
+        onClose={() => setAvatarOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setAvatarOpen(false)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={async () => {
+                try {
+                  await api.put('/api/auth/profile', { avatar: avatarDraft, banner: bannerDraft });
+                  setAvatarOpen(false);
+                  await refresh();
+                  void load();
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : '保存失败');
+                }
+              }}
+            >
+              保存
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <ImageUploadField
+            value={avatarDraft}
+            onChange={setAvatarDraft}
+            category="avatar"
+            previewClassName="h-20 w-20"
+            rounded="rounded-full"
+            hint="支持 jpg / png / gif / webp，建议使用正方形图片（至少 200×200）"
+          />
+          <ImageUploadField
+            value={bannerDraft}
+            onChange={setBannerDraft}
+            category="banner"
+            previewClassName="h-20 w-40"
+            hint="个人主页顶部横幅，建议 1200×300"
+          />
+        </div>
+      </Modal>
 
       <div className="space-y-4">
         <div className="card overflow-hidden">

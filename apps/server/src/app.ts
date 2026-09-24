@@ -26,6 +26,7 @@ import { registerOAuthRoutes } from './routes/oauth.js';
 import { registerHackRoutes } from './routes/hacks.js';
 import { registerAchievementRoutes } from './routes/achievements.js';
 import { registerTicketRoutes } from './routes/tickets.js';
+import { registerMessageRoutes } from './routes/messages.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   ensureDataDirs();
@@ -55,7 +56,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   await app.register(rateLimit, {
     global: true,
-    max: Math.max(60, num('rate_limit_per_minute', 300)),
+    // Read the limit on every request so the control panel takes effect live.
+    max: () => Math.max(60, num('rate_limit_per_minute', 1200)),
     timeWindow: '1 minute',
     allowList: () => false,
     errorResponseBuilder: () => ({
@@ -98,7 +100,17 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
     }
     const err = error as { statusCode?: number; message?: string; code?: string };
-    const status = err.statusCode ?? 500;
+    // @fastify/rate-limit reports its state through `code`, make sure it keeps
+    // the 429 status instead of degrading into a generic 500.
+    const rateLimited = String(err.code ?? '') === '429' || /too many requests/i.test(err.message ?? '');
+    const status = rateLimited ? 429 : err.statusCode ?? 500;
+    if (rateLimited) {
+      return reply.code(429).send({
+        code: 429,
+        message: '请求过于频繁，请稍后再试',
+        error: 'TOO_MANY',
+      });
+    }
     if (status >= 500) request.log.error(error);
     return reply.code(status).send({
       code: status,
@@ -147,6 +159,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerCommunityRoutes(app);
   await registerAchievementRoutes(app);
   await registerTicketRoutes(app);
+  await registerMessageRoutes(app);
   await registerShopRoutes(app);
   await registerListRoutes(app);
   await registerAdminRoutes(app);

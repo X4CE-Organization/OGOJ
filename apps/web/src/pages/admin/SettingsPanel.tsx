@@ -4,11 +4,12 @@ import { useAuth } from '../../lib/auth';
 import { classNames } from '../../lib/format';
 import { Loading, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import ImageUploadField from '../../components/ImageUploadField';
 
 interface Field {
   key: string;
   label: string;
-  type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'color' | 'password' | 'json';
+  type: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'color' | 'password' | 'json' | 'image';
   default: unknown;
   group: string;
   description?: string;
@@ -19,6 +20,7 @@ interface Field {
   public?: boolean;
   secret?: boolean;
   placeholder?: string;
+  uploadCategory?: string;
 }
 
 interface Group {
@@ -243,6 +245,13 @@ export default function SettingsPanel() {
                       className="input min-h-[100px]"
                       value={String(value ?? '')}
                       onChange={(event) => setValue(field, event.target.value)}
+                    />
+                  ) : field.type === 'image' ? (
+                    <ImageUploadField
+                      value={String(value ?? '')}
+                      onChange={(next) => setValue(field, next)}
+                      category={field.uploadCategory ?? 'site'}
+                      placeholder={field.placeholder ?? '/uploads/site/xxx.png'}
                     />
                   ) : field.type === 'color' ? (
                     <div className="flex items-center gap-2">

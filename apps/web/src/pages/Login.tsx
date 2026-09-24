@@ -81,7 +81,7 @@ export default function Login() {
         )}
       </form>
       <p className="text-center text-xs text-slate-400">
-        默认超级管理员账号：root / ogoj123456（首次登录后请立即修改密码）
+        登录后即可提交代码、参加比赛、兑换商店特权；遇到问题可以提交工单。
       </p>
     </div>
   );

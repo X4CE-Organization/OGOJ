@@ -14,7 +14,9 @@ export function audit(
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         request.user?.id ?? null,
-        request.user?.username ?? 'anonymous',
+        // Prefer the display name so the log never leaks the default account
+        // name; the actor id below still links to the real user row.
+        request.user?.display_name || request.user?.username || 'anonymous',
         action,
         options.targetType ?? '',
         options.targetId === undefined ? '' : String(options.targetId),

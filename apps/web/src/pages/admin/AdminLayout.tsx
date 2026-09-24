@@ -85,7 +85,7 @@ export default function AdminLayout() {
             <div className="mt-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">
               {isSuperAdmin ? '超级管理员' : '普通管理员'}
             </div>
-            <div className="text-[11px] text-slate-400">@{user?.username}</div>
+            <div className="text-[11px] text-slate-400">{user?.display_name || user?.username}</div>
           </div>
         </div>
         <nav className="card space-y-3 p-3">

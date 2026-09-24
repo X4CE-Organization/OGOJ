@@ -34,6 +34,50 @@ interface ProblemSeed {
   testcases: { input: string; output: string; score?: number; subtask?: number }[];
 }
 
+/**
+ * Remove every visible trace of the default administrator account name from
+ * existing data. The credentials themselves are only documented in the README
+ * and in the deployment environment - never on the site itself.
+ */
+function cleanDefaultAdminTraces(): void {
+  const username = config.seed.rootUsername;
+  const admin = get<any>('SELECT id, display_name, email FROM users WHERE username = ?', [username]);
+  if (admin) {
+    if (!admin.display_name || admin.display_name === username) {
+      run('UPDATE users SET display_name = ? WHERE id = ?', ['站长', admin.id]);
+    }
+    if (String(admin.email ?? '').toLowerCase() === `${username}@ogoj.local`) {
+      run('UPDATE users SET email = ? WHERE id = ?', ['webmaster@ogoj.local', admin.id]);
+    }
+  }
+  for (const phrase of [
+    `默认超级管理员账号为 \`${username}\`，请首次登录后立即修改密码。`,
+    '默认超级管理员账号为 `root`，请首次登录后立即修改密码。',
+  ]) {
+    run('UPDATE announcements SET content = REPLACE(content, ?, ?)', [
+      phrase,
+      '如需反馈问题，可以随时提交工单，管理员会尽快处理。',
+    ]);
+  }
+  const banned = get<{ value: string }>(`SELECT value FROM settings WHERE key = 'banned_usernames'`);
+  if (banned?.value) {
+    try {
+      const list = JSON.parse(banned.value) as string[];
+      if (Array.isArray(list) && list.includes(username)) {
+        run(`UPDATE settings SET value = ? WHERE key = 'banned_usernames'`, [
+          JSON.stringify(list.filter((item) => item !== username)),
+        ]);
+      }
+    } catch {
+      /* ignore malformed value */
+    }
+  }
+  // The control panel shows the actor of every admin action.
+  if (admin) {
+    run(`UPDATE audit_logs SET actor_name = ? WHERE actor_name = ?`, ['站长', username]);
+  }
+}
+
 const TAGS: { name: string; color: string; category: string }[] = [
   { name: '模拟', color: '#60a5fa', category: '基础算法' },
   { name: '枚举', color: '#38bdf8', category: '基础算法' },
@@ -243,7 +287,16 @@ async function seedUsers(): Promise<Record<string, number>> {
     const info = run(
       `INSERT INTO users (username, email, password_hash, role, display_name, bio, school, points)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user.username, user.email, hash, user.role, user.username, user.bio, user.school, 0],
+      [
+        user.username,
+        user.email,
+        hash,
+        user.role,
+        user.role === 'superadmin' ? '站长' : user.username,
+        user.bio,
+        user.school,
+        0,
+      ],
     );
     ids[user.username] = Number(info.lastInsertRowid);
   }
@@ -600,7 +653,7 @@ function seedHomepage(ownerId: number): void {
       `INSERT INTO announcements (title, content, type, is_pinned, is_public, author_id) VALUES (?, ?, 'important', 1, 1, ?)`,
       [
         'OGOJ 正式上线，欢迎使用！',
-        'OGOJ 是一个完全开源的在线评测系统，支持题目、评测、比赛、讨论、题解、专栏、题单、团队与积分商店。\n\n默认超级管理员账号为 `root`，请首次登录后立即修改密码。',
+        'OGOJ 是一个完全开源的在线评测系统，支持题目、评测、比赛、讨论、题解、专栏、题单、团队与积分商店。\n\n站点还提供 Hack 系统、成就徽章与工单支持，欢迎体验；遇到问题可以随时提交工单。',
         ownerId,
       ],
     );
@@ -670,6 +723,7 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
   insertSettingsDefaults();
   invalidateSettings();
   const userIds = await seedUsers();
+  cleanDefaultAdminTraces();
   const tagIds = seedTags();
   const problemIds = seedProblems(userIds.root!, tagIds);
   seedContests(userIds.root!, problemIds);

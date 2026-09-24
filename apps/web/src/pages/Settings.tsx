@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatTime } from '../lib/format';
-import { Avatar, Field, Loading, Section } from '../components/ui';
+import { Field, Loading, Section } from '../components/ui';
 import { useToast } from '../components/Toast';
 import OAuthButtons from '../components/OAuthButtons';
 import { Link2, Trash2 } from 'lucide-react';
+import ImageUploadField from '../components/ImageUploadField';
 
 export default function SettingsPage() {
   const { user, profile, refresh, settings } = useAuth();
@@ -26,7 +27,6 @@ export default function SettingsPage() {
   const [password, setPassword] = useState({ old_password: '', new_password: '', new_password2: '' });
   const [points, setPoints] = useState<any>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [bindings, setBindings] = useState<{ bindings: any[]; providers: any[] } | null>(null);
 
   const loadBindings = () => {
@@ -69,21 +69,6 @@ export default function SettingsPage() {
     }
   };
 
-  const upload = async (file: File, category: 'avatar' | 'banner') => {
-    setUploading(true);
-    try {
-      const result = await api.upload<{ url: string }>(`/api/upload?category=${category}`, file);
-      setForm((current) => ({ ...current, [category]: result.url }));
-      await api.put('/api/auth/profile', { [category]: result.url });
-      await refresh();
-      toast.success('图片已更新');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '上传失败');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const save = async () => {
     setSaving(true);
     try {
@@ -117,37 +102,23 @@ export default function SettingsPage() {
       <Section title="个人资料">
         <div className="space-y-4 p-4">
           <div className="flex flex-wrap items-center gap-4">
-            <Avatar user={{ ...user, avatar: form.avatar }} size={64} />
-            <div>
-              <label className="btn-ghost cursor-pointer !py-1.5 text-xs">
-                {uploading ? '上传中…' : '更换头像'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void upload(file, 'avatar');
-                  }}
-                />
-              </label>
-              <p className="mt-1 text-xs text-slate-400">支持 jpg / png / gif / webp，建议 200×200</p>
-            </div>
+            <ImageUploadField
+              value={form.avatar}
+              onChange={(next) => setForm({ ...form, avatar: next })}
+              category="avatar"
+              previewClassName="h-20 w-20"
+              rounded="rounded-full"
+              hint="支持 jpg / png / gif / webp / svg，建议使用 200×200 以上的正方形图片"
+            />
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            {form.banner && <img src={form.banner} alt="" className="h-16 w-40 rounded-lg object-cover" />}
-            <label className="btn-ghost cursor-pointer !py-1.5 text-xs">
-              更换主页背景
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void upload(file, 'banner');
-                }}
-              />
-            </label>
+            <ImageUploadField
+              value={form.banner}
+              onChange={(next) => setForm({ ...form, banner: next })}
+              category="banner"
+              previewClassName="h-20 w-40"
+              hint="个人主页顶部横幅，建议 1200×300"
+            />
           </div>
           <Field label="昵称">
             <input

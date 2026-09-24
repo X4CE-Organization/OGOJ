@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth';
 import { Field, Loading } from '../components/ui';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
+import ImageUploadField from '../components/ImageUploadField';
 
 export default function ArticleEditor() {
   const { id } = useParams();
@@ -88,12 +89,12 @@ export default function ArticleEditor() {
               ))}
             </select>
           </Field>
-          <Field label="封面图地址">
-            <input
-              className="input"
+          <Field label="封面图">
+            <ImageUploadField
               value={form.cover}
-              onChange={(event) => setForm({ ...form, cover: event.target.value })}
-              placeholder="/uploads/article/xxx.png"
+              onChange={(next) => setForm({ ...form, cover: next })}
+              category="article"
+              hint="建议 16:9 或 3:2 的横向图片"
             />
           </Field>
         </div>

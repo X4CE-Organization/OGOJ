@@ -110,8 +110,51 @@ export default function Home() {
   const has = (name: string) => modules.includes(name);
 
   return (
-    <div className="space-y-5">
-      {has('carousel') && <Carousel items={data.carousel} interval={Number(settings.carousel_interval ?? 6)} />}
+    <div
+      className="space-y-5"
+      style={
+        settings.home_background_image
+          ? {
+              backgroundImage: `url(${String(settings.home_background_image)})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundAttachment: 'fixed',
+            }
+          : undefined
+      }
+    >
+      {Boolean(settings.home_background_image) && (
+        <div className="-mx-4 -mt-5 bg-white/80 px-4 pt-5 backdrop-blur-sm dark:bg-slate-950/70">
+          <HomeInner data={data} modules={modules} has={has} />
+        </div>
+      )}
+      {!settings.home_background_image && <HomeInner data={data} modules={modules} has={has} />}
+    </div>
+  );
+}
+
+/** The homepage body: shared so the background image can wrap it. */
+function HomeInner({
+  data,
+  modules,
+  has,
+}: {
+  data: HomeData;
+  modules: string[];
+  has: (name: string) => boolean;
+}) {
+  const { settings, user } = useAuth();
+  return (
+    <>
+      {has('carousel') && data.carousel.length > 0 ? (
+        <Carousel items={data.carousel} interval={Number(settings.carousel_interval ?? 6)} />
+      ) : settings.home_hero_image ? (
+        <img
+          src={String(settings.home_hero_image)}
+          alt={String(settings.site_name ?? 'OGOJ')}
+          className="max-h-72 w-full rounded-xl border border-slate-200 object-cover dark:border-slate-800"
+        />
+      ) : null}
 
       {has('notice') && data.notice && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
@@ -323,6 +366,6 @@ export default function Home() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

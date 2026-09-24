@@ -496,10 +496,14 @@ CREATE TABLE IF NOT EXISTS messages (
   type       TEXT NOT NULL DEFAULT 'system',   -- system | user | reply | judge | shop
   ref_type   TEXT DEFAULT '',
   ref_id     INTEGER,
+  conversation_key TEXT NOT NULL DEFAULT '',   -- 私信会话：<小ID>-<大ID>
+  parent_id  INTEGER,
   is_read    INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_id, is_read, id DESC);
+-- idx_messages_conversation is created after the ALTER statements below so that
+-- databases created before the column existed migrate cleanly.
 
 CREATE TABLE IF NOT EXISTS announcements (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -690,4 +694,7 @@ export const ALTERATIONS_SQL: string[] = [
   `ALTER TABLE submissions ADD COLUMN hack_id INTEGER`,
   `ALTER TABLE contests ADD COLUMN allow_hack INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE contests ADD COLUMN open_hack INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE messages ADD COLUMN conversation_key TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE messages ADD COLUMN parent_id INTEGER`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_key, id DESC)`,
 ];
