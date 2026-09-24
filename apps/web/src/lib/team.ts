@@ -24,7 +24,7 @@ export const TEAM_POLICIES: TeamPolicyMeta[] = [
     label: '保护团队（加入需要审核）',
     short: '保护团队',
     hint: '加入需要审核',
-    color: '#3b82f6',
+    color: '#f59e0b',
     description: '申请后需要团长或管理员审核通过才能加入。',
   },
   {
