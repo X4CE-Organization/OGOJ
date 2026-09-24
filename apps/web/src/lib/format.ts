@@ -37,12 +37,12 @@ export const DIFFICULTY_NAMES = [
 ];
 
 export const DIFFICULTY_COLORS = [
-  '#fe4c61',
-  '#f39c11',
-  '#ffc116',
-  '#52c41a',
-  '#3498db',
-  '#9d3dcf',
+  '#22c55e', // 入门 - 绿
+  '#14b8a6', // 普及 - 青
+  '#3b82f6', // 提高 - 蓝
+  '#8b5cf6', // NOIP - 紫
+  '#f97316', // NOI  - 橙
+  '#ef4444', // IOI  - 红
 ];
 
 export function statusStyle(status: string) {

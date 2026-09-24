@@ -58,10 +58,10 @@ export default function SearchPage() {
                       {problem.title}
                     </Link>
                     <span
-                      className="rounded px-1.5 py-0.5 text-xs"
+                      className="rounded px-1.5 py-0.5 text-xs [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
                       style={{
-                        backgroundColor: `${difficultyColor(problem.difficulty)}22`,
-                        color: difficultyColor(problem.difficulty),
+                        backgroundColor: `color-mix(in srgb, ${difficultyColor(problem.difficulty)} 16%, transparent)`,
+                        ['--difficulty' as string]: difficultyColor(problem.difficulty),
                       }}
                     >
                       {difficultyName(problem.difficulty)}

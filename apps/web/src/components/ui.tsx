@@ -95,8 +95,10 @@ export function DifficultyBadge({ value, compact = false }: { value: number; com
   const color = difficultyColor(value);
   return (
     <span
-      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap"
-      style={{ backgroundColor: `${color}1f`, color }}
+      // 浅色模式下把文字色调深一点，保证小字号也有足够对比度；
+      // 深色模式保持原色（深底浅字本来就清晰）。
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
+      style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, ['--difficulty' as string]: color }}
       title={difficultyName(value)}
     >
       {compact ? difficultyName(value) : `${value}. ${difficultyName(value)}`}

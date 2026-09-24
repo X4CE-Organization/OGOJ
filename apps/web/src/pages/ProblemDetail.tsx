@@ -331,8 +331,11 @@ export default function ProblemDetail() {
               </h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <span
-                  className="rounded px-1.5 py-0.5 text-xs"
-                  style={{ backgroundColor: `${problem.difficultyColor}22`, color: problem.difficultyColor }}
+                  className="rounded px-1.5 py-0.5 text-xs [color:color-mix(in_srgb,var(--difficulty)_72%,black)] dark:[color:var(--difficulty)]"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${problem.difficultyColor} 16%, transparent)`,
+                    ['--difficulty' as string]: problem.difficultyColor,
+                  }}
                 >
                   {problem.difficultyName}
                 </span>

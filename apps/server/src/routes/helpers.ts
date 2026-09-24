@@ -12,12 +12,12 @@ export const DIFFICULTY_NAMES = [
 ];
 
 export const DIFFICULTY_COLORS = [
-  '#fe4c61', // 入门
-  '#f39c11', // 普及
-  '#ffc116', // 提高
-  '#52c41a', // NOIP
-  '#3498db', // NOI
-  '#9d3dcf', // IOI
+  '#22c55e', // 入门 - 绿
+  '#14b8a6', // 普及 - 青
+  '#3b82f6', // 提高 - 蓝
+  '#8b5cf6', // NOIP - 紫
+  '#f97316', // NOI  - 橙
+  '#ef4444', // IOI  - 红
 ];
 
 export interface UserBrief {
