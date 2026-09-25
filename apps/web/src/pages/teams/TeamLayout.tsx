@@ -17,6 +17,7 @@ import { classNames, fromNow } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import TeamPolicyBadge from '../../components/TeamPolicyBadge';
+import BackButton from '../../components/BackButton';
 import { teamPolicy } from '../../lib/team';
 
 export interface TeamContextValue {
@@ -106,6 +107,7 @@ export default function TeamLayout() {
 
   return (
     <div className="space-y-4">
+      <BackButton label="返回团队" listKey="teams" fallback="/teams" />
       {/* ------------------------------------------------------------ 团队头部 */}
       <div className="card overflow-hidden">
         <div

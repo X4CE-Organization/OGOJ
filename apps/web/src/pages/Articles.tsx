@@ -4,6 +4,7 @@ import { PenLine, Eye } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fromNow } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { Avatar, EmptyState, Loading, Pagination } from '../components/ui';
 
 export default function Articles() {
@@ -17,6 +18,12 @@ export default function Articles() {
   const category = params.get('category') ?? '';
   const keyword = params.get('q') ?? '';
   const size = 20;
+
+  // 记住列表位置，文章详情页的「返回文章广场」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('articles', search ? `/articles?${search}` : '/articles');
+  }, [params]);
 
   useEffect(() => {
     setLoading(true);

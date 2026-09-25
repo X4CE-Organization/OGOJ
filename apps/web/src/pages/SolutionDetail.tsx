@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatTime } from '../lib/format';
 import { Avatar, EmptyState, Loading } from '../components/ui';
+import BackButton from '../components/BackButton';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 
@@ -60,6 +61,7 @@ export default function SolutionDetail() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      <BackButton label="返回题目" fallback={solution.pid ? `/problem/${solution.pid}` : '/problems'} />
       <article className="card p-6">
         <h1 className="text-2xl font-bold">{solution.title}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">

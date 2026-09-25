@@ -5,6 +5,7 @@ import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, countdown, formatDuration, formatMs, formatTime, fromNow } from '../lib/format';
 import { DifficultyBadge, EmptyState, Loading, Modal, Section, Tabs, UserLink, StatusText } from '../components/ui';
+import BackButton from '../components/BackButton';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 
@@ -96,6 +97,7 @@ export default function ContestDetail() {
 
   return (
     <div className="space-y-4">
+      <BackButton label="返回比赛" listKey="contests" fallback="/contests" />
       <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

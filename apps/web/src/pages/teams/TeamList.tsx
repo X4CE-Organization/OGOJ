@@ -4,6 +4,7 @@ import { Crown, Flame, Plus, Search, UserPlus, Users2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { classNames, fromNow } from '../../lib/format';
+import { rememberListUrl } from '../../lib/nav';
 import { TEAM_POLICIES, teamPolicy } from '../../lib/team';
 import { EmptyState, Field, Loading, Modal, Pagination, Section } from '../../components/ui';
 import ImageUploadField from '../../components/ImageUploadField';
@@ -43,6 +44,12 @@ export default function TeamList() {
   const sort = params.get('sort') ?? 'members';
   const policy = params.get('policy') ?? '';
   const category = params.get('category') ?? '';
+
+  // 记住团队列表位置，团队主页的「返回团队」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('teams', search ? `/teams?${search}` : '/teams');
+  }, [params]);
 
   const load = useCallback(async () => {
     setLoading(true);

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Info, Lock, Star, Trash2, UserCheck } from 'lucide-react';
+import { CheckCircle2, Info, Lock, Star, Trash2, UserCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatTime, fromNow } from '../lib/format';
 import { Avatar, EmptyState, Loading, Section } from '../components/ui';
+import BackButton from '../components/BackButton';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 import { TICKET_PRIORITY, TICKET_STATUS } from './Tickets';
@@ -124,10 +125,11 @@ export default function TicketDetail() {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center justify-between">
-        <Link to={isAdmin && ticket.canManage ? '/admin/tickets' : '/tickets'} className="text-xs text-primary hover:underline">
-          <ArrowLeft className="mr-0.5 inline h-3.5 w-3.5" />
-          {isAdmin && ticket.canManage ? '返回工单管理' : '返回我的工单'}
-        </Link>
+        {isAdmin && ticket.canManage ? (
+          <BackButton label="返回工单管理" fallback="/admin/tickets" />
+        ) : (
+          <BackButton label="返回工单" listKey="tickets" fallback="/tickets" />
+        )}
         {isSuperAdmin && <button type="button" className="text-xs text-rose-500 hover:underline" onClick={remove}>
           <Trash2 className="mr-0.5 inline h-3.5 w-3.5" />
           删除工单

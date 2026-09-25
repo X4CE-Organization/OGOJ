@@ -4,7 +4,7 @@ import { Search, SlidersHorizontal } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, DIFFICULTY_COLORS, DIFFICULTY_COLORS_DARK, DIFFICULTY_NAMES } from '../lib/format';
-import { rememberProblemsUrl } from '../lib/nav';
+import { rememberListUrl } from '../lib/nav';
 import { DifficultyBadge, EmptyState, Loading, Pagination, Section, TagBadge } from '../components/ui';
 
 interface ProblemItem {
@@ -44,7 +44,7 @@ export default function Problems() {
   // 记住当前这一屏的筛选条件，题目详情页的「返回题库」会回到这里
   useEffect(() => {
     const search = params.toString();
-    rememberProblemsUrl(search ? `/problems?${search}` : '/problems');
+    rememberListUrl('problems', search ? `/problems?${search}` : '/problems');
   }, [params]);
 
   useEffect(() => {

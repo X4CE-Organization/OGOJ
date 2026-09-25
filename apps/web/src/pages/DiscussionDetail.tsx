@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatTime, fromNow } from '../lib/format';
 import { Avatar, EmptyState, Loading, UserLink } from '../components/ui';
+import BackButton from '../components/BackButton';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 
@@ -94,6 +95,7 @@ export default function DiscussionDetail() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
+      <BackButton label="返回讨论区" listKey="discussions" fallback="/discussions" />
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-bold">

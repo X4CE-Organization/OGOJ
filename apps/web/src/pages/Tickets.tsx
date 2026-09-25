@@ -4,6 +4,7 @@ import { LifeBuoy, Plus, Star } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, fromNow } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Loading, Pagination, Section } from '../components/ui';
 
 export const TICKET_STATUS: Record<string, { label: string; className: string }> = {
@@ -32,6 +33,12 @@ export default function Tickets() {
   const status = params.get('status') ?? 'unfinished';
   const category = params.get('category') ?? '';
   const size = Number(settings.ticket_list_page_size ?? 20);
+
+  // 记住列表位置，工单详情页的「返回工单」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('tickets', search ? `/tickets?${search}` : '/tickets');
+  }, [params]);
 
   const load = useCallback(async () => {
     setLoading(true);

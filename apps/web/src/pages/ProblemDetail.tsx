@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check, Copy, Heart, Pencil, Plus, Send, ThumbsUp } from 'lucide-react';
+import { Check, Copy, Heart, Pencil, Plus, Send, ThumbsUp } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatMs, formatMemory, fromNow } from '../lib/format';
@@ -9,7 +9,7 @@ import CodeEditor from '../components/CodeEditor';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
-import { lastProblemsUrl } from '../lib/nav';
+import BackButton from '../components/BackButton';
 
 function SampleBlock({ index, sample }: { index: number; sample: { input: string; output: string; explanation?: string } }) {
   const [copied, setCopied] = useState<'in' | 'out' | null>(null);
@@ -323,14 +323,7 @@ export default function ProblemDetail() {
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
       <div className="lg:col-span-2">
-        <button
-          type="button"
-          title="返回你刚才浏览的题库"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition hover:border-primary/40 hover:text-primary dark:border-slate-700"
-          onClick={() => navigate(lastProblemsUrl() ?? '/problems')}
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> 返回题库
-        </button>
+        <BackButton label="返回题库" listKey="problems" fallback="/problems" />
       </div>
       <div className="space-y-4">
         <div className="card overflow-hidden">

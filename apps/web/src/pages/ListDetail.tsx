@@ -15,6 +15,7 @@ import {
   TagBadge,
 } from '../components/ui';
 import Markdown from '../components/Markdown';
+import BackButton from '../components/BackButton';
 import { useToast } from '../components/Toast';
 
 export default function ListDetail() {
@@ -92,6 +93,9 @@ export default function ListDetail() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+      <div className="lg:col-span-2">
+        <BackButton label="返回题单" listKey="training" fallback="/training" />
+      </div>
       <div className="space-y-4">
         <div className="card p-5">
           <div className="flex items-start justify-between gap-3">

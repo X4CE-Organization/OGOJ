@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, countdown, formatDuration, formatTime } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Loading, Pagination } from '../components/ui';
 
 const RULES_LABEL: Record<string, string> = { acm: 'ACM', oi: 'OI', ioi: 'IOI' };
@@ -20,6 +21,12 @@ export default function Contests() {
   const rules = params.get('rules') ?? '';
   const mine = params.get('mine') ?? '';
   const size = 20;
+
+  // 记住列表位置，比赛详情页的「返回比赛」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('contests', search ? `/contests?${search}` : '/contests');
+  }, [params]);
 
   useEffect(() => {
     setLoading(true);

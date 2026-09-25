@@ -4,6 +4,7 @@ import { ListChecks, Plus } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, fromNow } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Field, Loading, Modal, Pagination, Section } from '../components/ui';
 import { useToast } from '../components/Toast';
 
@@ -23,6 +24,12 @@ export default function Training() {
   const type = params.get('type') ?? '';
   const mine = params.get('mine') ?? '';
   const size = 20;
+
+  // 记住列表位置，题单详情页的「返回题单」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('training', search ? `/training?${search}` : '/training');
+  }, [params]);
 
   const load = () => {
     setLoading(true);

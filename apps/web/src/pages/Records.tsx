@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { LANGUAGE_NAMES, formatMemory, formatMs, fromNow } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Loading, Pagination, StatusText, UserLink } from '../components/ui';
 
 export default function Records() {
@@ -21,6 +22,12 @@ export default function Records() {
   const keyword = params.get('q') ?? '';
   const mine = params.get('mine') ?? '';
   const contest = params.get('contest') ?? '';
+
+  // 记住列表位置，评测详情页的「返回评测记录」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('records', search ? `/record?${search}` : '/record');
+  }, [params]);
 
   const load = () => {
     setLoading(true);

@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { LANGUAGE_NAMES, formatMemory, formatMs, formatTime, classNames } from '../lib/format';
 import { EmptyState, Loading, StatusText, UserLink } from '../components/ui';
+import BackButton from '../components/BackButton';
 import CodeEditor from '../components/CodeEditor';
 import { useToast } from '../components/Toast';
 
@@ -58,6 +59,7 @@ export default function RecordDetail() {
 
   return (
     <div className="space-y-4">
+      <BackButton label="返回评测记录" listKey="records" fallback="/record" />
       <div className="card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

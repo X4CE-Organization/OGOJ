@@ -4,6 +4,7 @@ import { MessageSquarePlus, Pin, Lock, Eye } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, fromNow } from '../lib/format';
+import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Field, Loading, Modal, Pagination, UserLink } from '../components/ui';
 import { useToast } from '../components/Toast';
 
@@ -23,6 +24,12 @@ export default function Discussions() {
   const sort = params.get('sort') ?? 'new';
   const keyword = params.get('q') ?? '';
   const size = 30;
+
+  // 记住列表位置，帖子详情页的「返回讨论区」会回到这一屏
+  useEffect(() => {
+    const search = params.toString();
+    rememberListUrl('discussions', search ? `/discussions?${search}` : '/discussions');
+  }, [params]);
 
   useEffect(() => {
     api.get<{ boards: any[] }>('/api/boards').then((data) => setBoards(data.boards)).catch(() => undefined);

@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, DIFFICULTY_COLORS, DIFFICULTY_COLORS_DARK, DIFFICULTY_NAMES, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
 import { Avatar, DifficultyBadge, EmptyState, Loading, Modal, StatusText, Tabs, TagBadge } from '../components/ui';
+import BackButton from '../components/BackButton';
 import ImageUploadField from '../components/ImageUploadField';
 import { useToast } from '../components/Toast';
 
@@ -81,6 +82,9 @@ export default function UserProfile() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+      <div className="lg:col-span-2">
+        <BackButton label="返回上一页" fallback="/rank" useHistory />
+      </div>
       <aside className="space-y-4">
         <div className="card overflow-hidden">
           {profile.banner ? (
