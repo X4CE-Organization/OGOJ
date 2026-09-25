@@ -678,10 +678,10 @@ export default function ProblemDetail() {
               )}
 
               {/* -------------------------------------------- 自测：左输入 右输出 */}
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 [&>*]:min-w-0">
                 {/* 左：自定义输入 */}
-                <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center justify-between gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800/60">
+                <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40">
+                  <div className="flex h-8 items-center justify-between gap-1 border-b border-slate-200 bg-slate-100/70 px-2 dark:border-slate-700 dark:bg-slate-800/60">
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-300">
                       输入
                     </span>
@@ -723,7 +723,7 @@ export default function ProblemDetail() {
                     </div>
                   </div>
                   <textarea
-                    className="scrollbar-thin min-h-[150px] flex-1 resize-y border-0 bg-transparent p-2 font-mono text-[12px] leading-relaxed outline-none"
+                    className="scrollbar-thin min-h-[150px] flex-1 resize-y border-0 bg-transparent p-2 font-mono text-[12px] leading-relaxed text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200"
                     placeholder={'在这里输入自测数据\n运行时会作为标准输入传给程序'}
                     value={testInput}
                     spellCheck={false}
@@ -736,8 +736,8 @@ export default function ProblemDetail() {
                 </div>
 
                 {/* 右：运行输出 */}
-                <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800/60">
+                <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40">
+                  <div className="flex h-8 items-center justify-between gap-1 border-b border-slate-200 bg-slate-100/70 px-2 dark:border-slate-700 dark:bg-slate-800/60">
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-300">输出</span>
                     {testResult && (
                       <span className="flex items-center gap-1.5 text-[11px]">
@@ -752,27 +752,31 @@ export default function ProblemDetail() {
                       </span>
                     )}
                   </div>
-                  <div className="scrollbar-thin min-h-[150px] flex-1 overflow-auto bg-slate-900 p-2 font-mono text-[12px] leading-relaxed">
+                  <div className="scrollbar-thin min-h-[150px] flex-1 overflow-auto p-2 font-mono text-[12px] leading-relaxed text-slate-700 dark:text-slate-200">
                     {testing ? (
                       <span className="text-slate-400">运行中…</span>
                     ) : testError ? (
-                      <span className="text-rose-300">{testError}</span>
+                      <span className="break-words text-rose-600 dark:text-rose-300">{testError}</span>
                     ) : !testResult ? (
-                      <span className="text-slate-500">点左侧右上角「运行自测」，这里会显示输出</span>
+                      <span className="break-words text-slate-400">点左侧右上角「运行自测」，这里会显示输出</span>
                     ) : testResult.status === 'CE' ? (
-                      <pre className="whitespace-pre-wrap text-rose-200">{testResult.compileOutput || '编译失败'}</pre>
+                      <pre className="whitespace-pre-wrap break-words text-rose-600 dark:text-rose-300">
+{testResult.compileOutput || '编译失败'}
+                      </pre>
                     ) : (
                       <div className="space-y-2">
-                        <pre className="whitespace-pre-wrap text-slate-100">
+                        <pre className="whitespace-pre-wrap break-words">
 {testResult.stdout?.length ? testResult.stdout : '（没有输出）'}
                         </pre>
                         {testResult.stderr && (
-                          <pre className="whitespace-pre-wrap border-t border-slate-700 pt-2 text-amber-200">
+                          <pre className="whitespace-pre-wrap break-words border-t border-slate-200 pt-2 text-amber-600 dark:border-slate-700 dark:text-amber-300">
 {testResult.stderr}
                           </pre>
                         )}
                         {testResult.status !== 'OK' && (
-                          <p className="border-t border-slate-700 pt-2 text-slate-400">{testResult.message}</p>
+                          <p className="break-words border-t border-slate-200 pt-2 text-slate-400 dark:border-slate-700">
+                            {testResult.message}
+                          </p>
                         )}
                       </div>
                     )}
