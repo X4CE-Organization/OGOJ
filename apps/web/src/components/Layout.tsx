@@ -86,16 +86,14 @@ function Header() {
     <>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4">
-        <a
-          href={githubUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="OGOJ on GitHub"
+        <Link
+          to="/"
+          title={`${siteName} 首页`}
           className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-primary"
         >
           {logo ? <img src={logo} alt={siteName} className="h-7" /> : null}
           <span>{siteName}</span>
-        </a>
+        </Link>
 
         <nav className="hidden flex-1 items-center gap-0.5 lg:flex">
           {NAV_ITEMS.map((item) => (
