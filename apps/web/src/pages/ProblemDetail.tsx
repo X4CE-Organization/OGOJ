@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, Copy, Heart, Pencil, Play, Plus, RotateCcw, Send, ThumbsUp } from 'lucide-react';
+import { Check, Copy, Heart, Pencil, Play, Plus, RotateCcw, Send, ThumbsUp } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { classNames, formatMs, formatMemory, fromNow } from '../lib/format';
+import { classNames, formatMs, formatMemory, fromNow, statusStyle } from '../lib/format';
 import { EmptyState, Loading, Section, StatusText, Tabs, TagBadge, UserLink, Modal, Field } from '../components/ui';
 import CodeEditor from '../components/CodeEditor';
 import Markdown from '../components/Markdown';
@@ -73,8 +73,7 @@ export default function ProblemDetail() {
   const [language, setLanguage] = useState('');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  /** 自测面板：自定义输入、运行结果与开关状态 */
-  const [testOpen, setTestOpen] = useState(false);
+  /** 自测面板：左边输入、右边输出 */
   const [testInput, setTestInput] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -351,7 +350,7 @@ export default function ProblemDetail() {
   const canSubmit = settings.allow_submit !== false;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+    <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
       <div className="lg:col-span-2">
         <BackButton label="返回题库" listKey="problems" fallback="/problems" />
       </div>
@@ -678,109 +677,107 @@ export default function ProblemDetail() {
                 </div>
               )}
 
-              {/* ------------------------------------------------------- 自测 */}
-              <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300"
-                  onClick={() => setTestOpen((open) => !open)}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Play className="h-3.5 w-3.5 text-primary" /> 自测（自定义输入）
-                  </span>
-                  <ChevronDown className={classNames('h-3.5 w-3.5 transition-transform', testOpen && 'rotate-180')} />
-                </button>
-
-                {testOpen && (
-                  <div className="space-y-2 border-t border-slate-200 px-3 py-3 dark:border-slate-700">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>自定义输入</span>
-                      <div className="flex items-center gap-2">
-                        {problem.samples?.length > 0 && (
-                          <button
-                            type="button"
-                            className="hover:text-primary"
-                            onClick={() => {
-                              setTestInput(problem.samples[0].input ?? '');
-                              setTestResult(null);
-                            }}
-                          >
-                            填入样例 1
-                          </button>
-                        )}
+              {/* -------------------------------------------- 自测：左输入 右输出 */}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {/* 左：自定义输入 */}
+                <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800/60">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-300">
+                      输入
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {problem.samples?.length > 0 && (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-0.5 hover:text-primary"
+                          className="text-[11px] text-slate-400 hover:text-primary"
+                          title="填入题目样例 1"
                           onClick={() => {
-                            setTestInput('');
+                            setTestInput(problem.samples[0].input ?? '');
                             setTestResult(null);
                             setTestError('');
                           }}
                         >
-                          <RotateCcw className="h-3 w-3" /> 清空
+                          样例
                         </button>
-                      </div>
+                      )}
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-0.5 text-[11px] text-slate-400 hover:text-primary"
+                        title="清空输入与输出"
+                        onClick={() => {
+                          setTestInput('');
+                          setTestResult(null);
+                          setTestError('');
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary !px-2 !py-0.5 text-[11px]"
+                        disabled={testing}
+                        onClick={() => void runTest()}
+                      >
+                        <Play className="h-3 w-3" /> {testing ? '运行中…' : '运行自测'}
+                      </button>
                     </div>
-                    <textarea
-                      className="input min-h-[90px] w-full font-mono text-xs"
-                      placeholder="在这里输入自测数据，运行时会作为标准输入传给程序"
-                      value={testInput}
-                      spellCheck={false}
-                      onChange={(event) => {
-                        setTestInput(event.target.value);
-                        setTestResult(null);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-primary w-full !py-1.5 text-xs"
-                      disabled={testing}
-                      onClick={() => void runTest()}
-                    >
-                      <Play className="h-3.5 w-3.5" /> {testing ? '运行中…' : '运行自测'}
-                    </button>
+                  </div>
+                  <textarea
+                    className="scrollbar-thin min-h-[150px] flex-1 resize-y border-0 bg-transparent p-2 font-mono text-[12px] leading-relaxed outline-none"
+                    placeholder={'在这里输入自测数据\n运行时会作为标准输入传给程序'}
+                    value={testInput}
+                    spellCheck={false}
+                    onChange={(event) => {
+                      setTestInput(event.target.value);
+                      setTestResult(null);
+                      setTestError('');
+                    }}
+                  />
+                </div>
 
-                    {testError && <p className="text-xs text-rose-500">{testError}</p>}
-
+                {/* 右：运行输出 */}
+                <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-700 dark:bg-slate-800/60">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-300">输出</span>
                     {testResult && (
+                      <span className="flex items-center gap-1.5 text-[11px]">
+                        <span className={classNames('font-medium', statusStyle(testResult.status).className)}>
+                          {statusStyle(testResult.status).label}
+                        </span>
+                        {testResult.status !== 'CE' && testResult.status !== 'SE' && (
+                          <span className="text-slate-400">
+                            {formatMs(testResult.timeMs)} · {formatMemory(testResult.memoryKb)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div className="scrollbar-thin min-h-[150px] flex-1 overflow-auto bg-slate-900 p-2 font-mono text-[12px] leading-relaxed">
+                    {testing ? (
+                      <span className="text-slate-400">运行中…</span>
+                    ) : testError ? (
+                      <span className="text-rose-300">{testError}</span>
+                    ) : !testResult ? (
+                      <span className="text-slate-500">点左侧右上角「运行自测」，这里会显示输出</span>
+                    ) : testResult.status === 'CE' ? (
+                      <pre className="whitespace-pre-wrap text-rose-200">{testResult.compileOutput || '编译失败'}</pre>
+                    ) : (
                       <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <StatusText status={testResult.status} />
-                          <span className="text-slate-400">{testResult.message}</span>
-                          {testResult.status !== 'CE' && testResult.status !== 'SE' && (
-                            <span className="text-slate-400">
-                              {formatMs(testResult.timeMs)} · {formatMemory(testResult.memoryKb)}
-                            </span>
-                          )}
-                        </div>
-                        {testResult.compileOutput && (
-                          <div>
-                            <div className="mb-1 text-[11px] text-slate-400">编译输出</div>
-                            <pre className="scrollbar-thin max-h-40 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-rose-200">
-{testResult.compileOutput}
-                            </pre>
-                          </div>
-                        )}
-                        {!testResult.compileOutput && (
-                          <div>
-                            <div className="mb-1 text-[11px] text-slate-400">输出</div>
-                            <pre className="scrollbar-thin max-h-60 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-slate-100">
-{testResult.stdout?.trim() ? testResult.stdout : '（没有输出）'}
-                            </pre>
-                          </div>
-                        )}
+                        <pre className="whitespace-pre-wrap text-slate-100">
+{testResult.stdout?.length ? testResult.stdout : '（没有输出）'}
+                        </pre>
                         {testResult.stderr && (
-                          <div>
-                            <div className="mb-1 text-[11px] text-slate-400">错误输出</div>
-                            <pre className="scrollbar-thin max-h-40 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-amber-200">
+                          <pre className="whitespace-pre-wrap border-t border-slate-700 pt-2 text-amber-200">
 {testResult.stderr}
-                            </pre>
-                          </div>
+                          </pre>
+                        )}
+                        {testResult.status !== 'OK' && (
+                          <p className="border-t border-slate-700 pt-2 text-slate-400">{testResult.message}</p>
                         )}
                       </div>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
