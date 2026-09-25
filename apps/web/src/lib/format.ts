@@ -1,4 +1,5 @@
 export const STATUS_STYLES: Record<string, { label: string; className: string }> = {
+  OK: { label: '运行成功', className: 'text-emerald-600 dark:text-emerald-400 font-semibold' },
   AC: { label: 'Accepted', className: 'text-emerald-600 dark:text-emerald-400 font-semibold' },
   WA: { label: 'Wrong Answer', className: 'text-rose-600 dark:text-rose-400' },
   TLE: { label: 'Time Limit Exceeded', className: 'text-orange-600 dark:text-orange-400' },

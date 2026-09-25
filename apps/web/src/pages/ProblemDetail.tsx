@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Check, Copy, Heart, Pencil, Plus, Send, ThumbsUp } from 'lucide-react';
+import { Check, ChevronDown, Copy, Heart, Pencil, Play, Plus, RotateCcw, Send, ThumbsUp } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatMs, formatMemory, fromNow } from '../lib/format';
@@ -73,6 +73,12 @@ export default function ProblemDetail() {
   const [language, setLanguage] = useState('');
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  /** 自测面板：自定义输入、运行结果与开关状态 */
+  const [testOpen, setTestOpen] = useState(false);
+  const [testInput, setTestInput] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [testError, setTestError] = useState('');
   /** 代码来源提示：draft = 上次没提交的草稿，last = 上次提交的代码 */
   const [codeSource, setCodeSource] = useState<{ kind: 'draft' | 'last'; at?: string; id?: number } | null>(
     null,
@@ -252,6 +258,30 @@ export default function ProblemDetail() {
       toast.error(err instanceof Error ? err.message : '提交失败');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** 自测：把当前代码和自定义输入交给后端跑一遍，只拿运行结果 */
+  const runTest = async () => {
+    if (!user) {
+      toast.error('请先登录');
+      return;
+    }
+    setTesting(true);
+    setTestError('');
+    try {
+      const result = await api.post<any>('/api/run', {
+        problemId: data.problem.id,
+        language,
+        code,
+        input: testInput,
+      });
+      setTestResult(result.result);
+    } catch (err) {
+      setTestResult(null);
+      setTestError(err instanceof Error ? err.message : '自测失败');
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -647,6 +677,112 @@ export default function ProblemDetail() {
                   </button>
                 </div>
               )}
+
+              {/* ------------------------------------------------------- 自测 */}
+              <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300"
+                  onClick={() => setTestOpen((open) => !open)}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Play className="h-3.5 w-3.5 text-primary" /> 自测（自定义输入）
+                  </span>
+                  <ChevronDown className={classNames('h-3.5 w-3.5 transition-transform', testOpen && 'rotate-180')} />
+                </button>
+
+                {testOpen && (
+                  <div className="space-y-2 border-t border-slate-200 px-3 py-3 dark:border-slate-700">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>自定义输入</span>
+                      <div className="flex items-center gap-2">
+                        {problem.samples?.length > 0 && (
+                          <button
+                            type="button"
+                            className="hover:text-primary"
+                            onClick={() => {
+                              setTestInput(problem.samples[0].input ?? '');
+                              setTestResult(null);
+                            }}
+                          >
+                            填入样例 1
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-0.5 hover:text-primary"
+                          onClick={() => {
+                            setTestInput('');
+                            setTestResult(null);
+                            setTestError('');
+                          }}
+                        >
+                          <RotateCcw className="h-3 w-3" /> 清空
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      className="input min-h-[90px] w-full font-mono text-xs"
+                      placeholder="在这里输入自测数据，运行时会作为标准输入传给程序"
+                      value={testInput}
+                      spellCheck={false}
+                      onChange={(event) => {
+                        setTestInput(event.target.value);
+                        setTestResult(null);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-primary w-full !py-1.5 text-xs"
+                      disabled={testing}
+                      onClick={() => void runTest()}
+                    >
+                      <Play className="h-3.5 w-3.5" /> {testing ? '运行中…' : '运行自测'}
+                    </button>
+
+                    {testError && <p className="text-xs text-rose-500">{testError}</p>}
+
+                    {testResult && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <StatusText status={testResult.status} />
+                          <span className="text-slate-400">{testResult.message}</span>
+                          {testResult.status !== 'CE' && testResult.status !== 'SE' && (
+                            <span className="text-slate-400">
+                              {formatMs(testResult.timeMs)} · {formatMemory(testResult.memoryKb)}
+                            </span>
+                          )}
+                        </div>
+                        {testResult.compileOutput && (
+                          <div>
+                            <div className="mb-1 text-[11px] text-slate-400">编译输出</div>
+                            <pre className="scrollbar-thin max-h-40 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-rose-200">
+{testResult.compileOutput}
+                            </pre>
+                          </div>
+                        )}
+                        {!testResult.compileOutput && (
+                          <div>
+                            <div className="mb-1 text-[11px] text-slate-400">输出</div>
+                            <pre className="scrollbar-thin max-h-60 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-slate-100">
+{testResult.stdout?.trim() ? testResult.stdout : '（没有输出）'}
+                            </pre>
+                          </div>
+                        )}
+                        {testResult.stderr && (
+                          <div>
+                            <div className="mb-1 text-[11px] text-slate-400">错误输出</div>
+                            <pre className="scrollbar-thin max-h-40 overflow-auto rounded-lg bg-slate-900 p-2 font-mono text-[11px] text-amber-200">
+{testResult.stderr}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
                 <span>{code.length} 字符</span>
                 {user && (

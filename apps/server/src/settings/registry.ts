@@ -834,6 +834,14 @@ export const SETTINGS: SettingField[] = [
     public: true,
   },
   {
+    key: 'enable_custom_test',
+    label: '允许代码自测（自定义输入）',
+    type: 'boolean',
+    default: true,
+    group: 'submission',
+    public: true,
+  },
+  {
     key: 'submit_interval_seconds',
     label: '两次提交最小间隔（秒）',
     type: 'number',
