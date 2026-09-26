@@ -76,7 +76,11 @@ export default function Register() {
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 py-10">
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-primary">注册 {String(settings.site_name ?? 'OGOJ')}</h1>
+        <h1 className="text-2xl font-bold text-primary">
+          <Link to="/" title="返回首页" className="transition hover:opacity-75">
+            注册 {String(settings.site_name ?? 'OGOJ')}
+          </Link>
+        </h1>
         <p className="mt-1 text-sm text-slate-500">注册即表示同意本站用户协议</p>
       </div>
       <form onSubmit={submit} className="card space-y-4 p-6">
