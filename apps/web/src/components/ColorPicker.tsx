@@ -4,12 +4,16 @@ import { classNames } from '../lib/format';
 
 /** 常用配色，够用又不刺眼 */
 export const COLOR_PRESETS = [
-  '#ef4444', '#f97316', '#f59e0b', '#eab308',
-  '#84cc16', '#22c55e', '#10b981', '#14b8a6',
-  '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
-  '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
-  '#f43f5e', '#64748b', '#94a3b8', '#475569',
-  '#7c3aed', '#0e1d69', '#166534', '#7f1d1d',
+  '#ef4444', '#f87171', '#fb923c', '#f97316',
+  '#f59e0b', '#facc15', '#eab308', '#a3e635',
+  '#84cc16', '#4ade80', '#22c55e', '#10b981',
+  '#34d399', '#14b8a6', '#2dd4bf', '#06b6d4',
+  '#22d3ee', '#38bdf8', '#0ea5e9', '#3b82f6',
+  '#60a5fa', '#6366f1', '#818cf8', '#8b5cf6',
+  '#a855f7', '#c084fc', '#d946ef', '#e879f9',
+  '#ec4899', '#f472b6', '#f43f5e', '#94a3b8',
+  '#64748b', '#475569', '#7c3aed', '#0e1d69',
+  '#166534', '#7f1d1d', '#a16207', '#0f172a',
 ];
 
 /**
@@ -80,15 +84,9 @@ export default function ColorPicker({
           </div>
           <div className="mt-2 flex items-center gap-2">
             <input
-              type="color"
-              value={current || '#60a5fa'}
-              className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent dark:border-slate-600"
-              onChange={(event) => pick(event.target.value)}
-            />
-            <input
               className="input !py-1 text-xs"
               value={value ?? ''}
-              placeholder="#60a5fa"
+              placeholder="自定义色值，如 #60a5fa"
               onChange={(event) => onChange(event.target.value)}
             />
           </div>
@@ -144,12 +142,6 @@ export function ColorBoard({
           ))}
         </div>
         <div className="mt-2.5 flex items-center gap-2">
-          <input
-            type="color"
-            value={current || '#60a5fa'}
-            className="h-8 w-12 shrink-0 cursor-pointer rounded border border-slate-200 bg-transparent dark:border-slate-700"
-            onChange={(event) => onChange(event.target.value)}
-          />
           <input
             className="input !py-1.5 text-xs"
             value={value ?? ''}

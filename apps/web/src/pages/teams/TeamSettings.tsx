@@ -7,6 +7,7 @@ import { TEAM_POLICIES } from '../../lib/team';
 import TeamPolicyBadge from '../../components/TeamPolicyBadge';
 import { EmptyState, Field, Loading, Modal, Section, UserLink } from '../../components/ui';
 import ImageUploadField from '../../components/ImageUploadField';
+import { ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 import type { TeamContextValue } from './TeamLayout';
 
@@ -415,12 +416,7 @@ export default function TeamSettings() {
                 />
               </Field>
               <Field label="颜色">
-                <input
-                  className="input"
-                  type="color"
-                  value={groupModal.color}
-                  onChange={(event) => setGroupModal({ ...groupModal, color: event.target.value })}
-                />
+                <ColorBoard value={groupModal.color} onChange={(color) => setGroupModal({ ...groupModal, color })} />
               </Field>
             </div>
             <Field label="组别说明">

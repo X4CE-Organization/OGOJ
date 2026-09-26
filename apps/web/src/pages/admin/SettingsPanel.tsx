@@ -5,6 +5,7 @@ import { classNames } from '../../lib/format';
 import { Loading, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import ImageUploadField from '../../components/ImageUploadField';
+import ColorPicker from '../../components/ColorPicker';
 
 interface Field {
   key: string;
@@ -255,11 +256,10 @@ export default function SettingsPanel() {
                     />
                   ) : field.type === 'color' ? (
                     <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        className="h-9 w-14 cursor-pointer rounded border border-slate-200 dark:border-slate-700"
+                      <ColorPicker
                         value={String(value ?? '#0ea5e9')}
-                        onChange={(event) => setValue(field, event.target.value)}
+                        title={field.label ?? '选择颜色'}
+                        onChange={(color) => setValue(field, color || '#0ea5e9')}
                       />
                       <input
                         className="input"

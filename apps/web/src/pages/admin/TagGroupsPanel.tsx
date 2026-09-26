@@ -379,28 +379,7 @@ export default function TagGroupsPanel() {
               ))}
             </datalist>
           </Field>
-          <Field label="标签颜色">
-            <div className="flex flex-wrap items-center gap-2">
-              {PRESET_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={classNames(
-                    'h-6 w-6 rounded-full border-2',
-                    form.color === color ? 'border-slate-400 dark:border-slate-200' : 'border-transparent',
-                  )}
-                  style={{ backgroundColor: color }}
-                  onClick={() => setForm({ ...form, color })}
-                />
-              ))}
-              <input
-                type="color"
-                value={form.color}
-                className="h-7 w-9 cursor-pointer rounded border border-slate-200 bg-transparent dark:border-slate-700"
-                onChange={(event) => setForm({ ...form, color: event.target.value })}
-              />
-            </div>
-          </Field>
+          <ColorBoard label="标签颜色" value={form.color} onChange={(color) => setForm({ ...form, color })} />
         </div>
       </Modal>
 
