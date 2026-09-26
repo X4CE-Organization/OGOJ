@@ -217,6 +217,17 @@ function ColorControls({
           onChange={(event) => onChange(event.target.value)}
         />
       </div>
+
+      {/* 想要系统取色器（吸管、渐变、最近使用）就用这个 */}
+      <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-400 hover:text-primary">
+        <input
+          type="color"
+          value={normalized}
+          className="h-5 w-10 cursor-pointer rounded border border-slate-200 bg-transparent p-0 dark:border-slate-600"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        系统取色器
+      </label>
     </div>
   );
 }
