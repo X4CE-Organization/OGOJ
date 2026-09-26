@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
 import { DifficultyBadge, Field, Loading, Modal, Section } from '../../components/ui';
-import ColorPicker, { COLOR_PRESETS } from '../../components/ColorPicker';
+import ColorPicker, { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
 export default function DifficultiesPanel() {
@@ -12,6 +12,9 @@ export default function DifficultiesPanel() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', color: COLOR_PRESETS[9], colorDark: '' });
+  /** 点铅笔打开的编辑弹窗：上面改名字，下面颜色板 */
+  const [editing, setEditing] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: '', color: '', colorDark: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,10 +45,31 @@ export default function DifficultiesPanel() {
     }
   };
 
-  const rename = (item: any) => {
-    const name = window.prompt('难度名称', item.name)?.trim();
-    if (!name || name === item.name) return;
-    void update(item, { name });
+  const openEditor = (item: any) => {
+    setEditing(item);
+    setEditForm({ name: item.name, color: item.color, colorDark: item.colorDark || item.color });
+  };
+
+  const saveEditor = async () => {
+    if (!editing) return;
+    const name = editForm.name.trim();
+    if (!name) {
+      toast.error('难度名称不能为空');
+      return;
+    }
+    try {
+      await api.put(`/api/admin/difficulties/${editing.id}`, {
+        name,
+        color: editForm.color || '#52c41a',
+        colorDark: editForm.colorDark || editForm.color || '#52c41a',
+      });
+      toast.success('已保存');
+      setEditing(null);
+      window.dispatchEvent(new CustomEvent('ogoj:difficulties'));
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '保存失败');
+    }
   };
 
   const remove = async (item: any) => {
@@ -121,8 +145,13 @@ export default function DifficultiesPanel() {
                       onChange={(color) => void update(item, { colorDark: color || item.color })}
                     />
                   </span>
-                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => rename(item)}>
-                    改名
+                  <button
+                    type="button"
+                    className="text-slate-400 hover:text-primary"
+                    title="编辑难度"
+                    onClick={() => openEditor(item)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
@@ -137,6 +166,54 @@ export default function DifficultiesPanel() {
           </div>
         )}
       </Section>
+
+      <Modal
+        open={Boolean(editing)}
+        title="编辑难度"
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>
+              取消
+            </button>
+            <button type="button" className="btn-primary" onClick={() => void saveEditor()}>
+              保存
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="难度名称" required>
+            <input
+              className="input"
+              value={editForm.name}
+              onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+            />
+          </Field>
+          <ColorBoard
+            label="浅色模式配色"
+            value={editForm.color}
+            onChange={(color) => setEditForm({ ...editForm, color })}
+          />
+          <ColorBoard
+            label="深色模式配色"
+            value={editForm.colorDark}
+            onChange={(color) => setEditForm({ ...editForm, colorDark: color })}
+          />
+          <div className="text-xs text-slate-400">
+            预览：
+            <span
+              className="ml-1 rounded px-1.5 py-0.5 text-xs"
+              style={{
+                backgroundColor: `${editForm.color || '#52c41a'}22`,
+                color: editForm.color || '#52c41a',
+              }}
+            >
+              {editForm.name || '难度'}
+            </span>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={creating}

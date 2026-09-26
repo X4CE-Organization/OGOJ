@@ -3,7 +3,7 @@ import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
-import ColorPicker, { COLOR_PRESETS } from '../../components/ColorPicker';
+import ColorPicker, { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
 const DEFAULT_GROUP = '默认';
@@ -17,6 +17,9 @@ export default function TagGroupsPanel() {
   const [form, setForm] = useState({ name: '', group: DEFAULT_GROUP, color: PRESET_COLORS[0] });
   const [renameFrom, setRenameFrom] = useState<string | null>(null);
   const [renameTo, setRenameTo] = useState('');
+  /** 点铅笔打开的编辑弹窗：上面改名字，下面颜色板 */
+  const [editing, setEditing] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: '', color: '', group: DEFAULT_GROUP });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,15 +68,29 @@ export default function TagGroupsPanel() {
     }
   };
 
-  const renameTag = async (tag: any) => {
-    const name = window.prompt('修改标签名称', tag.name)?.trim();
-    if (!name || name === tag.name) return;
+  const openEditor = (tag: any, group: string) => {
+    setEditing(tag);
+    setEditForm({ name: tag.name, color: tag.color || '#60a5fa', group });
+  };
+
+  const saveTag = async () => {
+    if (!editing) return;
+    const name = editForm.name.trim();
+    if (!name) {
+      toast.error('标签名称不能为空');
+      return;
+    }
     try {
-      await api.put(`/api/tags/${tag.id}`, { name });
-      toast.success('已修改');
+      await api.put(`/api/tags/${editing.id}`, {
+        name,
+        color: editForm.color || '#60a5fa',
+        category: editForm.group.trim() || DEFAULT_GROUP,
+      });
+      toast.success('标签已保存');
+      setEditing(null);
       void load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '修改失败');
+      toast.error(err instanceof Error ? err.message : '保存失败');
     }
   };
 
@@ -250,7 +267,12 @@ export default function TagGroupsPanel() {
                         </option>
                       ))}
                     </select>
-                    <button type="button" className="text-slate-400 hover:text-primary" onClick={() => void renameTag(tag)}>
+                    <button
+                      type="button"
+                      className="text-slate-400 hover:text-primary"
+                      title="编辑标签"
+                      onClick={() => openEditor(tag, group)}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button type="button" className="text-rose-500 hover:text-rose-600" onClick={() => void removeTag(tag)}>
@@ -263,6 +285,62 @@ export default function TagGroupsPanel() {
           </Section>
         ))
       )}
+
+      <Modal
+        open={Boolean(editing)}
+        title="编辑标签"
+        onClose={() => setEditing(null)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>
+              取消
+            </button>
+            <button type="button" className="btn-primary" onClick={() => void saveTag()}>
+              保存
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="标签名称" required>
+            <input
+              className="input"
+              value={editForm.name}
+              onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+            />
+          </Field>
+          <Field label="所属分组">
+            <input
+              className="input"
+              list="tag-group-options-edit"
+              value={editForm.group}
+              onChange={(event) => setEditForm({ ...editForm, group: event.target.value })}
+            />
+            <datalist id="tag-group-options-edit">
+              {groupNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </Field>
+          <ColorBoard
+            label="标签颜色"
+            value={editForm.color}
+            onChange={(color) => setEditForm({ ...editForm, color })}
+          />
+          <div className="text-xs text-slate-400">
+            预览：
+            <span
+              className="ml-1 rounded px-1.5 py-0.5"
+              style={{
+                backgroundColor: `${editForm.color || '#60a5fa'}22`,
+                color: editForm.color || '#60a5fa',
+              }}
+            >
+              {editForm.name || '标签'}
+            </span>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={creating}

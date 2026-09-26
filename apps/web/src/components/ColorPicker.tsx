@@ -106,3 +106,67 @@ export default function ColorPicker({
     </div>
   );
 }
+
+/** 平铺的颜色板：给编辑弹窗用（预设色块 + 取色器 + 手填色值） */
+export function ColorBoard({
+  value,
+  onChange,
+  label,
+  allowEmpty = false,
+}: {
+  value?: string;
+  onChange: (color: string) => void;
+  label?: string;
+  allowEmpty?: boolean;
+}) {
+  const current = (value || '').toLowerCase();
+  return (
+    <div>
+      {label && <div className="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-300">{label}</div>}
+      <div className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-700">
+        <div className="grid grid-cols-8 gap-1.5">
+          {COLOR_PRESETS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              title={color}
+              onClick={() => onChange(color)}
+              className={classNames(
+                'flex h-6 w-6 items-center justify-center rounded-md border transition',
+                current === color.toLowerCase()
+                  ? 'border-slate-500 ring-2 ring-slate-300 dark:border-slate-200 dark:ring-slate-600'
+                  : 'border-black/5 hover:scale-110',
+              )}
+              style={{ backgroundColor: color }}
+            >
+              {current === color.toLowerCase() && <Check className="h-3.5 w-3.5 text-white drop-shadow" />}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2.5 flex items-center gap-2">
+          <input
+            type="color"
+            value={current || '#60a5fa'}
+            className="h-8 w-12 shrink-0 cursor-pointer rounded border border-slate-200 bg-transparent dark:border-slate-700"
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <input
+            className="input !py-1.5 text-xs"
+            value={value ?? ''}
+            placeholder="也可以直接填色值，例如 #60a5fa"
+            onChange={(event) => onChange(event.target.value)}
+          />
+          {allowEmpty && (
+            <button
+              type="button"
+              className="shrink-0 text-xs text-slate-400 hover:text-rose-500"
+              onClick={() => onChange('')}
+            >
+              跟随浅色
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
