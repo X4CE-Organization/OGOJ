@@ -156,7 +156,8 @@ function applyTags(problemId: number, tags: unknown): void {
     if (!name) continue;
     const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
     if (existing) ids.push(existing.id);
-    else ids.push(Number(run('INSERT INTO tags (name) VALUES (?)', [name]).lastInsertRowid));
+      // 自动创建的标签统一进「默认」分组，管理员可以在后台调整分组
+      else ids.push(Number(run(`INSERT INTO tags (name, category) VALUES (?, ?)`, [name, '默认']).lastInsertRowid));
   }
   run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
   for (const id of ids) run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, id]);
@@ -345,6 +346,22 @@ function replaceAll(source: string, search: string, replacement: string): string
   return source.split(search).join(replacement);
 }
 
+/**
+ * FPS 文件的 <source> 往往把多个标签挤在一起，例如
+ * 「[数组 查找 数组 二分查找 线性查找]」，这里拆成一个个标签并去重。
+ */
+function splitFpsTags(source: string): string[] {
+  const cleaned = String(source ?? '').replace(/[\[\]【】（）(){}<>《》「」]/g, ' ');
+  const parts = cleaned.split(/[\s,，、;；|/]+/);
+  const tags: string[] = [];
+  for (const part of parts) {
+    const name = part.replace(/^[-–—_*·]+|[-–—_*·]+$/g, '').trim().slice(0, 32);
+    if (!name) continue;
+    if (!tags.includes(name)) tags.push(name);
+  }
+  return tags;
+}
+
 /* ------------------------------------------------------------------ 路由 */
 
 export async function registerProblemTransferRoutes(app: FastifyInstance): Promise<void> {
@@ -472,6 +489,8 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
             memoryLimit: fpsMemoryLimit(item),
             samples,
             isPublic,
+            // FPS 没有标签字段，把来源拆成标签（归到「默认」分组）
+            tags: splitFpsTags(nodeText(item.source)),
           });
 
           // FPS 里没有测试数据时，用样例数据兜底，否则这道题没法评测

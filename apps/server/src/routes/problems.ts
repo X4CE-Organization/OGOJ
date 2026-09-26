@@ -129,15 +129,17 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     }
 
     const sortMap: Record<string, string> = {
+      pid: 'LENGTH(p.pid) ASC, p.pid ASC',
+      pid_desc: 'LENGTH(p.pid) DESC, p.pid DESC',
       newest: 'p.id DESC',
       oldest: 'p.id ASC',
-      difficulty: 'p.difficulty ASC, p.id ASC',
-      difficulty_desc: 'p.difficulty DESC, p.id ASC',
+      difficulty: 'p.difficulty ASC, LENGTH(p.pid) ASC, p.pid ASC',
+      difficulty_desc: 'p.difficulty DESC, LENGTH(p.pid) ASC, p.pid ASC',
       submissions: 'p.submit_count DESC, p.id DESC',
       acceptance: 'CASE WHEN p.submit_count = 0 THEN 1 ELSE CAST(p.accepted_count AS REAL) / p.submit_count END DESC',
-      pid: 'p.pid ASC',
     };
-    const orderBy = sortMap[String(query.sort ?? 'newest')] ?? sortMap.newest;
+    // 默认按题号从小到大
+    const orderBy = sortMap[String(query.sort ?? 'pid')] ?? sortMap.pid;
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const rows = all<any>(
@@ -754,7 +756,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     const info = run('INSERT INTO tags (name, color, category, sort) VALUES (?, ?, ?, ?)', [
       name,
       String(body.color ?? '#60a5fa'),
-      String(body.category ?? '算法'),
+      String(body.category ?? '默认').trim() || '默认',
       Number(body.sort ?? 0) || 0,
     ]);
     audit(request, 'tag.create', { targetType: 'tag', targetId: Number(info.lastInsertRowid), detail: { name } });
@@ -795,6 +797,47 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     run('DELETE FROM tags WHERE id = ?', [id]);
     audit(request, 'tag.delete', { targetType: 'tag', targetId: id });
     return { ok: true };
+  });
+
+  /* --------------------------------------------------------- 标签分组 */
+  /** 分组就是标签的 category 字段，这里按分组聚合给后台管理用 */
+  app.get('/api/admin/tag-groups', async (request) => {
+    requireAdmin(request);
+    return {
+      groups: all<any>(
+        `SELECT category AS name, COUNT(*) AS count, MIN(sort) AS sort
+           FROM tags GROUP BY category
+          ORDER BY CASE WHEN category = ? THEN 0 ELSE 1 END, MIN(sort) ASC, category ASC`,
+        ['默认'],
+      ),
+    };
+  });
+
+  /** 重命名分组（也可以用来合并：把 from 的分组并到 to） */
+  app.put('/api/admin/tag-groups', async (request) => {
+    requireAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const from = String(body.from ?? '').trim();
+    const to = String(body.to ?? '').trim();
+    if (!from) throw badRequest('请指定要修改的分组');
+    if (!to) throw badRequest('分组名称不能为空');
+    if (to.length > 32) throw badRequest('分组名称最多 32 个字符');
+    const affected = run('UPDATE tags SET category = ? WHERE category = ?', [to, from]).changes;
+    audit(request, 'tag_group.rename', { detail: { from, to, affected } });
+    return { ok: true, affected };
+  });
+
+  /** 删除分组：分组里的标签统一挪到指定分组（默认「默认」） */
+  app.delete('/api/admin/tag-groups', async (request) => {
+    requireAdmin(request);
+    const query = request.query as any;
+    const name = String(query.name ?? '').trim();
+    const moveTo = String(query.moveTo ?? '默认').trim() || '默认';
+    if (!name) throw badRequest('请指定要删除的分组');
+    if (name === moveTo) throw badRequest('不能把分组并到它自己');
+    const affected = run('UPDATE tags SET category = ? WHERE category = ?', [moveTo, name]).changes;
+    audit(request, 'tag_group.delete', { detail: { name, moveTo, affected } });
+    return { ok: true, affected };
   });
 
   /* ------------------------------------------------------------ favourites */
@@ -856,7 +899,8 @@ function applyTags(problemId: number, tags: unknown): void {
       const name = tag.trim().slice(0, 32);
       const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
       if (existing) ids.push(existing.id);
-      else ids.push(Number(run('INSERT INTO tags (name) VALUES (?)', [name]).lastInsertRowid));
+      // 自动创建的标签统一归到「默认」分组，管理员可在后台改分组
+      else ids.push(Number(run(`INSERT INTO tags (name, category) VALUES (?, ?)`, [name, '默认']).lastInsertRowid));
     }
   }
   run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);

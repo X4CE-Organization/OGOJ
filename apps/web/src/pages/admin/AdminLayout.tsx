@@ -14,6 +14,7 @@ import {
   Receipt,
   Settings2,
   ShoppingBag,
+  Tags,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -43,6 +44,7 @@ const SECTIONS: { title: string; items: { to: string; label: string; icon: any; 
       { to: '/admin/contests', label: '比赛管理', icon: Trophy },
       { to: '/admin/solutions', label: '题解审核', icon: ListChecks },
       { to: '/admin/achievements', label: '成就管理', icon: Award },
+      { to: '/admin/tags', label: '标签分组', icon: Tags },
       { to: '/admin/discussions', label: '帖子管理', icon: MessageSquare },
       { to: '/admin/announcements', label: '公告管理', icon: Flag },
       { to: '/admin/carousel', label: '首页轮播', icon: Image },

@@ -34,7 +34,7 @@ export default function Problems() {
   const difficulties = params.get('difficulty')?.split(',').filter(Boolean).map(Number) ?? [];
   const selectedTags = params.get('tag')?.split(',').filter(Boolean).map(Number) ?? [];
   const status = params.get('status') ?? '';
-  const sort = params.get('sort') ?? 'newest';
+  const sort = params.get('sort') ?? 'pid';
   const showAll = params.get('all') === 'true';
 
   useEffect(() => {
@@ -185,13 +185,14 @@ export default function Problems() {
             <div>
               <span className="label">排序</span>
               <select className="input" value={sort} onChange={(event) => update({ sort: event.target.value })}>
+                <option value="pid">题号从小到大</option>
+                <option value="pid_desc">题号从大到小</option>
                 <option value="newest">最新发布</option>
                 <option value="oldest">最早发布</option>
                 <option value="difficulty">难度从低到高</option>
                 <option value="difficulty_desc">难度从高到低</option>
                 <option value="submissions">提交数最多</option>
                 <option value="acceptance">通过率最高</option>
-                <option value="pid">按编号</option>
               </select>
             </div>
 

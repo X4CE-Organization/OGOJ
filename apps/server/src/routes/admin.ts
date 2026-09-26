@@ -288,7 +288,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       `SELECT p.*, u.username AS owner_name,
               (SELECT COUNT(*) FROM testcases t WHERE t.problem_id = p.id) AS testcase_count
          FROM problems p LEFT JOIN users u ON u.id = p.owner_id
-        WHERE ${conditions.join(' AND ')} ORDER BY p.id DESC LIMIT ? OFFSET ?`,
+        WHERE ${conditions.join(' AND ')} ORDER BY LENGTH(p.pid) ASC, p.pid ASC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
     return {

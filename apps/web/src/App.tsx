@@ -65,6 +65,7 @@ import AdminJudge from './pages/admin/JudgePanel';
 import AdminLogs from './pages/admin/LogsPanel';
 import AdminBackups from './pages/admin/MaintenancePanel';
 import AdminAchievements from './pages/admin/AchievementsPanel';
+import AdminTagGroups from './pages/admin/TagGroupsPanel';
 import AdminTickets from './pages/admin/TicketsPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -160,6 +161,7 @@ export default function App() {
           <Route path="solutions" element={<AdminSolutions />} />
           <Route path="judge" element={<AdminJudge />} />
           <Route path="achievements" element={<AdminAchievements />} />
+          <Route path="tags" element={<AdminTagGroups />} />
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="logs" element={<AdminLogs />} />
           <Route path="maintenance" element={<AdminBackups />} />
