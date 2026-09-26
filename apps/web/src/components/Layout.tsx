@@ -366,16 +366,10 @@ function Footer() {
   const githubUrl = String(settings.github_url ?? GITHUB_FALLBACK) || GITHUB_FALLBACK;
   const links = Array.isArray(settings.footer_links) ? (settings.footer_links as any[]) : [];
   const footerText = String(settings.footer_text ?? 'Powered by OGOJ');
-  const showTickets = settings.enable_tickets !== false && settings.ticket_show_entry !== false;
 
   return (
     <footer className="mt-10 border-t border-slate-200 bg-white py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 text-xs text-center">
-        {showTickets && (
-          <Link to="/tickets/new" className="hover:text-primary">
-            提交工单
-          </Link>
-        )}
         {links.map((link) => (
           <Link key={String(link.href)} to={String(link.href)} className="hover:text-primary">
             {String(link.label)}
