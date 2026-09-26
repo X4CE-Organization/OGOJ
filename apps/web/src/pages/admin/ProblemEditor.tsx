@@ -272,7 +272,7 @@ export default function ProblemEditor() {
                 >
                   {DIFFICULTY_NAMES.map((name, index) => (
                     <option key={name} value={index + 1}>
-                      {index + 1}. {name}
+                      {name}
                     </option>
                   ))}
                 </select>

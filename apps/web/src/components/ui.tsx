@@ -92,7 +92,7 @@ export function TagBadge({ tag }: { tag: { name: string; color?: string } }) {
   );
 }
 
-export function DifficultyBadge({ value, compact = false }: { value: number; compact?: boolean }) {
+export function DifficultyBadge({ value }: { value: number; compact?: boolean }) {
   const color = difficultyColor(value);
   const darkColor = difficultyDarkColor(value);
   return (
@@ -103,7 +103,7 @@ export function DifficultyBadge({ value, compact = false }: { value: number; com
       style={{ ['--difficulty' as string]: color, ['--difficulty-dark' as string]: darkColor }}
       title={difficultyName(value)}
     >
-      {compact ? difficultyName(value) : `${value}. ${difficultyName(value)}`}
+      {difficultyName(value)}
     </span>
   );
 }
