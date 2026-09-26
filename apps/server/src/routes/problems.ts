@@ -742,7 +742,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         `SELECT t.*, (SELECT COUNT(*) FROM problem_tags pt
                         JOIN problems p ON p.id = pt.problem_id AND p.is_public = 1 AND p.deleted_at IS NULL
                        WHERE pt.tag_id = t.id) AS problem_count
-           FROM tags t ORDER BY t.sort ASC, t.id ASC`,
+           FROM tags t
+          ORDER BY CASE WHEN t.category = ? THEN 0 ELSE 1 END, t.sort ASC, t.id ASC`,
+        ['默认'],
       ),
     };
   });

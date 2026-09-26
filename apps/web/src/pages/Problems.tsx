@@ -99,11 +99,13 @@ export default function Problems() {
   const tagGroups = useMemo(() => {
     const groups = new Map<string, any[]>();
     for (const tag of tags) {
-      const list = groups.get(tag.category) ?? [];
+      const key = String(tag.category || '默认');
+      const list = groups.get(key) ?? [];
       list.push(tag);
-      groups.set(tag.category, list);
+      groups.set(key, list);
     }
-    return [...groups.entries()];
+    // 「默认」分组固定排在最前面
+    return [...groups.entries()].sort(([a], [b]) => (a === b ? 0 : a === '默认' ? -1 : b === '默认' ? 1 : 0));
   }, [tags]);
 
   return (
