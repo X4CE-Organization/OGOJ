@@ -3,7 +3,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
 import { DifficultyBadge, Field, Loading, Modal, Section } from '../../components/ui';
-import ColorPicker, { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
+import { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
 export default function DifficultiesPanel() {
@@ -129,20 +129,21 @@ export default function DifficultiesPanel() {
                 <DifficultyBadge value={item.value} />
                 <span className="text-xs text-slate-400">题目数据里记的值：{item.value}</span>
                 <div className="ml-auto flex items-center gap-3">
+                  {/* 颜色只做展示，改配色请点右侧铅笔 */}
                   <span className="flex items-center gap-1.5 text-xs text-slate-400">
                     浅色
-                    <ColorPicker
-                      value={item.color}
-                      title="浅色模式配色"
-                      onChange={(color) => void update(item, { color: color || item.color })}
+                    <span
+                      title={item.color}
+                      className="h-4 w-4 rounded-full border border-slate-200 dark:border-slate-600"
+                      style={{ backgroundColor: item.color }}
                     />
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-slate-400">
                     深色
-                    <ColorPicker
-                      value={item.colorDark || item.color}
-                      title="深色模式配色"
-                      onChange={(color) => void update(item, { colorDark: color || item.color })}
+                    <span
+                      title={item.colorDark || item.color}
+                      className="h-4 w-4 rounded-full border border-slate-200 dark:border-slate-600"
+                      style={{ backgroundColor: item.colorDark || item.color }}
                     />
                   </span>
                   <button
@@ -234,26 +235,17 @@ export default function DifficultiesPanel() {
           <Field label="难度名称" required hint="例如：省选 / 集训队">
             <input className="input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           </Field>
-          <Field label="浅色模式配色">
-            <div className="flex items-center gap-2">
-              <ColorPicker
-                value={form.color}
-                title="浅色模式配色"
-                onChange={(color) => setForm({ ...form, color: color || form.color })}
-              />
-              <span className="text-xs text-slate-400">{form.color}</span>
-            </div>
-          </Field>
-          <Field label="深色模式配色" hint="留空则跟随浅色配色">
-            <div className="flex items-center gap-2">
-              <ColorPicker
-                value={form.colorDark || form.color}
-                title="深色模式配色"
-                onChange={(color) => setForm({ ...form, colorDark: color })}
-              />
-              <span className="text-xs text-slate-400">{form.colorDark || '跟随浅色'}</span>
-            </div>
-          </Field>
+          <ColorBoard
+            label="浅色模式配色"
+            value={form.color}
+            onChange={(color) => setForm({ ...form, color: color || form.color })}
+          />
+          <ColorBoard
+            label="深色模式配色（留空则跟随浅色）"
+            value={form.colorDark || form.color}
+            onChange={(color) => setForm({ ...form, colorDark: color })}
+            allowEmpty
+          />
         </div>
       </Modal>
     </div>

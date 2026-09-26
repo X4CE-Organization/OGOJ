@@ -3,7 +3,7 @@ import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
-import ColorPicker, { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
+import { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
 const DEFAULT_GROUP = '默认';
@@ -243,10 +243,11 @@ export default function TagGroupsPanel() {
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {list.map((tag) => (
                 <div key={tag.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
-                  <ColorPicker
-                    value={tag.color || '#60a5fa'}
-                    title="标签颜色"
-                    onChange={(color) => void setColor(tag, color || '#60a5fa')}
+                  {/* 颜色只做展示，改颜色请点右侧铅笔 */}
+                  <span
+                    title={tag.color || '#60a5fa'}
+                    className="h-5 w-5 shrink-0 rounded-full border border-slate-200 dark:border-slate-600"
+                    style={{ backgroundColor: tag.color || '#60a5fa' }}
                   />
                   <span
                     className="rounded px-1.5 py-0.5 text-xs"
