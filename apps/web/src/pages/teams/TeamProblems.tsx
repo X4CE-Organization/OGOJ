@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { Pin, Plus, Trash2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
-import { classNames, DIFFICULTY_NAMES } from '../../lib/format';
+import { classNames, difficultyList } from '../../lib/format';
 import { DifficultyBadge, EmptyState, Field, Loading, Modal, Pagination, StatusText } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import type { TeamContextValue } from './TeamLayout';
@@ -107,9 +107,9 @@ export default function TeamProblems() {
           }}
         >
           <option value="">全部难度</option>
-          {DIFFICULTY_NAMES.map((name, index) => (
-            <option key={name} value={index + 1}>
-              {name}
+          {difficultyList().map((item) => (
+            <option key={item.level} value={item.level}>
+              {item.name}
             </option>
           ))}
         </select>

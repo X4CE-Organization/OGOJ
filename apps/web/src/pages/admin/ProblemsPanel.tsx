@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Download, FileArchive, FileCode2, Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { api, query } from '../../lib/api';
-import { classNames, DIFFICULTY_NAMES, fromNow } from '../../lib/format';
+import { classNames, difficultyList, fromNow } from '../../lib/format';
 import { DifficultyBadge, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
@@ -398,9 +398,9 @@ export default function ProblemsPanel() {
                 value={importDifficulty}
                 onChange={(event) => setImportDifficulty(Number(event.target.value))}
               >
-                {DIFFICULTY_NAMES.map((name, index) => (
-                  <option key={name} value={index + 1}>
-                    {name}
+                {difficultyList().map((item) => (
+                  <option key={item.level} value={item.level}>
+                    {item.name}
                   </option>
                 ))}
               </select>

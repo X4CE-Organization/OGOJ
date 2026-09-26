@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { classNames, DIFFICULTY_COLORS, DIFFICULTY_COLORS_DARK, DIFFICULTY_NAMES } from '../lib/format';
+import { classNames, difficultyList } from '../lib/format';
 import { rememberListUrl } from '../lib/nav';
 import { DifficultyBadge, EmptyState, Loading, Pagination, Section, TagBadge } from '../components/ui';
 
@@ -134,8 +134,9 @@ export default function Problems() {
             <div>
               <span className="label">难度</span>
               <div className="space-y-1">
-                {DIFFICULTY_NAMES.map((name, index) => {
-                  const value = index + 1;
+                {difficultyList().map((item) => {
+                  const value = item.level;
+                  const name = item.name;
                   return (
                     <label key={name} className="flex cursor-pointer items-center gap-2 text-sm">
                       <input
@@ -146,8 +147,8 @@ export default function Problems() {
                       <span
                         className="h-2.5 w-2.5 rounded-full [background-color:var(--dot)] dark:[background-color:var(--dot-dark)]"
                         style={{
-                          ['--dot' as string]: DIFFICULTY_COLORS[index],
-                          ['--dot-dark' as string]: DIFFICULTY_COLORS_DARK[index],
+                          ['--dot' as string]: item.color,
+                          ['--dot-dark' as string]: item.colorDark,
                         }}
                       />
                       <span className="text-slate-600 dark:text-slate-300">{name}</span>

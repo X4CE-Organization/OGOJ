@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { all, count, get, run } from '../db/index.js';
 import { publicSettings, bool, num, str, json as settingJson } from '../settings/index.js';
 import { parsePage, sqlLike } from '../lib/util.js';
-import { DIFFICULTY_COLORS, DIFFICULTY_NAMES, problemSummary, submissionSummary, tagRows } from './helpers.js';
+import { problemSummary, submissionSummary, tagRows } from './helpers.js';
+import { difficultyDefs, invalidateDifficulties, maxDifficultyLevel } from '../lib/difficulty.js';
 import { AVAILABLE_LANGUAGE_IDS, LANGUAGES } from '../judge/languages.js';
 import { judgeStats } from '../judge/index.js';
 
@@ -16,10 +17,11 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
     const enabled = settingJson<string[]>('enabled_languages', ['cpp']);
     return {
       settings: publicSettings(),
-      difficulties: DIFFICULTY_NAMES.map((name, index) => ({
-        value: index + 1,
-        name,
-        color: DIFFICULTY_COLORS[index],
+      difficulties: difficultyDefs().map((item) => ({
+        value: item.level,
+        name: item.name,
+        color: item.color,
+        colorDark: item.colorDark,
       })),
       languages: LANGUAGES.filter((lang) => AVAILABLE_LANGUAGE_IDS.includes(lang.id)).map((lang) => ({
         id: lang.id,

@@ -11,6 +11,7 @@ import { all, count, db, get, migrate, run, tx } from './index.js';
 import { hashPassword } from '../lib/crypto.js';
 import { addPoints } from '../lib/points.js';
 import { saveTestcase } from '../lib/storage.js';
+import { DEFAULT_DIFFICULTIES, invalidateDifficulties } from '../lib/difficulty.js';
 import { invalidateSettings } from '../settings/index.js';
 import { evaluateAchievements, seedAchievements } from '../lib/achievements.js';
 
@@ -282,6 +283,20 @@ async function seedUsers(): Promise<Record<string, number>> {
     ids[user.username] = Number(info.lastInsertRowid);
   }
   return ids;
+}
+
+/** 难度等级为空时写入内置的六级默认值 */
+function seedDifficulties(): void {
+  if (get('SELECT id FROM difficulties LIMIT 1')) return;
+  for (const item of DEFAULT_DIFFICULTIES) {
+    run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
+      item.level,
+      item.name,
+      item.color,
+      item.colorDark,
+    ]);
+  }
+  invalidateDifficulties();
 }
 
 function seedTags(): Map<string, number> {
@@ -712,6 +727,7 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
   const userIds = await seedUsers();
   cleanDefaultAdminTraces();
   const tagIds = seedTags();
+  seedDifficulties();
   const problemIds = seedProblems(userIds.root!, tagIds);
   seedContests(userIds.root!, problemIds);
   seedCommunity(userIds, problemIds);

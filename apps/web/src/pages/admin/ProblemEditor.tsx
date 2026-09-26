@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { classNames, DIFFICULTY_NAMES, formatBytes } from '../../lib/format';
+import { classNames, difficultyList, formatBytes } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal, Section, Tabs } from '../../components/ui';
 import CodeEditor from '../../components/CodeEditor';
 import Markdown from '../../components/Markdown';
@@ -270,9 +270,9 @@ export default function ProblemEditor() {
                   value={form.difficulty}
                   onChange={(e) => setForm({ ...form, difficulty: Number(e.target.value) })}
                 >
-                  {DIFFICULTY_NAMES.map((name, index) => (
-                    <option key={name} value={index + 1}>
-                      {name}
+                  {difficultyList().map((item) => (
+                    <option key={item.level} value={item.level}>
+                      {item.name}
                     </option>
                   ))}
                 </select>

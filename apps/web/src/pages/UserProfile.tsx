@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Award, Calendar, Camera, MapPin, MessageSquarePlus, UserMinus, UserPlus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { classNames, DIFFICULTY_COLORS, DIFFICULTY_COLORS_DARK, DIFFICULTY_NAMES, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
+import { classNames, difficultyList, formatMemory, formatMs, formatTime, fromNow } from '../lib/format';
 import { Avatar, DifficultyBadge, EmptyState, Loading, Modal, StatusText, Tabs, TagBadge } from '../components/ui';
 import BackButton from '../components/BackButton';
 import ImageUploadField from '../components/ImageUploadField';
@@ -202,9 +202,10 @@ export default function UserProfile() {
           <div className="card p-4">
             <h2 className="mb-3 text-sm font-semibold">难度分布</h2>
             <div className="space-y-1.5">
-              {DIFFICULTY_NAMES.map((name, index) => {
+              {difficultyList().map((item) => {
+                const name = item.name;
                 const count =
-                  profile.solvedByDifficulty.find((item: any) => item.difficulty === index + 1)?.c ?? 0;
+                  profile.solvedByDifficulty.find((row: any) => row.difficulty === item.level)?.c ?? 0;
                 return (
                   <div key={name} className="flex items-center gap-2 text-xs">
                     <span className="w-24 shrink-0 truncate text-slate-500">{name}</span>
@@ -213,8 +214,8 @@ export default function UserProfile() {
                         className="h-full rounded-full [background-color:var(--bar)] dark:[background-color:var(--bar-dark)]"
                         style={{
                           width: `${(count / maxDifficulty) * 100}%`,
-                          ['--bar' as string]: DIFFICULTY_COLORS[index],
-                          ['--bar-dark' as string]: DIFFICULTY_COLORS_DARK[index],
+                          ['--bar' as string]: item.color,
+                          ['--bar-dark' as string]: item.colorDark,
                         }}
                       />
                     </div>

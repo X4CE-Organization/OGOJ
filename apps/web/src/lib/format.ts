@@ -56,6 +56,41 @@ export const DIFFICULTY_COLORS_DARK = [
   '#a5b4fc', // 第六级在深色模式下换成浅靛蓝，保证深底可读
 ];
 
+export interface DifficultyItem {
+  level: number;
+  name: string;
+  color: string;
+  colorDark: string;
+}
+
+/** 后台可自定义难度，这里缓存一份当前配置，未加载时用内置默认值 */
+let difficultyCache: DifficultyItem[] = DIFFICULTY_NAMES.map((name, index) => ({
+  level: index + 1,
+  name,
+  color: DIFFICULTY_COLORS[index]!,
+  colorDark: DIFFICULTY_COLORS_DARK[index]!,
+}));
+
+export function setDifficulties(items: { value: number; name: string; color: string; colorDark?: string }[]): void {
+  if (!Array.isArray(items) || items.length === 0) return;
+  difficultyCache = items
+    .map((item) => ({
+      level: Number(item.value),
+      name: String(item.name),
+      color: String(item.color || '#52c41a'),
+      colorDark: String(item.colorDark || item.color || '#52c41a'),
+    }))
+    .sort((a, b) => a.level - b.level);
+}
+
+export function difficultyList(): DifficultyItem[] {
+  return difficultyCache;
+}
+
+export function difficultyAt(value: number): DifficultyItem {
+  return difficultyCache.find((item) => item.level === Number(value)) ?? difficultyCache[0]!;
+}
+
 export function statusStyle(status: string) {
   return STATUS_STYLES[status] ?? { label: status, className: 'text-slate-500' };
 }
@@ -138,15 +173,15 @@ export function formatMs(ms?: number | null): string {
 }
 
 export function difficultyName(value: number): string {
-  return DIFFICULTY_NAMES[Math.max(0, Math.min(5, (value || 1) - 1))]!;
+  return difficultyAt(value).name;
 }
 
 export function difficultyColor(value: number): string {
-  return DIFFICULTY_COLORS[Math.max(0, Math.min(5, (value || 1) - 1))]!;
+  return difficultyAt(value).color;
 }
 
 export function difficultyDarkColor(value: number): string {
-  return DIFFICULTY_COLORS_DARK[Math.max(0, Math.min(5, (value || 1) - 1))]!;
+  return difficultyAt(value).colorDark;
 }
 
 export function initials(name?: string | null): string {

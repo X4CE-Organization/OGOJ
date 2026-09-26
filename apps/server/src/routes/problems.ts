@@ -27,6 +27,8 @@ import {
 import { rejudge } from '../judge/index.js';
 import { SPJ_LANGUAGES } from '../judge/languages.js';
 import { config } from '../config.js';
+import { difficultyDefs, invalidateDifficulties, maxDifficultyLevel } from '../lib/difficulty.js';
+import { autoTagColor } from '../lib/tags.js';
 
 function findProblem(idOrPid: string): any {
   const numeric = Number(idOrPid);
@@ -260,7 +262,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
          provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
          subtasks, samples, allow_languages, source_type, review_status, is_public)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         pid,
         title,
@@ -269,7 +271,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         String(body.inputFormat ?? ''),
         String(body.outputFormat ?? ''),
         String(body.hint ?? ''),
-        Math.min(6, Math.max(1, Number(body.difficulty ?? 1) || 1)),
+        Math.min(maxDifficultyLevel(), Math.max(1, Number(body.difficulty ?? 1) || 1)),
         user.id,
         user.id,
         String(body.provider ?? ''),
@@ -337,7 +339,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     ] as const) {
       if (body[key] !== undefined) set(column, String(body[key]));
     }
-    if (body.difficulty !== undefined) set('difficulty', Math.min(6, Math.max(1, Number(body.difficulty) || 1)));
+    if (body.difficulty !== undefined) {
+      set('difficulty', Math.min(maxDifficultyLevel(), Math.max(1, Number(body.difficulty) || 1)));
+    }
     if (body.timeLimit !== undefined) {
       set('time_limit', Math.min(num('max_time_limit', 10000), Math.max(100, Number(body.timeLimit) || 1000)));
     }
@@ -757,7 +761,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (get('SELECT id FROM tags WHERE name = ?', [name])) throw conflict('标签已存在');
     const info = run('INSERT INTO tags (name, color, category, sort) VALUES (?, ?, ?, ?)', [
       name,
-      String(body.color ?? '#60a5fa'),
+      String(body.color ?? autoTagColor(name)),
       String(body.category ?? '默认').trim() || '默认',
       Number(body.sort ?? 0) || 0,
     ]);
@@ -842,6 +846,99 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     return { ok: true, affected };
   });
 
+  /** 给分组里的标签按名称重新配色（用于把以前清一色蓝的标签刷成彩色） */
+  app.put('/api/admin/tag-groups/colors', async (request) => {
+    requireAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const group = String(body.group ?? '').trim();
+    const rows = group
+      ? all<{ id: number; name: string }>('SELECT id, name FROM tags WHERE category = ?', [group])
+      : all<{ id: number; name: string }>('SELECT id, name FROM tags');
+    for (const row of rows) {
+      run('UPDATE tags SET color = ? WHERE id = ?', [autoTagColor(row.name), row.id]);
+    }
+    audit(request, 'tag_group.recolor', { detail: { group: group || '全部', count: rows.length } });
+    return { ok: true, affected: rows.length };
+  });
+
+  /* ------------------------------------------------------------- 难度等级 */
+  /** 全部难度等级（前台筛选、出题、导入都要用） */
+  app.get('/api/difficulties', async () => ({
+    difficulties: difficultyDefs().map((item) => ({
+      id: item.id,
+      value: item.level,
+      name: item.name,
+      color: item.color,
+      colorDark: item.colorDark,
+    })),
+  }));
+
+  /** 新建一个难度等级（接在最高级之后） */
+  app.post('/api/admin/difficulties', async (request) => {
+    requireAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const name = String(body.name ?? '').trim().slice(0, 24);
+    if (!name) throw badRequest('请填写难度名称');
+    if (difficultyDefs().some((item) => item.name === name)) throw conflict('该难度名称已存在');
+    const level = maxDifficultyLevel() + 1;
+    const info = run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
+      level,
+      name,
+      String(body.color ?? '#60a5fa'),
+      String(body.colorDark ?? body.color ?? '#60a5fa'),
+    ]);
+    invalidateDifficulties();
+    audit(request, 'difficulty.create', { detail: { level, name } });
+    return { ok: true, id: Number(info.lastInsertRowid), level };
+  });
+
+  /** 修改难度名称与配色 */
+  app.put('/api/admin/difficulties/:id', async (request) => {
+    requireAdmin(request);
+    const id = parseId((request.params as any).id);
+    const row = get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
+    if (!row) throw notFound('难度不存在');
+    const body = (request.body ?? {}) as any;
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (body.name !== undefined) {
+      const name = String(body.name).trim().slice(0, 24);
+      if (!name) throw badRequest('难度名称不能为空');
+      const dup = get('SELECT id FROM difficulties WHERE name = ? AND id <> ?', [name, id]);
+      if (dup) throw conflict('该难度名称已存在');
+      fields.push('name = ?');
+      values.push(name);
+    }
+    if (body.color !== undefined) {
+      fields.push('color = ?');
+      values.push(String(body.color));
+    }
+    if (body.colorDark !== undefined) {
+      fields.push('color_dark = ?');
+      values.push(String(body.colorDark));
+    }
+    if (fields.length) run(`UPDATE difficulties SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    invalidateDifficulties();
+    audit(request, 'difficulty.update', { targetType: 'difficulty', targetId: id });
+    return { ok: true };
+  });
+
+  /** 删除难度：还有题目在用、或只剩一个时不允许删 */
+  app.delete('/api/admin/difficulties/:id', async (request) => {
+    requireAdmin(request);
+    const id = parseId((request.params as any).id);
+    const row = get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
+    if (!row) throw notFound('难度不存在');
+    const defs = difficultyDefs();
+    if (defs.length <= 1) throw badRequest('至少要保留一个难度等级');
+    const used = count('SELECT COUNT(*) AS c FROM problems WHERE difficulty = ? AND deleted_at IS NULL', [row.level]);
+    if (used > 0) throw conflict(`还有 ${used} 道题使用「${row.name}」，请先调整这些题目的难度`);
+    run('DELETE FROM difficulties WHERE id = ?', [id]);
+    invalidateDifficulties();
+    audit(request, 'difficulty.delete', { detail: { level: row.level, name: row.name } });
+    return { ok: true };
+  });
+
   /* ------------------------------------------------------------ favourites */
   app.get('/api/favorites', async (request) => {
     const user = requireUser(request);
@@ -902,7 +999,17 @@ function applyTags(problemId: number, tags: unknown): void {
       const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
       if (existing) ids.push(existing.id);
       // 自动创建的标签统一归到「默认」分组，管理员可在后台改分组
-      else ids.push(Number(run(`INSERT INTO tags (name, category) VALUES (?, ?)`, [name, '默认']).lastInsertRowid));
+      else {
+        ids.push(
+          Number(
+            run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
+              name,
+              autoTagColor(name),
+              '默认',
+            ]).lastInsertRowid,
+          ),
+        );
+      }
     }
   }
   run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);

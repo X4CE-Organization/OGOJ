@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api, setToken } from './api';
+import { setDifficulties } from './format';
 
 export interface SiteUser {
   id: number;
@@ -75,7 +76,7 @@ export interface LanguageMeta {
 
 export interface Meta {
   settings: SiteSettings;
-  difficulties: { value: number; name: string; color: string }[];
+  difficulties: { value: number; name: string; color: string; colorDark?: string }[];
   languages: LanguageMeta[];
   boards: { slug: string; name: string; description?: string }[];
   judge: { waiting: number; judging: number; concurrency?: number; available?: string[] };
@@ -160,6 +161,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Apply the theme colour + document title coming from the system settings.
   useEffect(() => {
     if (!meta) return;
+    // 后台改了难度配置后，通过这个事件通知前台刷新
+    const onDifficultiesChanged = () => void refreshMeta();
+    window.addEventListener('ogoj:difficulties', onDifficultiesChanged);
+    return () => window.removeEventListener('ogoj:difficulties', onDifficultiesChanged);
+  }, [meta, refreshMeta]);
+
+  useEffect(() => {
+    if (!meta) return;
+    // 难度等级由后台配置，先同步到本地缓存，供全站的难度名称与配色使用
+    setDifficulties(meta.difficulties ?? []);
     const color = hexToRgbTriplet(String(meta.settings.theme_color ?? '#0ea5e9'));
     if (color) {
       document.documentElement.style.setProperty('--ogoj-primary', color);

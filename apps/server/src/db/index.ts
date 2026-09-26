@@ -14,6 +14,8 @@ db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 8000');
 
 /** Create every missing table / index. Safe to call on each boot. */
+import { DEFAULT_DIFFICULTIES } from '../lib/difficulty-defaults.js';
+
 export function migrate(): void {
   db.exec(SCHEMA_SQL);
   for (const sql of ALTERATIONS_SQL) {
@@ -22,6 +24,12 @@ export function migrate(): void {
     } catch {
       /* already applied */
     }
+  }
+  // 难度表为空时（新库或第一次升级的老库）写入内置的六级默认值
+  const difficultyCount = db.prepare('SELECT COUNT(*) AS c FROM difficulties').get() as { c: number };
+  if (!difficultyCount.c) {
+    const insert = db.prepare('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)');
+    for (const item of DEFAULT_DIFFICULTIES) insert.run(item.level, item.name, item.color, item.colorDark);
   }
 }
 

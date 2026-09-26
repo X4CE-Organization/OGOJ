@@ -3,10 +3,11 @@ import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { classNames } from '../../lib/format';
 import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import ColorPicker, { COLOR_PRESETS } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
 const DEFAULT_GROUP = '默认';
-const PRESET_COLORS = ['#60a5fa', '#38bdf8', '#22d3ee', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb7185', '#818cf8'];
+const PRESET_COLORS = COLOR_PRESETS;
 
 export default function TagGroupsPanel() {
   const toast = useToast();
@@ -142,6 +143,17 @@ export default function TagGroupsPanel() {
 
   const groupNames = groups.map(([name]) => name);
 
+  const recolorGroup = async (group: string) => {
+    if (!window.confirm(`把「${group}」里的标签按名称重新配色？会覆盖这个分组里现有的颜色。`)) return;
+    try {
+      const result = await api.put<{ affected: number }>('/api/admin/tag-groups/colors', { group });
+      toast.success(`已重新配色 ${result.affected ?? 0} 个标签`);
+      void load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '配色失败');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -189,6 +201,13 @@ export default function TagGroupsPanel() {
                 <button
                   type="button"
                   className="text-slate-400 hover:text-primary"
+                  onClick={() => void recolorGroup(group)}
+                >
+                  重新配色
+                </button>
+                <button
+                  type="button"
+                  className="text-slate-400 hover:text-primary"
                   onClick={() => {
                     setRenameFrom(group);
                     setRenameTo(group);
@@ -207,12 +226,10 @@ export default function TagGroupsPanel() {
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {list.map((tag) => (
                 <div key={tag.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
-                  <input
-                    type="color"
+                  <ColorPicker
                     value={tag.color || '#60a5fa'}
                     title="标签颜色"
-                    className="h-5 w-5 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
-                    onChange={(event) => void setColor(tag, event.target.value)}
+                    onChange={(color) => void setColor(tag, color || '#60a5fa')}
                   />
                   <span
                     className="rounded px-1.5 py-0.5 text-xs"

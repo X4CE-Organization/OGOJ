@@ -24,6 +24,7 @@ import { audit } from '../lib/audit.js';
 import { num } from '../settings/index.js';
 import { publicUploadPath, saveTestcase, uploadDir } from '../lib/storage.js';
 import { nextProblemPid } from './helpers.js';
+import { autoTagColor } from '../lib/tags.js';
 
 const PACK_FORMAT = 'ogoj-problem-pack';
 /** 单次导出的题目上限，避免把内存撑爆 */
@@ -157,7 +158,17 @@ function applyTags(problemId: number, tags: unknown): void {
     const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
     if (existing) ids.push(existing.id);
       // 自动创建的标签统一进「默认」分组，管理员可以在后台调整分组
-      else ids.push(Number(run(`INSERT INTO tags (name, category) VALUES (?, ?)`, [name, '默认']).lastInsertRowid));
+      else {
+        ids.push(
+          Number(
+            run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
+              name,
+              autoTagColor(name),
+              '默认',
+            ]).lastInsertRowid,
+          ),
+        );
+      }
   }
   run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
   for (const id of ids) run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, id]);

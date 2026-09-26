@@ -1,6 +1,7 @@
 import { all, get } from '../db/index.js';
 import type { AuthUser } from '../lib/auth.js';
 import { json as settingJson, num, str } from '../settings/index.js';
+import { difficultyOf } from '../lib/difficulty.js';
 
 export const DIFFICULTY_NAMES = [
   '入门',
@@ -95,9 +96,9 @@ export function problemSummary(row: any, options: { tags?: any[]; showRate?: boo
     pid: row.pid,
     title: row.title,
     difficulty: row.difficulty,
-    difficultyName: DIFFICULTY_NAMES[row.difficulty - 1] ?? DIFFICULTY_NAMES[0],
-    difficultyColor: DIFFICULTY_COLORS[row.difficulty - 1] ?? DIFFICULTY_COLORS[0],
-    difficultyColorDark: DIFFICULTY_COLORS_DARK[row.difficulty - 1] ?? DIFFICULTY_COLORS_DARK[0],
+    difficultyName: difficultyOf(row.difficulty).name,
+    difficultyColor: difficultyOf(row.difficulty).color,
+    difficultyColorDark: difficultyOf(row.difficulty).colorDark,
     tags: options.tags ?? [],
     provider: row.provider ?? '',
     submitCount: total,

@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS tags (
   sort     INTEGER NOT NULL DEFAULT 0
 );
 
+-- 难度等级（可自定义名称与颜色，level 用作 problems.difficulty 的取值）
+CREATE TABLE IF NOT EXISTS difficulties (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  level      INTEGER NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  color      TEXT NOT NULL DEFAULT '#52c41a',
+  color_dark TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS problems (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   pid             TEXT NOT NULL UNIQUE,               -- 显示编号, e.g. P1001 / OGOJ001
