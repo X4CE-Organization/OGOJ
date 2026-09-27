@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MessageSquarePlus, Pin, Lock, Eye } from 'lucide-react';
 import { api, query } from '../lib/api';
@@ -7,6 +7,8 @@ import { classNames, fromNow } from '../lib/format';
 import { rememberListUrl } from '../lib/nav';
 import { EmptyState, Field, Loading, Modal, Pagination, UserLink } from '../components/ui';
 import { useToast } from '../components/Toast';
+import StickerPicker from '../components/StickerPicker';
+import { insertAtCursor } from '../lib/insert';
 
 export default function Discussions() {
   const { user, meta } = useAuth();
@@ -17,6 +19,7 @@ export default function Discussions() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', board: 'general' });
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
 
   const page = Number(params.get('page') ?? 1);
@@ -210,11 +213,20 @@ export default function Discussions() {
           </Field>
           <Field label="内容（支持 Markdown 与 LaTeX）" required>
             <textarea
+              ref={contentRef}
               className="input min-h-[240px]"
               value={form.content}
               onChange={(event) => setForm({ ...form, content: event.target.value })}
             />
           </Field>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <StickerPicker
+              onPick={(markdown) =>
+                insertAtCursor(contentRef.current, markdown, (value) => setForm((current) => ({ ...current, content: value })))
+              }
+            />
+            插入表情包
+          </div>
         </div>
       </Modal>
     </div>

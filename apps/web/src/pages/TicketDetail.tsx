@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Info, Lock, Star, Trash2, UserCheck } from 'lucide-react';
 import { api } from '../lib/api';
@@ -6,6 +6,8 @@ import { useAuth } from '../lib/auth';
 import { classNames, formatTime, fromNow } from '../lib/format';
 import { Avatar, EmptyState, Loading, Section } from '../components/ui';
 import BackButton from '../components/BackButton';
+import StickerPicker from '../components/StickerPicker';
+import { insertAtCursor } from '../lib/insert';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 import { TICKET_PRIORITY, TICKET_STATUS } from './Tickets';
@@ -18,6 +20,7 @@ export default function TicketDetail() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement>(null);
   const [internal, setInternal] = useState(false);
   const [sending, setSending] = useState(false);
   const [rating, setRating] = useState(5);
@@ -321,12 +324,14 @@ export default function TicketDetail() {
         <Section title={isAdmin ? '回复工单' : '补充说明'}>
           <div className="space-y-3 p-4">
             <textarea
+              ref={replyRef}
               className="input min-h-[140px]"
               value={reply}
               onChange={(event) => setReply(event.target.value)}
               placeholder={isAdmin ? '回复用户，或添加内部备注…' : '补充你没有说清楚的信息…'}
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
+              <StickerPicker onPick={(markdown) => insertAtCursor(replyRef.current, markdown, setReply)} />
               {isAdmin ? (
                 <label className="flex items-center gap-2 text-sm text-slate-500">
                   <input type="checkbox" checked={internal} onChange={(event) => setInternal(event.target.checked)} />

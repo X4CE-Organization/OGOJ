@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { Lock, MessageSquarePlus, Pin, Trash2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
@@ -7,6 +7,8 @@ import { classNames, formatTime, fromNow } from '../../lib/format';
 import { Avatar, EmptyState, Field, Loading, Modal, Pagination, UserLink } from '../../components/ui';
 import Markdown from '../../components/Markdown';
 import { useToast } from '../../components/Toast';
+import StickerPicker from '../../components/StickerPicker';
+import { insertAtCursor } from '../../lib/insert';
 import type { TeamContextValue } from './TeamLayout';
 
 const CATEGORIES: { value: string; label: string }[] = [
@@ -31,6 +33,7 @@ function DiscussionList({ ctx }: { ctx: TeamContextValue }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: 'general' });
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const category = params.get('category') ?? '';
   const page = Number(params.get('page') ?? 1);
@@ -185,6 +188,14 @@ function DiscussionList({ ctx }: { ctx: TeamContextValue }) {
               onChange={(event) => setForm({ ...form, content: event.target.value })}
             />
           </Field>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <StickerPicker
+              onPick={(markdown) =>
+                insertAtCursor(contentRef.current, markdown, (value) => setForm((current) => ({ ...current, content: value })))
+              }
+            />
+            插入表情包
+          </div>
         </div>
       </Modal>
     </div>
@@ -199,6 +210,7 @@ function DiscussionDetail({ teamSlug, id, ctx }: { teamSlug: string; id: string;
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -315,12 +327,14 @@ function DiscussionDetail({ teamSlug, id, ctx }: { teamSlug: string; id: string;
       {data.canReply ? (
         <div className="card p-4">
           <textarea
+            ref={replyRef}
             className="input min-h-[120px]"
             value={reply}
             onChange={(event) => setReply(event.target.value)}
             placeholder="写下你的回复…"
           />
           <div className="mt-2 flex justify-end">
+            <StickerPicker className="mr-auto" onPick={(markdown) => insertAtCursor(replyRef.current, markdown, setReply)} />
             <button type="button" className="btn-primary" disabled={sending} onClick={send}>
               {sending ? '发送中…' : '发表回复'}
             </button>

@@ -80,6 +80,29 @@ CREATE TABLE IF NOT EXISTS difficulties (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- 表情包：图片 / GIF，可公开给全站，也能被别人收藏
+CREATE TABLE IF NOT EXISTS stickers (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL DEFAULT '',
+  pack       TEXT NOT NULL DEFAULT '默认',
+  url        TEXT NOT NULL,
+  mimetype   TEXT NOT NULL DEFAULT '',
+  is_public  INTEGER NOT NULL DEFAULT 1,
+  use_count  INTEGER NOT NULL DEFAULT 0,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stickers_public ON stickers(is_public, is_deleted, use_count DESC);
+CREATE INDEX IF NOT EXISTS idx_stickers_owner ON stickers(owner_id, is_deleted);
+
+CREATE TABLE IF NOT EXISTS user_stickers (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sticker_id INTEGER NOT NULL REFERENCES stickers(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, sticker_id)
+);
+
 CREATE TABLE IF NOT EXISTS problems (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   pid             TEXT NOT NULL UNIQUE,               -- 显示编号, e.g. P1001 / OGOJ001

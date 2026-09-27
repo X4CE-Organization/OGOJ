@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Lock, Pin, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -8,6 +8,8 @@ import { Avatar, EmptyState, Loading, UserLink } from '../components/ui';
 import BackButton from '../components/BackButton';
 import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
+import StickerPicker from '../components/StickerPicker';
+import { insertAtCursor } from '../lib/insert';
 
 export default function DiscussionDetail() {
   const { id = '' } = useParams();
@@ -17,6 +19,7 @@ export default function DiscussionDetail() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement>(null);
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -204,12 +207,17 @@ export default function DiscussionDetail() {
               )}
             </div>
             <textarea
+              ref={replyRef}
               className="input min-h-[140px]"
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder="支持 Markdown 与 LaTeX 公式"
             />
             <div className="mt-2 flex justify-end">
+              <StickerPicker
+                className="mr-auto"
+                onPick={(markdown) => insertAtCursor(replyRef.current, markdown, setContent)}
+              />
               <button type="button" className="btn-primary" disabled={sending} onClick={reply}>
                 {sending ? '发送中…' : '发表回复'}
               </button>

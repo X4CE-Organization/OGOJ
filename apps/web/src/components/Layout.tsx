@@ -233,6 +233,7 @@ function Header() {
                     {ticketUnread > 0 && <span className="ml-1 text-rose-500">({ticketUnread})</span>}
                   </MenuItem>
                   <MenuItem to="/achievements">我的成就</MenuItem>
+                  <MenuItem to="/stickers">表情包</MenuItem>
                   <MenuItem to="/messages">
                     站内信
                     {unread > 0 && <span className="ml-1 text-rose-500">({unread})</span>}

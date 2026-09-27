@@ -140,6 +140,11 @@ body {
   @apply my-3 max-w-full rounded-lg;
 }
 
+/* 表情包在正文里不要撑太大 */
+.markdown img[src^='/uploads/sticker/'] {
+  @apply my-1 inline-block max-h-40 w-auto rounded-lg align-middle;
+}
+
 .markdown a {
   @apply text-primary hover:underline;
 }

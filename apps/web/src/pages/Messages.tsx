@@ -6,6 +6,10 @@ import { useAuth } from '../lib/auth';
 import { classNames, formatTime, fromNow } from '../lib/format';
 import { Avatar, EmptyState, Field, Loading, Modal, Pagination, UserLink } from '../components/ui';
 import { useToast } from '../components/Toast';
+import StickerPicker from '../components/StickerPicker';
+import { insertAtCursor } from '../lib/insert';
+import Markdown from '../components/Markdown';
+import { plainPreview } from '../lib/preview';
 
 interface Conversation {
   user: {
@@ -43,6 +47,8 @@ export default function Messages() {
   /** 未读汇总：用于标签页上的红点（与顶栏图标同源） */
   const [summary, setSummary] = useState({ unread: 0, unreadSystem: 0, unreadPrivate: 0 });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  const composeRef = useRef<HTMLTextAreaElement>(null);
 
   const toParam = params.get('to');
 
@@ -392,7 +398,7 @@ export default function Messages() {
                                   : 'rounded-bl-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
                               )}
                             >
-                              {message.content}
+                              <Markdown className="break-words">{message.content}</Markdown>
                             </div>
                             <div
                               className={classNames(
@@ -413,6 +419,7 @@ export default function Messages() {
 
                   <footer className="border-t border-slate-200 p-3 dark:border-slate-800">
                     <textarea
+                      ref={draftRef}
                       className="input min-h-[80px] resize-none"
                       placeholder="输入私信内容（Ctrl + Enter 发送）"
                       value={draft}
@@ -425,7 +432,10 @@ export default function Messages() {
                       }}
                     />
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400">
+                      <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                        <StickerPicker
+                          onPick={(markdown) => insertAtCursor(draftRef.current, markdown, setDraft)}
+                        />
                         {draft.length} / {String(settings.pm_max_length ?? 2000)} 字符
                       </span>
                       <button type="button" className="btn-primary !py-1.5 text-xs" disabled={sending} onClick={send}>
@@ -483,7 +493,7 @@ export default function Messages() {
                         <span className={classNames('truncate', !message.is_read && 'font-semibold')}>{message.title}</span>
                         <span className="ml-auto shrink-0 text-xs text-slate-400">{fromNow(message.created_at)}</span>
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{message.content}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{plainPreview(message.content)}</p>
                       <div className="mt-1 text-[11px] text-slate-400">
                         来自 {message.from_display || message.from_username || '系统'}
                       </div>
@@ -591,12 +601,17 @@ export default function Messages() {
           )}
           <Field label="内容" required>
             <textarea
+              ref={composeRef}
               className="input min-h-[140px]"
               value={compose.content}
               onChange={(event) => setCompose({ ...compose, content: event.target.value })}
               placeholder="请输入私信内容…"
             />
           </Field>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <StickerPicker onPick={(markdown) => insertAtCursor(composeRef.current, markdown, (value) => setCompose((current) => ({ ...current, content: value })))} />
+            插入表情包
+          </div>
         </div>
       </Modal>
     </div>

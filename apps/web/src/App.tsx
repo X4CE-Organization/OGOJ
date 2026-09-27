@@ -66,6 +66,7 @@ import AdminLogs from './pages/admin/LogsPanel';
 import AdminBackups from './pages/admin/MaintenancePanel';
 import AdminAchievements from './pages/admin/AchievementsPanel';
 import AdminTagGroups from './pages/admin/TagGroupsPanel';
+import Stickers from './pages/Stickers';
 import AdminDifficulties from './pages/admin/DifficultiesPanel';
 import AdminTickets from './pages/admin/TicketsPanel';
 
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/user/:username" element={<UserProfile />} />
         <Route path="/shop" element={<Shop />} />
+        <Route path="/stickers" element={<Stickers />} />
         <Route path="/shop/orders" element={<RequireAuth><Orders /></RequireAuth>} />
         <Route path="/teams" element={<TeamList />} />
         <Route path="/team/:slug" element={<TeamLayout />}>

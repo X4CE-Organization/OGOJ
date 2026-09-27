@@ -10,6 +10,8 @@ import Markdown from '../components/Markdown';
 import { useToast } from '../components/Toast';
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft';
 import BackButton from '../components/BackButton';
+import StickerPicker from '../components/StickerPicker';
+import { insertAtCursor } from '../lib/insert';
 
 function SampleBlock({ index, sample }: { index: number; sample: { input: string; output: string; explanation?: string } }) {
   const [copied, setCopied] = useState<'in' | 'out' | null>(null);
@@ -98,6 +100,7 @@ export default function ProblemDetail() {
     title: '',
     content: '',
   });
+  const solutionRef = useRef<HTMLTextAreaElement>(null);
   const [newPost, setNewPost] = useState<{ open: boolean; title: string; content: string }>({
     open: false,
     title: '',
@@ -923,11 +926,22 @@ export default function ProblemDetail() {
           </Field>
           <Field label="内容（支持 Markdown 与 LaTeX）" required>
             <textarea
+              ref={solutionRef}
               className="input min-h-[280px] font-mono"
               value={newSolution.content}
               onChange={(event) => setNewSolution({ ...newSolution, content: event.target.value })}
             />
           </Field>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <StickerPicker
+              onPick={(markdown) =>
+                insertAtCursor(solutionRef.current, markdown, (value) =>
+                  setNewSolution((current) => ({ ...current, content: value })),
+                )
+              }
+            />
+            插入表情包
+          </div>
         </div>
       </Modal>
 
