@@ -20,6 +20,10 @@ RUN npm run build
 # ------------------------------ runtime stage ------------------------------
 FROM node:22-bookworm-slim AS runtime
 
+# 国内服务器可以把 APT 源换成镜像站加速构建：
+#   docker compose build --build-arg APT_MIRROR=mirrors.aliyun.com
+ARG APT_MIRROR=deb.debian.org
+
 ENV NODE_ENV=production \
     PORT=8080 \
     HOST=0.0.0.0 \
@@ -28,7 +32,10 @@ ENV NODE_ENV=production \
 
 # Judge toolchains. Remove what you do not need to slim the image down.
 # `time` is used for accurate peak-memory measurement.
-RUN apt-get update \
+RUN if [ "$APT_MIRROR" != "deb.debian.org" ]; then \
+      sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    fi \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
       g++ gcc libc6-dev python3 time ca-certificates \
       postgresql-client \
