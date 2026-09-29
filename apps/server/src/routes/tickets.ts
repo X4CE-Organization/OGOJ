@@ -52,10 +52,10 @@ function ticketNo(): string {
 }
 
 /** Close tickets that stayed "resolved" for too long (lazy maintenance). */
-export function autoCloseTickets(): number {
+export async function autoCloseTickets(): Promise<number> {
   const days = num('ticket_auto_close_days', 7);
   if (days <= 0) return 0;
-  const info = run(
+  const info = await run(
     `UPDATE tickets SET status = 'closed', closed_at = datetime('now'), updated_at = datetime('now')
       WHERE status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at < datetime('now', ?)`,
     [`-${days} days`],
@@ -105,7 +105,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/tickets/meta', async (request) => {
     const user = request.user;
     const openCount = user
-      ? count(`SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND status IN ('open','processing','replied')`, [
+      ? await count(`SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND status IN ('open','processing','replied')`, [
           user.id,
         ])
       : 0;
@@ -119,13 +119,13 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
       maxOpen: num('ticket_max_open', 5),
       maxContentKb: num('ticket_max_content_kb', 8),
       openCount,
-      unread: user ? count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND unread_for_user = 1', [user.id]) : 0,
+      unread: user ? await count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND unread_for_user = 1', [user.id]) : 0,
     };
   });
 
   /* ------------------------------------------------------------- 提交工单 */
   app.post('/api/tickets', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_tickets', true)) throw forbidden('本站暂未开放工单系统');
     const body = (request.body ?? {}) as any;
 
@@ -152,7 +152,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     }
     const maxOpen = num('ticket_max_open', 5);
     if (maxOpen > 0 && !hasRole(user, 'admin')) {
-      const openCount = count(
+      const openCount = await count(
         `SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND status IN ('open','processing','replied')`,
         [user.id],
       );
@@ -168,46 +168,46 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     const relatedId = relatedType && Number.isFinite(Number(body.relatedId)) ? Number(body.relatedId) : null;
     let relatedLabel = '';
     if (relatedType === 'problem' && relatedId) {
-      const problem = get<{ pid: string; title: string }>('SELECT pid, title FROM problems WHERE id = ?', [relatedId]);
+      const problem = await get<{ pid: string; title: string }>('SELECT pid, title FROM problems WHERE id = ?', [relatedId]);
       relatedLabel = problem ? `${problem.pid} ${problem.title}` : '';
     } else if (relatedType === 'submission' && relatedId) {
       relatedLabel = `提交 #${relatedId}`;
     } else if (relatedType === 'contest' && relatedId) {
-      const contest = get<{ title: string }>('SELECT title FROM contests WHERE id = ?', [relatedId]);
+      const contest = await get<{ title: string }>('SELECT title FROM contests WHERE id = ?', [relatedId]);
       relatedLabel = contest?.title ?? '';
     } else if (relatedType === 'discussion' && relatedId) {
-      const discussion = get<{ title: string }>('SELECT title FROM discussions WHERE id = ?', [relatedId]);
+      const discussion = await get<{ title: string }>('SELECT title FROM discussions WHERE id = ?', [relatedId]);
       relatedLabel = discussion?.title ?? '';
     } else if (relatedType === 'user') {
       relatedLabel = String(body.relatedLabel ?? '').slice(0, 100);
     }
 
-    const id = tx(() =>
+    const id = await tx(async () =>
       Number(
-        run(
+        (await run(
           `INSERT INTO tickets (ticket_no, user_id, category, title, content, priority, related_type, related_id, related_label)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [ticketNo(), user.id, category, title, content, priority, relatedType, relatedId, relatedLabel],
-        ).lastInsertRowid,
+        )).lastInsertRowid,
       ),
     );
 
     if (bool('ticket_notify_admin', true)) {
-      notifyAdmins(
+      await notifyAdmins(
         `📮 新工单：${title}`,
         `用户 ${user.username} 提交了「${categoryLabel(category)}」工单（优先级：${PRIORITY_LABEL[priority]}）。\n\n${content.slice(0, 300)}`,
         { refType: 'ticket', refId: id },
       );
     }
-    audit(request, 'ticket.create', { targetType: 'ticket', targetId: id, detail: { category, priority } });
-    evaluateAchievements(user.id, { silent: true });
-    return { ok: true, id, ticketNo: get<{ ticket_no: string }>('SELECT ticket_no FROM tickets WHERE id = ?', [id])?.ticket_no };
+    await audit(request, 'ticket.create', { targetType: 'ticket', targetId: id, detail: { category, priority } });
+    await evaluateAchievements(user.id, { silent: true });
+    return { ok: true, id, ticketNo: (await get<{ ticket_no: string }>('SELECT ticket_no FROM tickets WHERE id = ?', [id]))?.ticket_no };
   });
 
   /* ------------------------------------------------------------- 我的工单 */
   app.get('/api/tickets', async (request) => {
-    const user = requireUser(request);
-    autoCloseTickets();
+    const user = await requireUser(request);
+    await autoCloseTickets();
     const query = request.query as any;
     const page = parsePage(query, num('ticket_list_page_size', 20));
     const conditions: string[] = [];
@@ -239,7 +239,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT t.*, u.username, u.display_name, u.avatar,
               a.username AS assignee_name, a.display_name AS assignee_display
          FROM tickets t
@@ -251,28 +251,28 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(`SELECT COUNT(*) AS c FROM tickets t ${where}`, params);
+    const total = await count(`SELECT COUNT(*) AS c FROM tickets t ${where}`, params);
     return {
       items: rows.map(ticketSummary),
       total,
       page: page.page,
       size: page.size,
       counts: {
-        open: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'open'`),
-        processing: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'processing'`),
-        replied: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'replied'`),
-        resolved: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'resolved'`),
-        closed: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'closed'`),
-        mine: count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ?', [user.id]),
+        open: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'open'`),
+        processing: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'processing'`),
+        replied: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'replied'`),
+        resolved: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'resolved'`),
+        closed: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'closed'`),
+        mine: await count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ?', [user.id]),
       },
     };
   });
 
   /* ------------------------------------------------------------- 工单详情 */
   app.get('/api/tickets/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>(
+    const ticket = await get<any>(
       `SELECT t.*, u.username, u.display_name, u.avatar,
               a.username AS assignee_name, a.display_name AS assignee_display
          FROM tickets t JOIN users u ON u.id = t.user_id
@@ -284,7 +284,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     const isAdmin = hasRole(user, 'admin');
     if (ticket.user_id !== user.id && !isAdmin) throw forbidden('无权查看该工单');
 
-    const replies = all<any>(
+    const replies = await all<any>(
       `SELECT r.*, u.username, u.display_name, u.avatar, u.role
          FROM ticket_replies r JOIN users u ON u.id = r.author_id
         WHERE r.ticket_id = ? ${isAdmin ? '' : 'AND r.is_internal = 0'}
@@ -292,8 +292,8 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
       [id],
     );
     // Mark as read for the current side.
-    if (isAdmin) run('UPDATE tickets SET unread_for_admin = 0 WHERE id = ?', [id]);
-    else run('UPDATE tickets SET unread_for_user = 0 WHERE id = ?', [id]);
+    if (isAdmin) await run('UPDATE tickets SET unread_for_admin = 0 WHERE id = ?', [id]);
+    else await run('UPDATE tickets SET unread_for_user = 0 WHERE id = ?', [id]);
 
     return {
       ticket: {
@@ -327,9 +327,9 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
 
   /* ---------------------------------------------------------------- 回复 */
   app.post('/api/tickets/:id/replies', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
     const isAdmin = hasRole(user, 'admin');
     if (ticket.user_id !== user.id && !isAdmin) throw forbidden('无权回复该工单');
@@ -342,8 +342,8 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     if (Buffer.byteLength(content, 'utf8') > maxKb * 1024) throw badRequest(`回复内容不能超过 ${maxKb} KB`);
     const isInternal = isAdmin && Boolean(body.isInternal);
 
-    tx(() => {
-      run('INSERT INTO ticket_replies (ticket_id, author_id, content, is_internal) VALUES (?, ?, ?, ?)', [
+    await tx(async () => {
+      await run('INSERT INTO ticket_replies (ticket_id, author_id, content, is_internal) VALUES (?, ?, ?, ?)', [
         id,
         user.id,
         content,
@@ -358,7 +358,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
           : ['resolved', 'closed'].includes(ticket.status)
             ? 'processing'
             : 'open';
-      run(
+      await run(
         `UPDATE tickets SET reply_count = reply_count + 1, last_reply_at = datetime('now'),
            last_reply_by = ?, status = ?, unread_for_admin = ?, unread_for_user = ?,
            resolved_at = CASE WHEN ? IN ('resolved','closed') THEN resolved_at ELSE NULL END,
@@ -377,7 +377,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
 
     if (!isInternal) {
       if (isAdmin && bool('ticket_notify_user', true)) {
-        sendMessage({
+        await sendMessage({
           to: ticket.user_id,
           title: `工单 ${ticket.ticket_no} 有新的回复`,
           content: `管理员回复了你的工单「${ticket.title}」：\n\n${content.slice(0, 500)}`,
@@ -387,21 +387,21 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         });
       }
       if (!isAdmin && bool('ticket_notify_admin', true)) {
-        notifyAdmins(`工单 ${ticket.ticket_no} 有新回复`, `用户 ${user.username} 补充了内容：\n\n${content.slice(0, 300)}`, {
+        await notifyAdmins(`工单 ${ticket.ticket_no} 有新回复`, `用户 ${user.username} 补充了内容：\n\n${content.slice(0, 300)}`, {
           refType: 'ticket',
           refId: id,
         });
       }
     }
-    audit(request, 'ticket.reply', { targetType: 'ticket', targetId: id, detail: { internal: isInternal } });
+    await audit(request, 'ticket.reply', { targetType: 'ticket', targetId: id, detail: { internal: isInternal } });
     return { ok: true };
   });
 
   /* ------------------------------------------------------ 关闭 / 重开 / 评价 */
   app.post('/api/tickets/:id/status', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
     const isAdmin = hasRole(user, 'admin');
     if (ticket.user_id !== user.id && !isAdmin) throw forbidden('无权操作该工单');
@@ -413,8 +413,8 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     if (!isAdmin && !['closed', 'open'].includes(status)) throw forbidden('只有管理员可以修改处理状态');
     if (!isAdmin && status === 'closed' && ticket.user_id !== user.id) throw forbidden();
 
-    tx(() => {
-      run(
+    await tx(async () => {
+      await run(
         `UPDATE tickets SET status = ?,
            resolved_at = CASE WHEN ? = 'resolved' THEN datetime('now')
                               WHEN ? IN ('open','processing') THEN NULL
@@ -426,18 +426,18 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         [status, status, status, status, status, id],
       );
       if (body.note) {
-        run('INSERT INTO ticket_replies (ticket_id, author_id, content, is_internal) VALUES (?, ?, ?, 0)', [
+        await run('INSERT INTO ticket_replies (ticket_id, author_id, content, is_internal) VALUES (?, ?, ?, 0)', [
           id,
           user.id,
           String(body.note),
         ]);
-        run('UPDATE tickets SET reply_count = reply_count + 1, last_reply_at = datetime(\'now\') WHERE id = ?', [id]);
+        await run('UPDATE tickets SET reply_count = reply_count + 1, last_reply_at = datetime(\'now\') WHERE id = ?', [id]);
       }
     });
 
     if (isAdmin && bool('ticket_notify_user', true)) {
       const label = STATUS_LABEL[status] ?? status;
-      sendMessage({
+      await sendMessage({
         to: ticket.user_id,
         title: `工单 ${ticket.ticket_no} 状态更新：${label}`,
         content: `你的工单「${ticket.title}」已被标记为「${label}」。${body.note ? `\n\n处理说明：${body.note}` : ''}`,
@@ -446,33 +446,33 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         refId: id,
       });
     }
-    audit(request, 'ticket.status', { targetType: 'ticket', targetId: id, detail: { status } });
+    await audit(request, 'ticket.status', { targetType: 'ticket', targetId: id, detail: { status } });
     return { ok: true, status };
   });
 
   app.post('/api/tickets/:id/rating', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('ticket_allow_rating', true)) throw forbidden('本站未开放工单评价');
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
     if (ticket.user_id !== user.id) throw forbidden('只有工单提交者可以评价');
     if (!['resolved', 'closed'].includes(ticket.status)) throw badRequest('工单处理完成后才能评价');
     const body = (request.body ?? {}) as any;
     const rating = Math.max(1, Math.min(5, Number(body.rating) || 5));
-    run(
+    await run(
       `UPDATE tickets SET rating = ?, rating_comment = ?, rated_at = datetime('now'), updated_at = datetime('now')
         WHERE id = ?`,
       [rating, String(body.comment ?? '').slice(0, 500), id],
     );
-    audit(request, 'ticket.rating', { targetType: 'ticket', targetId: id, detail: { rating } });
+    await audit(request, 'ticket.rating', { targetType: 'ticket', targetId: id, detail: { rating } });
     return { ok: true, rating };
   });
 
   /* --------------------------------------------------------- 管理员处理台 */
   app.get('/api/admin/tickets', async (request) => {
-    requireAdmin(request);
-    autoCloseTickets();
+    await requireAdmin(request);
+    await autoCloseTickets();
     const query = request.query as any;
     const page = parsePage(query, num('ticket_list_page_size', 20));
     const conditions: string[] = [];
@@ -507,7 +507,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
       params.push(like, like, like, like);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT t.*, u.username, u.display_name, u.avatar, u.role AS user_role,
               a.username AS assignee_name, a.display_name AS assignee_display
          FROM tickets t JOIN users u ON u.id = t.user_id
@@ -520,11 +520,11 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM tickets t JOIN users u ON u.id = t.user_id ${where}`,
       params,
     );
-    const ratingRow = get<{ avg: number | null; c: number }>(
+    const ratingRow = await get<{ avg: number | null; c: number }>(
       'SELECT AVG(rating) AS avg, COUNT(*) AS c FROM tickets WHERE rating IS NOT NULL',
     );
     return {
@@ -533,27 +533,27 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
       page: page.page,
       size: page.size,
       stats: {
-        open: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'open'`),
-        processing: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'processing'`),
-        replied: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'replied'`),
-        resolved: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'resolved'`),
-        closed: count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'closed'`),
-        unread: count('SELECT COUNT(*) AS c FROM tickets WHERE unread_for_admin = 1'),
-        escalated: count('SELECT COUNT(*) AS c FROM tickets WHERE is_escalated = 1'),
-        today: count(`SELECT COUNT(*) AS c FROM tickets WHERE created_at >= date('now')`),
+        open: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'open'`),
+        processing: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'processing'`),
+        replied: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'replied'`),
+        resolved: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'resolved'`),
+        closed: await count(`SELECT COUNT(*) AS c FROM tickets WHERE status = 'closed'`),
+        unread: await count('SELECT COUNT(*) AS c FROM tickets WHERE unread_for_admin = 1'),
+        escalated: await count('SELECT COUNT(*) AS c FROM tickets WHERE is_escalated = 1'),
+        today: await count(`SELECT COUNT(*) AS c FROM tickets WHERE created_at >= date('now')`),
         avgRating: ratingRow?.avg ? Math.round(ratingRow.avg * 10) / 10 : null,
         ratingCount: ratingRow?.c ?? 0,
-        byCategory: all<{ category: string; c: number }>(
+        byCategory: (await all<{ category: string; c: number }>(
           'SELECT category, COUNT(*) AS c FROM tickets GROUP BY category ORDER BY c DESC',
-        ).map((row) => ({ ...row, label: categoryLabel(row.category) })),
+        )).map((row) => ({ ...row, label: categoryLabel(row.category) })),
       },
     };
   });
 
   app.put('/api/admin/tickets/:id', async (request) => {
-    const admin = requireAdmin(request);
+    const admin = await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -588,7 +588,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
       if (body.assigneeId === null || body.assigneeId === 0) {
         fields.push('assignee_id = NULL');
       } else {
-        const target = get<{ id: number; role: string }>('SELECT id, role FROM users WHERE id = ?', [
+        const target = await get<{ id: number; role: string }>('SELECT id, role FROM users WHERE id = ?', [
           Number(body.assigneeId),
         ]);
         if (!target) throw notFound('指派的用户不存在');
@@ -605,11 +605,11 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
     if (!fields.length) throw badRequest('没有需要更新的内容');
     fields.push(`updated_at = datetime('now')`);
     values.push(id);
-    run(`UPDATE tickets SET ${fields.join(', ')} WHERE id = ?`, values);
+    await run(`UPDATE tickets SET ${fields.join(', ')} WHERE id = ?`, values);
 
     if (body.status && bool('ticket_notify_user', true)) {
       const label = STATUS_LABEL[String(body.status)] ?? String(body.status);
-      sendMessage({
+      await sendMessage({
         to: ticket.user_id,
         title: `工单 ${ticket.ticket_no} 状态更新：${label}`,
         content: `你的工单「${ticket.title}」当前状态：${label}。`,
@@ -618,7 +618,7 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
         refId: id,
       });
     }
-    audit(request, 'admin.ticket_update', {
+    await audit(request, 'admin.ticket_update', {
       targetType: 'ticket',
       targetId: id,
       detail: { fields: Object.keys(body), by: admin.username },
@@ -627,44 +627,44 @@ export async function registerTicketRoutes(app: FastifyInstance): Promise<void> 
   });
 
   app.post('/api/admin/tickets/:id/assign-me', async (request) => {
-    const admin = requireAdmin(request);
+    const admin = await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
-    run(
+    await run(
       `UPDATE tickets SET assignee_id = ?, status = CASE WHEN status = 'open' THEN 'processing' ELSE status END,
          unread_for_admin = 0, updated_at = datetime('now') WHERE id = ?`,
       [admin.id, id],
     );
-    audit(request, 'admin.ticket_assign', { targetType: 'ticket', targetId: id, detail: { assignee: admin.username } });
+    await audit(request, 'admin.ticket_assign', { targetType: 'ticket', targetId: id, detail: { assignee: admin.username } });
     return { ok: true };
   });
 
   app.delete('/api/admin/tickets/:id', async (request) => {
-    requireSuperAdmin(request);
+    await requireSuperAdmin(request);
     const id = parseId((request.params as any).id);
-    const ticket = get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
+    const ticket = await get<any>('SELECT * FROM tickets WHERE id = ?', [id]);
     if (!ticket) throw notFound('工单不存在');
-    tx(() => {
-      run('DELETE FROM ticket_replies WHERE ticket_id = ?', [id]);
-      run('DELETE FROM tickets WHERE id = ?', [id]);
+    await tx(async () => {
+      await run('DELETE FROM ticket_replies WHERE ticket_id = ?', [id]);
+      await run('DELETE FROM tickets WHERE id = ?', [id]);
     });
-    audit(request, 'admin.ticket_delete', { targetType: 'ticket', targetId: id, detail: { no: ticket.ticket_no } });
+    await audit(request, 'admin.ticket_delete', { targetType: 'ticket', targetId: id, detail: { no: ticket.ticket_no } });
     return { ok: true };
   });
 
   app.get('/api/admin/tickets/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    run('UPDATE tickets SET unread_for_admin = 0 WHERE id = ?', [id]);
-    const ticket = get<any>(
+    await run('UPDATE tickets SET unread_for_admin = 0 WHERE id = ?', [id]);
+    const ticket = await get<any>(
       `SELECT t.*, u.username, u.display_name, u.avatar, a.username AS assignee_name
          FROM tickets t JOIN users u ON u.id = t.user_id
          LEFT JOIN users a ON a.id = t.assignee_id WHERE t.id = ?`,
       [id],
     );
     if (!ticket) throw notFound('工单不存在');
-    const replies = all<any>(
+    const replies = await all<any>(
       `SELECT r.*, u.username, u.display_name, u.avatar, u.role
          FROM ticket_replies r JOIN users u ON u.id = r.author_id
         WHERE r.ticket_id = ? ORDER BY r.id ASC`,

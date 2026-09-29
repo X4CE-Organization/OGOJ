@@ -38,22 +38,22 @@ function validatePassword(password: string): void {
   if (password.length > 128) throw badRequest('密码过长');
 }
 
-function registerLoginAttempt(username: string, ip: string, success: boolean, userId?: number): void {
-  run(
+async function registerLoginAttempt(username: string, ip: string, success: boolean, userId?: number): Promise<void> {
+  await run(
     'INSERT INTO login_logs (user_id, username, ip, user_agent, success) VALUES (?, ?, ?, ?, ?)',
     [userId ?? null, username, ip, '', success ? 1 : 0],
   );
   const key = `login:${username}:${ip}`;
   if (success) {
-    run('DELETE FROM rate_limits WHERE key = ?', [key]);
+    await run('DELETE FROM rate_limits WHERE key = ?', [key]);
     return;
   }
   const limit = num('login_fail_limit', 10);
   if (limit <= 0) return;
-  const row = get<{ count: number }>('SELECT count FROM rate_limits WHERE key = ?', [key]);
+  const row = await get<{ count: number }>('SELECT count FROM rate_limits WHERE key = ?', [key]);
   const count = (row?.count ?? 0) + 1;
   const lockMinutes = num('login_lock_minutes', 15);
-  run(
+  await run(
     `INSERT INTO rate_limits (key, count, expires_at)
      VALUES (?, ?, datetime('now', ?))
      ON CONFLICT(key) DO UPDATE SET count = ?, expires_at = datetime('now', ?)`,
@@ -61,16 +61,16 @@ function registerLoginAttempt(username: string, ip: string, success: boolean, us
   );
 }
 
-function lockedOut(username: string, ip: string): boolean {
+async function lockedOut(username: string, ip: string): Promise<boolean> {
   const limit = num('login_fail_limit', 10);
   if (limit <= 0) return false;
-  const row = get<{ count: number; expires_at: string }>(
+  const row = await get<{ count: number; expires_at: string }>(
     'SELECT count, expires_at FROM rate_limits WHERE key = ?',
     [`login:${username}:${ip}`],
   );
   if (!row) return false;
   if (new Date(`${row.expires_at}Z`).getTime() < Date.now()) {
-    run('DELETE FROM rate_limits WHERE key = ?', [`login:${username}:${ip}`]);
+    await run('DELETE FROM rate_limits WHERE key = ?', [`login:${username}:${ip}`]);
     return false;
   }
   return row.count >= limit;
@@ -109,15 +109,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      if (get('SELECT id FROM users WHERE username = ?', [username])) {
+      if (await get('SELECT id FROM users WHERE username = ?', [username])) {
         throw conflict('该用户名已被注册');
       }
-      if (email && get('SELECT id FROM users WHERE email = ?', [email])) {
+      if (email && await get('SELECT id FROM users WHERE email = ?', [email])) {
         throw conflict('该邮箱已被注册');
       }
 
       const role = str('default_role', 'user') === 'admin' ? 'admin' : 'user';
-      const info = run(
+      const info = await run(
         `INSERT INTO users (username, email, password_hash, role, display_name, is_private, invite_code)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -131,12 +131,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         ],
       );
       const userId = Number(info.lastInsertRowid);
-      audit(request, 'user.register', { targetType: 'user', targetId: userId, detail: { username } });
-      evaluateAchievements(userId, { silent: true });
+      await audit(request, 'user.register', { targetType: 'user', targetId: userId, detail: { username } });
+      await evaluateAchievements(userId, { silent: true });
 
       const token = signToken({ sub: userId, username, role }, num('session_days', 14) * 86400);
       setAuthCookie(reply, token, num('session_days', 14));
-      const user = get<any>('SELECT * FROM users WHERE id = ?', [userId]);
+      const user = await get<any>('SELECT * FROM users WHERE id = ?', [userId]);
       return { token, user: publicUser(user) };
     },
   });
@@ -148,25 +148,25 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const account = (body.username ?? '').trim();
       const password = body.password ?? '';
       if (!account || !password) throw badRequest('请填写用户名和密码');
-      if (lockedOut(account, request.ip)) throw tooMany('登录失败次数过多，请稍后再试');
+      if (await lockedOut(account, request.ip)) throw tooMany('登录失败次数过多，请稍后再试');
 
-      const user = get<any>(
+      const user = await get<any>(
         'SELECT * FROM users WHERE username = ? OR (email IS NOT NULL AND email = ?)',
         [account, account.toLowerCase()],
       );
       if (!user || !(await verifyPassword(password, user.password_hash))) {
-        registerLoginAttempt(account, request.ip, false);
+        await registerLoginAttempt(account, request.ip, false);
         throw unauthorized('用户名或密码错误');
       }
       if (user.is_banned) {
         throw forbidden(`账号已被封禁：${user.ban_reason || '违反社区规范'}`);
       }
 
-      registerLoginAttempt(account, request.ip, true, user.id);
+      await registerLoginAttempt(account, request.ip, true, user.id);
       const days = body.remember === false ? 1 : num('session_days', 14);
       const token = signToken({ sub: user.id, username: user.username, role: user.role }, days * 86400);
       setAuthCookie(reply, token, days);
-      run(
+      await run(
         `UPDATE users SET last_login_at = datetime('now'), last_login_ip = ? WHERE id = ?`,
         [request.ip, user.id],
       );
@@ -176,11 +176,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const lastLogin = user.last_login_at as string | null;
         const today = new Date().toISOString().slice(0, 10);
         if (!lastLogin || !lastLogin.startsWith(today)) {
-          addPoints(user.id, daily, '每日登录');
+          await addPoints(user.id, daily, '每日登录');
         }
       }
-      audit(request, 'user.login', { targetType: 'user', targetId: user.id });
-      const fresh = get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
+      await audit(request, 'user.login', { targetType: 'user', targetId: user.id });
+      const fresh = await get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
       return { token, user: publicUser(fresh) };
     },
   });
@@ -191,18 +191,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/auth/me', async (request) => {
-    const user = requireUser(request);
-    const row = get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
+    const user = await requireUser(request);
+    const row = await get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
     if (!row) throw unauthorized();
-    const unread = get<{ c: number }>(
+    const unread = await get<{ c: number }>(
       'SELECT COUNT(*) AS c FROM messages WHERE to_id = ? AND is_read = 0',
       [user.id],
     );
     const isAdmin = user.role === 'admin' || user.role === 'superadmin';
     const ticketUnread = isAdmin
-      ? count(`SELECT COUNT(*) AS c FROM tickets WHERE unread_for_admin = 1`)
-      : count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND unread_for_user = 1', [user.id]);
-    const grants = all<any>(
+      ? await count(`SELECT COUNT(*) AS c FROM tickets WHERE unread_for_admin = 1`)
+      : await count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ? AND unread_for_user = 1', [user.id]);
+    const grants = await all<any>(
       `SELECT kind, SUM(total - used) AS remaining FROM grants
         WHERE user_id = ? AND (expires_at IS NULL OR expires_at > datetime('now'))
         GROUP BY kind`,
@@ -230,7 +230,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put('/api/auth/profile', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const body = (request.body ?? {}) as Record<string, unknown>;
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -256,36 +256,36 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const email = body.email.trim().toLowerCase();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('邮箱格式不正确');
       if (email) {
-        const taken = get('SELECT id FROM users WHERE email = ? AND id <> ?', [email, user.id]);
+        const taken = await get('SELECT id FROM users WHERE email = ? AND id <> ?', [email, user.id]);
         if (taken) throw conflict('该邮箱已被其他账号使用');
       }
       assign('email', email || null);
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...values, user.id]);
-      audit(request, 'user.update_profile', { targetType: 'user', targetId: user.id });
+      await run(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, [...values, user.id]);
+      await audit(request, 'user.update_profile', { targetType: 'user', targetId: user.id });
     }
-    return { ok: true, user: publicUser(get<any>('SELECT * FROM users WHERE id = ?', [user.id])) };
+    return { ok: true, user: publicUser(await get<any>('SELECT * FROM users WHERE id = ?', [user.id])) };
   });
 
   app.put('/api/auth/password', async (request, reply) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const body = (request.body ?? {}) as { old_password?: string; new_password?: string; new_password2?: string };
     if (!body.new_password || body.new_password !== body.new_password2) {
       throw badRequest('两次输入的新密码不一致');
     }
     validatePassword(body.new_password);
-    const row = get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [user.id]);
+    const row = await get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [user.id]);
     if (!row) throw unauthorized();
     if (!(await verifyPassword(body.old_password ?? '', row.password_hash))) {
       throw badRequest('原密码不正确');
     }
-    run(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`, [
+    await run(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`, [
       await hashPassword(body.new_password),
       user.id,
     ]);
-    audit(request, 'user.change_password', { targetType: 'user', targetId: user.id });
+    await audit(request, 'user.change_password', { targetType: 'user', targetId: user.id });
     clearAuthCookie(reply);
     return { ok: true, message: '密码已修改，请重新登录' };
   });
@@ -298,13 +298,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       return { available: false, reason: error instanceof Error ? error.message : '用户名不可用' };
     }
-    const exists = Boolean(get('SELECT id FROM users WHERE username = ?', [username]));
+    const exists = Boolean(await get('SELECT id FROM users WHERE username = ?', [username]));
     return { available: !exists, reason: exists ? '该用户名已被注册' : '' };
   });
 
   app.post('/api/auth/renew', async (request, reply) => {
-    const user = requireUser(request);
-    const row = get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
+    const user = await requireUser(request);
+    const row = await get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
     const days = num('session_days', 14);
     const token = signToken({ sub: user.id, username: user.username, role: user.role }, days * 86400);
     setAuthCookie(reply, token, days);

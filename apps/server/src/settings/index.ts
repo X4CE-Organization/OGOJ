@@ -1,4 +1,4 @@
-import { all, db, run } from '../db/index.js';
+import { all, run, tx } from '../db/index.js';
 import {
   defaultSettings,
   parseSetting,
@@ -12,11 +12,17 @@ let cache: Map<string, string> | null = null;
 
 function load(): Map<string, string> {
   if (cache) return cache;
-  const rows = all<{ key: string; value: string }>('SELECT key, value FROM settings');
+  // 缓存未预热时先用默认值，预热在启动阶段异步完成
+  cache = new Map<string, string>(Object.entries(defaultSettings()));
+  return cache;
+}
+
+/** 启动时把设置表读进内存缓存（之后 str/num/bool 都是同步读取） */
+export async function warmSettings(): Promise<void> {
+  const rows = await all<{ key: string; value: string }>('SELECT key, value FROM settings');
   const map = new Map<string, string>(Object.entries(defaultSettings()));
   for (const row of rows) map.set(row.key, row.value);
   cache = map;
-  return map;
 }
 
 export function invalidateSettings(): void {
@@ -90,13 +96,9 @@ export interface SettingChange {
 }
 
 /** Validate + persist a batch of settings, returning the applied changes. */
-export function updateSettings(patch: Record<string, unknown>): SettingChange[] {
+export async function updateSettings(patch: Record<string, unknown>): Promise<SettingChange[]> {
   const changes: SettingChange[] = [];
-  const stmt = db.prepare(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
-  );
-  db.transaction(() => {
+  await tx(async () => {
     for (const [key, rawValue] of Object.entries(patch)) {
       const field: SettingField | undefined = SETTING_MAP[key];
       if (!field) continue;
@@ -104,11 +106,15 @@ export function updateSettings(patch: Record<string, unknown>): SettingChange[] 
       if (field.secret && rawValue === '********') continue;
       const serialized = validate(field, rawValue);
       const oldValue = typedSetting(key);
-      stmt.run(key, serialized);
+      await run(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+        [key, serialized],
+      );
       if (oldValue !== rawValue) changes.push({ key, value: rawValue, oldValue });
     }
-  })();
-  invalidateSettings();
+  });
+  await warmSettings();
   return changes;
 }
 
@@ -142,14 +148,15 @@ export function validate(field: SettingField, value: unknown): string {
   }
 }
 
-export function resetSettings(keys?: string[]): void {
+export async function resetSettings(keys?: string[]): Promise<void> {
   if (keys?.length) {
-    const stmt = db.prepare('DELETE FROM settings WHERE key = ?');
-    db.transaction(() => keys.forEach((k) => stmt.run(k)))();
+    await tx(async () => {
+      for (const key of keys) await run('DELETE FROM settings WHERE key = ?', [key]);
+    });
   } else {
-    run('DELETE FROM settings');
+    await run('DELETE FROM settings');
   }
-  invalidateSettings();
+  await warmSettings();
 }
 
 export { SETTING_GROUPS, SETTINGS, SETTING_MAP } from './registry.js';

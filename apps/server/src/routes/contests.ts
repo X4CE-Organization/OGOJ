@@ -11,9 +11,9 @@ import { problemSummary, tagRows } from './helpers.js';
 import { contestStatus } from './public.js';
 import { evaluateAchievements } from '../lib/achievements.js';
 
-function findContest(idLike: string): any {
+async function findContest(idLike: string): Promise<any> {
   const id = Number(idLike);
-  const row = Number.isInteger(id) ? get<any>('SELECT * FROM contests WHERE id = ?', [id]) : undefined;
+  const row = Number.isInteger(id) ? await get<any>('SELECT * FROM contests WHERE id = ?', [id]) : undefined;
   if (!row || row.deleted_at) throw notFound('比赛不存在');
   return row;
 }
@@ -41,7 +41,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const viewer = request.user;
 
     if (query.mine === 'true') {
-      const user = requireUser(request);
+      const user = await requireUser(request);
       conditions.push('(c.owner_id = ? OR EXISTS (SELECT 1 FROM contest_registrations r WHERE r.contest_id = c.id AND r.user_id = ?))');
       params.push(user.id, user.id);
       conditions.push('c.deleted_at IS NULL');
@@ -77,7 +77,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const order =
       query.sort === 'start_asc' ? 'c.start_time ASC' : query.sort === 'oldest' ? 'c.id ASC' : 'c.start_time DESC';
 
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT c.*, u.username AS owner_name,
               (SELECT COUNT(*) FROM contest_registrations r WHERE r.contest_id = c.id) AS participant_count,
               (SELECT COUNT(*) FROM contest_problems cp WHERE cp.contest_id = c.id) AS problem_count
@@ -85,7 +85,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
          ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(`SELECT COUNT(*) AS c FROM contests c ${where}`, params);
+    const total = await count(`SELECT COUNT(*) AS c FROM contests c ${where}`, params);
     return {
       items: rows.map((row) => ({
         ...row,
@@ -102,7 +102,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
 
   /* ----------------------------------------------------------------- detail */
   app.get('/api/contests/:id', async (request) => {
-    const contest = findContest(String((request.params as any).id));
+    const contest = await findContest(String((request.params as any).id));
     const viewer = request.user;
     const isAdmin = hasRole(viewer, 'admin');
     const isOwner = Boolean(viewer && contest.owner_id === viewer.id);
@@ -111,13 +111,13 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     }
     const status = contestStatus(contest.start_time, contest.end_time);
     const registration = viewer
-      ? get<any>('SELECT * FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
+      ? await get<any>('SELECT * FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
           contest.id,
           viewer.id,
         ])
       : null;
 
-    const problems = all<any>(
+    const problems = await all<any>(
       `SELECT p.*, cp.order_no, cp.label, cp.score AS contest_score,
               u.username AS author_name, u.display_name AS author_display
          FROM contest_problems cp JOIN problems p ON p.id = cp.problem_id
@@ -127,11 +127,11 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     );
     const started = status !== 'upcoming';
     const canSeeProblems = started || isAdmin || isOwner;
-    const tagMap = tagRows(problems.map((p) => p.id));
+    const tagMap = await tagRows(problems.map((p) => p.id));
     const solvedMap = new Map<number, { accepted: number; attempts: number }>();
     if (viewer) {
       for (const problem of problems) {
-        const stat = get<any>(
+        const stat = await get<any>(
           'SELECT accepted, attempts FROM user_problem_stats WHERE user_id = ? AND problem_id = ?',
           [viewer.id, problem.id],
         );
@@ -159,19 +159,21 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
         status,
         durationMinutes: minutesBetween(contest.start_time, contest.end_time),
         owner: contest.owner_id,
-        participantCount: count('SELECT COUNT(*) AS c FROM contest_registrations WHERE contest_id = ?', [
+        participantCount: await count('SELECT COUNT(*) AS c FROM contest_registrations WHERE contest_id = ?', [
           contest.id,
         ]),
       },
       registered: Boolean(registration),
       problems: canSeeProblems
-        ? problems.map((row) => ({
-            ...problemSummary(row, { tags: tagMap.get(row.id) ?? [] }),
-            label: row.label,
-            order: row.order_no,
-            contestScore: row.contest_score,
-            myStats: solvedMap.get(row.id) ?? { accepted: 0, attempts: 0 },
-          }))
+        ? await Promise.all(
+            problems.map(async (row) => ({
+              ...(await problemSummary(row, { tags: tagMap.get(row.id) ?? [] })),
+              label: row.label,
+              order: row.order_no,
+              contestScore: row.contest_score,
+              myStats: solvedMap.get(row.id) ?? { accepted: 0, attempts: 0 },
+            })),
+          )
         : [],
       problemsHidden: !canSeeProblems,
       canEdit: isAdmin || isOwner,
@@ -180,18 +182,18 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
 
   /* ----------------------------------------------------------------- create */
   app.post('/api/contests', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const body = (request.body ?? {}) as any;
     const isAdmin = hasRole(user, 'admin');
     if (!isAdmin) {
       if (!bool('allow_user_contest', true)) throw forbidden('本站未开放用户创建比赛');
-      const grant = get<any>(
+      const grant = await get<any>(
         `SELECT * FROM grants WHERE user_id = ? AND kind = 'contest' AND used < total
            AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY id ASC LIMIT 1`,
         [user.id],
       );
       if (!grant) throw forbidden('你需要先在商店兑换「创建一次比赛」资格');
-      tx(() => run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
+      await tx(async () => await run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
     }
 
     const title = String(body.title ?? '').trim();
@@ -213,7 +215,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
       ? body.rules
       : str('default_contest_rules', 'acm');
     const needReview = !isAdmin && bool('user_contest_need_review', true);
-    const info = run(
+    const info = await run(
       `INSERT INTO contests
         (title, subtitle, description, rules, start_time, end_time, freeze_minutes, is_public, need_register,
          password, show_rank, rated, allow_languages, origin, owner_id, author_id, review_status)
@@ -240,10 +242,10 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     );
     const contestId = Number(info.lastInsertRowid);
     if (Array.isArray(body.problemIds) && body.problemIds.length) {
-      attachProblems(contestId, body.problemIds);
+      await attachProblems(contestId, body.problemIds);
     }
     if (needReview) {
-      sendMessage({
+      await sendMessage({
         to: user.id,
         title: '比赛已提交审核',
         content: `你的比赛「${title}」已提交，等待管理员审核。`,
@@ -252,14 +254,14 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
         refId: contestId,
       });
     }
-    audit(request, 'contest.create', { targetType: 'contest', targetId: contestId, detail: { title } });
+    await audit(request, 'contest.create', { targetType: 'contest', targetId: contestId, detail: { title } });
     return { ok: true, id: contestId, reviewStatus: needReview ? 'pending' : 'approved' };
   });
 
   /* ----------------------------------------------------------------- update */
   app.put('/api/contests/:id', async (request) => {
-    const user = requireUser(request);
-    const contest = findContest(String((request.params as any).id));
+    const user = await requireUser(request);
+    const contest = await findContest(String((request.params as any).id));
     assertContestAccess(contest, user);
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -297,64 +299,64 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE contests SET ${fields.join(', ')} WHERE id = ?`, [...values, contest.id]);
+      await run(`UPDATE contests SET ${fields.join(', ')} WHERE id = ?`, [...values, contest.id]);
     }
-    if (Array.isArray(body.problemIds)) attachProblems(contest.id, body.problemIds);
-    audit(request, 'contest.update', { targetType: 'contest', targetId: contest.id, detail: Object.keys(body) });
+    if (Array.isArray(body.problemIds)) await attachProblems(contest.id, body.problemIds);
+    await audit(request, 'contest.update', { targetType: 'contest', targetId: contest.id, detail: Object.keys(body) });
     return { ok: true };
   });
 
   app.delete('/api/contests/:id', async (request) => {
-    const user = requireUser(request);
-    const contest = findContest(String((request.params as any).id));
+    const user = await requireUser(request);
+    const contest = await findContest(String((request.params as any).id));
     assertContestAccess(contest, user);
     const hard = (request.query as any)?.hard === 'true' && hasRole(user, 'superadmin');
     if (hard) {
-      run('DELETE FROM contests WHERE id = ?', [contest.id]);
-      run('DELETE FROM contest_problems WHERE contest_id = ?', [contest.id]);
-      run('DELETE FROM contest_registrations WHERE contest_id = ?', [contest.id]);
+      await run('DELETE FROM contests WHERE id = ?', [contest.id]);
+      await run('DELETE FROM contest_problems WHERE contest_id = ?', [contest.id]);
+      await run('DELETE FROM contest_registrations WHERE contest_id = ?', [contest.id]);
     } else {
-      run(`UPDATE contests SET deleted_at = datetime('now'), is_public = 0 WHERE id = ?`, [contest.id]);
+      await run(`UPDATE contests SET deleted_at = datetime('now'), is_public = 0 WHERE id = ?`, [contest.id]);
     }
-    audit(request, 'contest.delete', { targetType: 'contest', targetId: contest.id, detail: { hard } });
+    await audit(request, 'contest.delete', { targetType: 'contest', targetId: contest.id, detail: { hard } });
     return { ok: true };
   });
 
   /* ------------------------------------------------------------- register */
   app.post('/api/contests/:id/register', async (request) => {
-    const user = requireUser(request);
-    const contest = findContest(String((request.params as any).id));
+    const user = await requireUser(request);
+    const contest = await findContest(String((request.params as any).id));
     const status = contestStatus(contest.start_time, contest.end_time);
     if (status === 'ended') throw forbidden('比赛已经结束');
     if (contest.password) {
       const password = String((request.body as any)?.password ?? '');
       if (password !== contest.password) throw forbidden('比赛密码不正确');
     }
-    const existing = get('SELECT 1 AS x FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
+    const existing = await get('SELECT 1 AS x FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
       contest.id,
       user.id,
     ]);
     if (existing) return { ok: true, registered: true, message: '你已经报名了本场比赛' };
-    run('INSERT INTO contest_registrations (contest_id, user_id) VALUES (?, ?)', [contest.id, user.id]);
-    run('UPDATE users SET contest_count = contest_count + 1 WHERE id = ?', [user.id]);
-    evaluateAchievements(user.id, { silent: true });
-    audit(request, 'contest.register', { targetType: 'contest', targetId: contest.id });
+    await run('INSERT INTO contest_registrations (contest_id, user_id) VALUES (?, ?)', [contest.id, user.id]);
+    await run('UPDATE users SET contest_count = contest_count + 1 WHERE id = ?', [user.id]);
+    await evaluateAchievements(user.id, { silent: true });
+    await audit(request, 'contest.register', { targetType: 'contest', targetId: contest.id });
     return { ok: true, registered: true };
   });
 
   app.post('/api/contests/:id/unregister', async (request) => {
-    const user = requireUser(request);
-    const contest = findContest(String((request.params as any).id));
+    const user = await requireUser(request);
+    const contest = await findContest(String((request.params as any).id));
     if (contestStatus(contest.start_time, contest.end_time) !== 'upcoming') {
       throw forbidden('比赛已经开始，无法取消报名');
     }
-    run('DELETE FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [contest.id, user.id]);
+    await run('DELETE FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [contest.id, user.id]);
     return { ok: true, registered: false };
   });
 
   app.get('/api/contests/:id/registrations', async (request) => {
-    const contest = findContest(String((request.params as any).id));
-    const rows = all<any>(
+    const contest = await findContest(String((request.params as any).id));
+    const rows = await all<any>(
       `SELECT r.registered_at, r.is_rated, u.id, u.username, u.display_name, u.avatar, u.solved_count
          FROM contest_registrations r JOIN users u ON u.id = r.user_id
         WHERE r.contest_id = ? ORDER BY r.registered_at ASC LIMIT 2000`,
@@ -365,44 +367,44 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
 
   /* ---------------------------------------------------------------- ranklist */
   app.get('/api/contests/:id/ranklist', async (request) => {
-    const contest = findContest(String((request.params as any).id));
-    return computeRanklist(contest, request.user);
+    const contest = await findContest(String((request.params as any).id));
+    return await computeRanklist(contest, request.user);
   });
 
   /* -------------------------------------------------------- finalize & points */
   app.post('/api/contests/:id/finalize', async (request) => {
-    requireAdmin(request);
-    const contest = findContest(String((request.params as any).id));
+    await requireAdmin(request);
+    const contest = await findContest(String((request.params as any).id));
     if (contestStatus(contest.start_time, contest.end_time) !== 'ended') {
       throw badRequest('比赛尚未结束');
     }
-    const data = computeRanklist(contest, request.user, true);
+    const data = await computeRanklist(contest, request.user, true);
     const ranklist: any[] = data.ranklist;
     const first = num('points_contest_rank1', 20);
     const top10 = num('points_contest_top10', 5);
     let awarded = 0;
-    tx(() => {
-      ranklist.forEach((row: any, index: number) => {
+    await tx(async () => {
+      for (const [index, row] of ranklist.entries()) {
         let points = 0;
         if (index === 0) points = first;
         else if (index < 10) points = top10;
         if (points > 0) {
-          addPoints(row.user.id, points, `比赛「${contest.title}」第 ${index + 1} 名`, {
+          await addPoints(row.user.id, points, `比赛「${contest.title}」第 ${index + 1} 名`, {
             refType: 'contest',
             refId: contest.id,
           });
           awarded += 1;
         }
-        evaluateAchievements(row.user.id, { silent: true });
-      });
-      run('UPDATE contests SET review_note = ? WHERE id = ?', ['finalized', contest.id]);
+        await evaluateAchievements(row.user.id, { silent: true });
+      }
+      await run('UPDATE contests SET review_note = ? WHERE id = ?', ['finalized', contest.id]);
     });
-    audit(request, 'contest.finalize', { targetType: 'contest', targetId: contest.id, detail: { awarded } });
+    await audit(request, 'contest.finalize', { targetType: 'contest', targetId: contest.id, detail: { awarded } });
     return { ok: true, awarded };
   });
 
   app.get('/api/contests/:id/submissions', async (request) => {
-    const contest = findContest(String((request.params as any).id));
+    const contest = await findContest(String((request.params as any).id));
     const query = request.query as any;
     const page = parsePage(query, num('submission_page_size', 50));
     const status = contestStatus(contest.start_time, contest.end_time);
@@ -418,7 +420,7 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
       conditions.push('u.username = ?');
       params.push(String(query.user));
     }
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.id, s.problem_id, s.status, s.score, s.time_ms, s.memory_kb, s.language, s.created_at,
               p.pid, p.title AS problem_title, u.id AS user_id, u.username, u.display_name, u.avatar
          FROM submissions s JOIN problems p ON p.id = s.problem_id JOIN users u ON u.id = s.user_id
@@ -440,25 +442,25 @@ export interface RanklistCell {
 }
 
 /** Compute the ACM / OI / IOI ranklist of a contest (with freeze support). */
-export function computeRanklist(
+export async function computeRanklist(
   contest: any,
   viewer: { id: number; role: string } | null,
   forceFull = false,
-): {
+): Promise<{
   contest: any;
   problems: any[];
   ranklist: any[];
   totalRanked: number;
   collapsed: boolean;
   message?: string;
-} {
+}> {
   const status = contestStatus(contest.start_time, contest.end_time);
   const isAdmin = forceFull || (viewer ? hasRole(viewer as any, 'admin') : false);
-  const problems = all<any>(
+  const problems = await all<any>(
     'SELECT problem_id, order_no, label, score FROM contest_problems WHERE contest_id = ? ORDER BY order_no',
     [contest.id],
   );
-  const submissions = all<any>(
+  const submissions = await all<any>(
     `SELECT id, user_id, problem_id, status, score, time_ms, created_at FROM submissions
       WHERE contest_id = ? ORDER BY id ASC`,
     [contest.id],
@@ -478,7 +480,7 @@ export function computeRanklist(
         )
       : submissions;
 
-  const participants = all<any>(
+  const participants = await all<any>(
     `SELECT u.id, u.username, u.display_name, u.avatar, r.registered_at, r.is_rated
        FROM contest_registrations r JOIN users u ON u.id = r.user_id WHERE r.contest_id = ?`,
     [contest.id],
@@ -487,7 +489,7 @@ export function computeRanklist(
   for (const submission of visibleSubmissions) participantIds.add(submission.user_id);
   const ids = [...participantIds];
   const users = ids.length
-    ? all<any>(
+    ? await all<any>(
         `SELECT id, username, display_name, avatar FROM users WHERE id IN (${ids.map(() => '?').join(',')})`,
         ids,
       )
@@ -619,18 +621,18 @@ function normalizeTime(value: unknown): string | null {
   return parsed.toISOString().replace('T', ' ').slice(0, 19);
 }
 
-export function attachProblems(contestId: number, problemIds: unknown[]): void {
+export async function attachProblems(contestId: number, problemIds: unknown[]): Promise<void> {
   const ids = problemIds.map(Number).filter((n) => Number.isInteger(n) && n > 0);
-  tx(() => {
-    const existing = all<any>(
+  await tx(async () => {
+    const existing = await all<any>(
       'SELECT problem_id, order_no, label, score FROM contest_problems WHERE contest_id = ?',
       [contestId],
     );
     const meta = new Map(existing.map((row) => [row.problem_id, row]));
-    run('DELETE FROM contest_problems WHERE contest_id = ?', [contestId]);
-    ids.forEach((problemId, index) => {
+    await run('DELETE FROM contest_problems WHERE contest_id = ?', [contestId]);
+    for (const [index, problemId] of ids.entries()) {
       const previous = meta.get(problemId);
-      run(
+      await run(
         `INSERT INTO contest_problems (contest_id, problem_id, order_no, label, score) VALUES (?, ?, ?, ?, ?)`,
         [
           contestId,
@@ -640,6 +642,6 @@ export function attachProblems(contestId: number, problemIds: unknown[]): void {
           previous?.score ?? 100,
         ],
       );
-    });
+    }
   });
 }

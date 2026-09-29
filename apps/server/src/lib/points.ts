@@ -18,25 +18,25 @@ export interface PointResult {
   balance: number;
 }
 
-export function currentPoints(userId: number): number {
-  return Number(get<{ points: number }>('SELECT points FROM users WHERE id = ?', [userId])?.points ?? 0);
+export async function currentPoints(userId: number): Promise<number> {
+  return Number((await get<{ points: number }>('SELECT points FROM users WHERE id = ?', [userId]))?.points ?? 0);
 }
 
 /**
  * Add (or subtract) points in a transaction and write an audit trail entry.
  * Negative balances are rejected unless the administrator enabled them.
  */
-export function addPoints(
+export async function addPoints(
   userId: number,
   delta: number,
   reason: string,
   options: { refType?: string; refId?: number | null; reasonKind?: PointReason } = {},
-): PointResult {
+): Promise<PointResult> {
   if (!Number.isFinite(delta) || delta === 0) {
-    return { delta: 0, balance: currentPoints(userId) };
+    return { delta: 0, balance: await currentPoints(userId) };
   }
-  return tx(() => {
-    const user = get<{ points: number }>('SELECT points FROM users WHERE id = ?', [userId]);
+  return await tx(async () => {
+    const user = await get<{ points: number }>('SELECT points FROM users WHERE id = ?', [userId]);
     if (!user) throw badRequest('用户不存在');
     let next = user.points + delta;
     if (next < 0) {
@@ -45,8 +45,8 @@ export function addPoints(
       }
       next = Math.min(next, 0);
     }
-    run('UPDATE users SET points = ? WHERE id = ?', [next, userId]);
-    run(
+    await run('UPDATE users SET points = ? WHERE id = ?', [next, userId]);
+    await run(
       `INSERT INTO point_logs (user_id, delta, balance_after, reason, ref_type, ref_id)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [userId, delta, next, reason, options.refType ?? '', options.refId ?? null],
@@ -55,14 +55,14 @@ export function addPoints(
   });
 }
 
-export function spendPoints(
+export async function spendPoints(
   userId: number,
   amount: number,
   reason: string,
   options: { refType?: string; refId?: number | null } = {},
-): PointResult {
+): Promise<PointResult> {
   if (amount <= 0) throw badRequest('消耗积分必须为正数');
-  return addPoints(userId, -amount, reason, options);
+  return await addPoints(userId, -amount, reason, options);
 }
 
 export function pointsForAccepted(): number {

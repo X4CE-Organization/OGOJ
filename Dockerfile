@@ -31,6 +31,7 @@ ENV NODE_ENV=production \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       g++ gcc libc6-dev python3 time ca-certificates \
+      postgresql-client \
       openjdk-17-jdk-headless \
  && rm -rf /var/lib/apt/lists/*
 

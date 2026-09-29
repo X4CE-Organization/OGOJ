@@ -30,10 +30,12 @@ import { registerTeamRoutes } from './routes/teams.js';
 import { registerProblemTransferRoutes } from './routes/problem-transfer.js';
 import { registerRunRoutes } from './routes/run.js';
 import { registerStickerRoutes } from './routes/stickers.js';
+import { warmSettings } from './settings/index.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   ensureDataDirs();
-  migrate();
+  await migrate();
+  await warmSettings();
 
   const app = Fastify({
     logger: {
@@ -71,7 +73,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.addHook('onRequest', async (request, reply) => {
-    request.user = resolveUser(request);
+    request.user = await resolveUser(request);
 
     const blocked = new Set(
       (JSON.parse(str('blocked_ips', '[]') || '[]') as string[]).filter(Boolean),

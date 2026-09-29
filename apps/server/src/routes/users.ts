@@ -7,11 +7,11 @@ import { parseId, parsePage, sqlLike } from '../lib/util.js';
 import { problemSummary, submissionSummary, tagRows, levelOf } from './helpers.js';
 import { publicUser } from './auth.js';
 
-function findUser(usernameOrId: string): any {
+async function findUser(usernameOrId: string): Promise<any> {
   const numeric = Number(usernameOrId);
   const row = Number.isInteger(numeric) && String(numeric) === usernameOrId
-    ? get<any>('SELECT * FROM users WHERE id = ?', [numeric])
-    : get<any>('SELECT * FROM users WHERE username = ?', [usernameOrId]);
+    ? await get<any>('SELECT * FROM users WHERE id = ?', [numeric])
+    : await get<any>('SELECT * FROM users WHERE username = ?', [usernameOrId]);
   if (!row) throw notFound('用户不存在');
   return row;
 }
@@ -43,14 +43,14 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
             ? 'id'
             : 'solved_count';
     const direction = query.sort === 'newest' ? 'DESC' : 'DESC';
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT id, username, display_name, avatar, bio, role, points, rating, solved_count,
               submission_count, accepted_count, created_at, last_login_at
          FROM users WHERE ${conditions.join(' AND ')}
         ORDER BY ${column} ${direction}, id ASC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(`SELECT COUNT(*) AS c FROM users WHERE ${conditions.join(' AND ')}`, params);
+    const total = await count(`SELECT COUNT(*) AS c FROM users WHERE ${conditions.join(' AND ')}`, params);
     const viewer = request.user;
     return {
       items: rows.map((row) => ({
@@ -67,19 +67,19 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   /* --------------------------------------------------------------- profile */
   app.get('/api/users/:username', async (request) => {
-    const row = findUser(String((request.params as any).username));
+    const row = await findUser(String((request.params as any).username));
     const viewer = request.user;
     const isSelf = viewer?.id === row.id;
     const isAdmin = hasRole(viewer, 'admin');
-    const followers = count('SELECT COUNT(*) AS c FROM follows WHERE followee_id = ?', [row.id]);
-    const following = count('SELECT COUNT(*) AS c FROM follows WHERE follower_id = ?', [row.id]);
+    const followers = await count('SELECT COUNT(*) AS c FROM follows WHERE followee_id = ?', [row.id]);
+    const following = await count('SELECT COUNT(*) AS c FROM follows WHERE follower_id = ?', [row.id]);
     const isFollowing = viewer
-      ? Boolean(get('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', [viewer.id, row.id]))
+      ? Boolean(await get('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', [viewer.id, row.id]))
       : false;
     const canSeeRecords = isSelf || isAdmin || !row.is_private;
 
     const solvedByDifficulty = canSeeRecords
-      ? all<any>(
+      ? await all<any>(
           `SELECT p.difficulty, COUNT(DISTINCT p.id) AS c
              FROM user_problem_stats s JOIN problems p ON p.id = s.problem_id
             WHERE s.user_id = ? AND s.accepted > 0 GROUP BY p.difficulty`,
@@ -87,7 +87,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         )
       : [];
     const recentSubmissions = canSeeRecords
-      ? all<any>(
+      ? await all<any>(
           `SELECT s.id, s.problem_id, s.user_id, s.language, s.status, s.score, s.time_ms, s.memory_kb,
                   s.code_length, s.contest_id, s.created_at, p.pid, p.title AS problem_title,
                   u.username, u.display_name, u.avatar
@@ -97,7 +97,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         )
       : [];
     const solvedProblems = canSeeRecords
-      ? all<any>(
+      ? await all<any>(
           `SELECT p.*, st.first_ac_at, u.username AS author_name, u.display_name AS author_display
              FROM user_problem_stats st JOIN problems p ON p.id = st.problem_id
              LEFT JOIN users u ON u.id = p.author_id
@@ -106,23 +106,23 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           [row.id],
         )
       : [];
-    const tagMap = tagRows(solvedProblems.map((p) => p.id));
+    const tagMap = await tagRows(solvedProblems.map((p) => p.id));
     const contestHistory = canSeeRecords
-      ? all<any>(
+      ? await all<any>(
           `SELECT c.id, c.title, c.rules, c.start_time, c.end_time, r.registered_at
              FROM contest_registrations r JOIN contests c ON c.id = r.contest_id
             WHERE r.user_id = ? ORDER BY c.start_time DESC LIMIT 20`,
           [row.id],
         )
       : [];
-    const stats = get<any>(
+    const stats = await get<any>(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN status = 'AC' THEN 1 ELSE 0 END) AS accepted,
               COUNT(DISTINCT problem_id) AS problems
          FROM submissions WHERE user_id = ?`,
       [row.id],
     );
-    const rank = count('SELECT COUNT(*) AS c FROM users WHERE solved_count > ?', [row.solved_count ?? 0]) + 1;
+    const rank = await count('SELECT COUNT(*) AS c FROM users WHERE solved_count > ?', [row.solved_count ?? 0]) + 1;
 
     return {
       profile: {
@@ -144,16 +144,18 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           stats?.total > 0 ? Math.round(((stats.accepted ?? 0) / stats.total) * 1000) / 10 : 0,
       },
       recentSubmissions: recentSubmissions.map(submissionSummary),
-      solvedProblems: solvedProblems.map((problem) => ({
-        ...problemSummary(problem, { tags: tagMap.get(problem.id) ?? [] }),
-        firstAcAt: problem.first_ac_at,
-      })),
+      solvedProblems: await Promise.all(
+        solvedProblems.map(async (problem) => ({
+          ...(await problemSummary(problem, { tags: tagMap.get(problem.id) ?? [] })),
+          firstAcAt: problem.first_ac_at,
+        })),
+      ),
       contestHistory,
     };
   });
 
   app.get('/api/users/:username/submissions', async (request) => {
-    const row = findUser(String((request.params as any).username));
+    const row = await findUser(String((request.params as any).username));
     const viewer = request.user;
     if (row.is_private && viewer?.id !== row.id && !hasRole(viewer, 'admin')) {
       throw forbidden('该用户隐藏了提交记录');
@@ -170,7 +172,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       conditions.push('s.language = ?');
       params.push(String(query.language));
     }
-    const items = all<any>(
+    const items = await all<any>(
       `SELECT s.id, s.problem_id, s.user_id, s.language, s.status, s.score, s.time_ms, s.memory_kb,
               s.code_length, s.contest_id, s.created_at, p.pid, p.title AS problem_title,
               u.username, u.display_name, u.avatar
@@ -178,7 +180,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         WHERE ${conditions.join(' AND ')} ORDER BY s.id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM submissions s WHERE ${conditions.join(' AND ')}`,
       params,
     );
@@ -186,20 +188,20 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/points', async (request) => {
-    const row = findUser(String((request.params as any).username));
+    const row = await findUser(String((request.params as any).username));
     const viewer = request.user;
     if (viewer?.id !== row.id && !hasRole(viewer, 'admin')) {
       throw forbidden('只能查看自己的积分记录');
     }
     const page = parsePage(request.query as any, 50);
-    const items = all<any>(
+    const items = await all<any>(
       'SELECT * FROM point_logs WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
       [row.id, page.size, page.offset],
     );
     return {
       balance: row.points,
       items,
-      total: count('SELECT COUNT(*) AS c FROM point_logs WHERE user_id = ?', [row.id]),
+      total: await count('SELECT COUNT(*) AS c FROM point_logs WHERE user_id = ?', [row.id]),
       page: page.page,
       size: page.size,
     };
@@ -207,25 +209,25 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   /* ----------------------------------------------------------------- follow */
   app.post('/api/users/:username/follow', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('allow_follow', true)) throw forbidden('本站已关闭关注功能');
-    const target = findUser(String((request.params as any).username));
+    const target = await findUser(String((request.params as any).username));
     if (target.id === user.id) throw badRequest('不能关注自己');
-    const existing = get('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', [
+    const existing = await get('SELECT 1 AS x FROM follows WHERE follower_id = ? AND followee_id = ?', [
       user.id,
       target.id,
     ]);
     if (existing) {
-      run('DELETE FROM follows WHERE follower_id = ? AND followee_id = ?', [user.id, target.id]);
+      await run('DELETE FROM follows WHERE follower_id = ? AND followee_id = ?', [user.id, target.id]);
       return { ok: true, following: false };
     }
-    run('INSERT INTO follows (follower_id, followee_id) VALUES (?, ?)', [user.id, target.id]);
+    await run('INSERT INTO follows (follower_id, followee_id) VALUES (?, ?)', [user.id, target.id]);
     return { ok: true, following: true };
   });
 
   app.get('/api/users/:username/followers', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT u.id, u.username, u.display_name, u.avatar, u.solved_count, f.created_at
          FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followee_id = ?
         ORDER BY f.created_at DESC LIMIT 500`,
@@ -235,8 +237,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/following', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT u.id, u.username, u.display_name, u.avatar, u.solved_count, f.created_at
          FROM follows f JOIN users u ON u.id = f.followee_id WHERE f.follower_id = ?
         ORDER BY f.created_at DESC LIMIT 500`,
@@ -247,7 +249,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   /* ------------------------------------------------------ 用户题目通过情况 */
   app.get('/api/users/:username/problems', async (request) => {
-    const row = findUser(String((request.params as any).username));
+    const row = await findUser(String((request.params as any).username));
     const viewer = request.user;
     if (row.is_private && viewer?.id !== row.id && !hasRole(viewer, 'admin')) {
       throw forbidden('该用户隐藏了通过题目');
@@ -259,7 +261,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       status === 'accepted'
         ? 'st.accepted > 0'
         : 'st.accepted = 0 AND st.attempts > 0';
-    const items = all<any>(
+    const items = await all<any>(
       `SELECT p.*, st.attempts, st.accepted, st.first_ac_at, u.username AS author_name, u.display_name AS author_display
          FROM user_problem_stats st JOIN problems p ON p.id = st.problem_id
          LEFT JOIN users u ON u.id = p.author_id
@@ -267,19 +269,21 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY st.last_submit_at DESC LIMIT ? OFFSET ?`,
       [row.id, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM user_problem_stats st JOIN problems p ON p.id = st.problem_id
         WHERE st.user_id = ? AND ${condition} AND p.deleted_at IS NULL`,
       [row.id],
     );
-    const tagMap = tagRows(items.map((i) => i.id));
+    const tagMap = await tagRows(items.map((i) => i.id));
     return {
-      items: items.map((item) => ({
-        ...problemSummary(item, { tags: tagMap.get(item.id) ?? [] }),
-        attempts: item.attempts,
-        accepted: item.accepted,
-        firstAcAt: item.first_ac_at,
-      })),
+      items: await Promise.all(
+        items.map(async (item) => ({
+          ...(await problemSummary(item, { tags: tagMap.get(item.id) ?? [] })),
+          attempts: item.attempts,
+          accepted: item.accepted,
+          firstAcAt: item.first_ac_at,
+        })),
+      ),
       total,
       page: page.page,
       size: page.size,
@@ -287,8 +291,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/rating-history', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT c.id, c.title, c.rules, c.start_time, c.end_time, r.registered_at
          FROM contest_registrations r JOIN contests c ON c.id = r.contest_id
         WHERE r.user_id = ? ORDER BY c.start_time ASC`,
@@ -298,8 +302,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/solutions', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT s.id, s.title, s.upvotes, s.views, s.created_at, s.is_public, p.pid, p.title AS problem_title
          FROM solutions s JOIN problems p ON p.id = s.problem_id
         WHERE s.author_id = ? AND s.is_deleted = 0 ORDER BY s.id DESC LIMIT 100`,
@@ -309,8 +313,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/articles', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT id, title, summary, views, category, created_at FROM articles
         WHERE author_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 100`,
       [row.id],
@@ -319,8 +323,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/users/:username/discussions', async (request) => {
-    const row = findUser(String((request.params as any).username));
-    const items = all<any>(
+    const row = await findUser(String((request.params as any).username));
+    const items = await all<any>(
       `SELECT d.id, d.title, d.reply_count, d.views, d.created_at FROM discussions d
         WHERE d.author_id = ? AND d.is_deleted = 0 ORDER BY d.id DESC LIMIT 100`,
       [row.id],
@@ -330,8 +334,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   /* ------------------------------------------------------------ 兑换配额 */
   app.get('/api/me/grants', async (request) => {
-    const user = requireUser(request);
-    const rows = all<any>(
+    const user = await requireUser(request);
+    const rows = await all<any>(
       `SELECT id, kind, total, used, expires_at, note, created_at FROM grants
         WHERE user_id = ? ORDER BY id DESC`,
       [user.id],
@@ -345,29 +349,29 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/me/overview', async (request) => {
-    const user = requireUser(request);
-    const todaySubmissions = count(
+    const user = await requireUser(request);
+    const todaySubmissions = await count(
       `SELECT COUNT(*) AS c FROM submissions WHERE user_id = ? AND created_at >= date('now')`,
       [user.id],
     );
-    const recentSubmissions = all<any>(
+    const recentSubmissions = await all<any>(
       `SELECT s.id, s.status, s.score, s.created_at, s.language, p.pid, p.title AS problem_title
          FROM submissions s JOIN problems p ON p.id = s.problem_id
         WHERE s.user_id = ? ORDER BY s.id DESC LIMIT 10`,
       [user.id],
     );
-    const solvedByDifficulty = all<any>(
+    const solvedByDifficulty = await all<any>(
       `SELECT p.difficulty, COUNT(DISTINCT p.id) AS c
          FROM user_problem_stats st JOIN problems p ON p.id = st.problem_id
         WHERE st.user_id = ? AND st.accepted > 0 GROUP BY p.difficulty`,
       [user.id],
     );
-    const upcomingContests = all<any>(
+    const upcomingContests = await all<any>(
       `SELECT c.id, c.title, c.start_time, c.end_time, c.rules FROM contests c
         WHERE c.is_public = 1 AND c.review_status = 'approved' AND c.end_time > datetime('now')
         ORDER BY c.start_time ASC LIMIT 5`,
     );
-    const row = get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
+    const row = await get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
     return {
       user: publicUser(row),
       points: row.points,
@@ -376,8 +380,8 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       recentSubmissions,
       solvedByDifficulty,
       upcomingContests,
-      unreadMessages: count('SELECT COUNT(*) AS c FROM messages WHERE to_id = ? AND is_read = 0', [user.id]),
-      favorites: count('SELECT COUNT(*) AS c FROM problem_favorites WHERE user_id = ?', [user.id]),
+      unreadMessages: await count('SELECT COUNT(*) AS c FROM messages WHERE to_id = ? AND is_read = 0', [user.id]),
+      favorites: await count('SELECT COUNT(*) AS c FROM problem_favorites WHERE user_id = ?', [user.id]),
     };
   });
 }

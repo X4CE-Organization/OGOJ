@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import { config } from '../config.js';
-import { all, count, db, get, migrate, run, tx } from './index.js';
+import { all, count, get, migrate, run, tx } from './index.js';
 import { hashPassword } from '../lib/crypto.js';
 import { addPoints } from '../lib/points.js';
 import { saveTestcase } from '../lib/storage.js';
@@ -42,31 +42,31 @@ interface ProblemSeed {
  * concerned - what must never show up in the site is the announcement telling
  * everyone that "the super administrator is <name> / <password>".
  */
-function cleanDefaultAdminTraces(): void {
+async function cleanDefaultAdminTraces(): Promise<void> {
   const username = config.seed.rootUsername;
   for (const phrase of [
     `默认超级管理员账号为 \`${username}\`，请首次登录后立即修改密码。`,
     '默认超级管理员账号为 `root`，请首次登录后立即修改密码。',
   ]) {
-    run('UPDATE announcements SET content = REPLACE(content, ?, ?)', [
+    await run('UPDATE announcements SET content = REPLACE(content, ?, ?)', [
       phrase,
       '如需反馈问题，可以随时提交工单，管理员会尽快处理。',
     ]);
   }
   // Restore the account name/email if an earlier build anonymised them.
-  run(`UPDATE users SET display_name = username WHERE username = ? AND display_name = '站长'`, [username]);
-  run(`UPDATE users SET email = ? WHERE username = ? AND email = 'webmaster@ogoj.local'`, [
+  await run(`UPDATE users SET display_name = username WHERE username = ? AND display_name = '站长'`, [username]);
+  await run(`UPDATE users SET email = ? WHERE username = ? AND email = 'webmaster@ogoj.local'`, [
     `${username}@ogoj.local`,
     username,
   ]);
-  run(`UPDATE audit_logs SET actor_name = ? WHERE actor_name = '站长'`, [username]);
+  await run(`UPDATE audit_logs SET actor_name = ? WHERE actor_name = '站长'`, [username]);
   // Older seeds described these accounts by their staff role in the bio, which
   // already told every visitor who the administrators were.
-  run(`UPDATE users SET bio = ? WHERE username = ? AND bio = 'OGOJ 系统管理员。'`, [
+  await run(`UPDATE users SET bio = ? WHERE username = ? AND bio = 'OGOJ 系统管理员。'`, [
     '欢迎来到 OGOJ，祝你刷题愉快。',
     username,
   ]);
-  run(`UPDATE users SET bio = ? WHERE username = 'admin' AND bio = '题目管理员。'`, ['喜欢出题与维护题库。']);
+  await run(`UPDATE users SET bio = ? WHERE username = 'admin' AND bio = '题目管理员。'`, ['喜欢出题与维护题库。']);
 }
 
 const TAGS: { name: string; color: string; category: string }[] = [
@@ -241,10 +241,10 @@ int main(int argc, char** argv) {
   },
 ];
 
-function insertSettingsDefaults(): void {
+async function insertSettingsDefaults(): Promise<void> {
   // settings are read with defaults; this only records the current values so
   // the control panel shows something on a fresh install.
-  run(`INSERT INTO settings (key, value) SELECT 'site_name', 'OGOJ'
+  await run(`INSERT INTO settings (key, value) SELECT 'site_name', 'OGOJ'
        WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'site_name')`);
 }
 
@@ -267,15 +267,15 @@ async function seedUsers(): Promise<Record<string, number>> {
 
   const ids: Record<string, number> = {};
   for (const user of users) {
-    const existing = get<{ id: number }>('SELECT id FROM users WHERE username = ?', [user.username]);
+    const existing = await get<{ id: number }>('SELECT id FROM users WHERE username = ?', [user.username]);
     if (existing) {
       ids[user.username] = existing.id;
       if (user.role === 'superadmin') {
-        run('UPDATE users SET role = ?, password_hash = ? WHERE id = ?', ['superadmin', hash, existing.id]);
+        await run('UPDATE users SET role = ?, password_hash = ? WHERE id = ?', ['superadmin', hash, existing.id]);
       }
       continue;
     }
-    const info = run(
+    const info = await run(
       `INSERT INTO users (username, email, password_hash, role, display_name, bio, school, points)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [user.username, user.email, hash, user.role, user.username, user.bio, user.school, 0],
@@ -286,10 +286,10 @@ async function seedUsers(): Promise<Record<string, number>> {
 }
 
 /** 难度等级为空时写入内置的六级默认值 */
-function seedDifficulties(): void {
-  if (get('SELECT id FROM difficulties LIMIT 1')) return;
+async function seedDifficulties(): Promise<void> {
+  if (await get('SELECT id FROM difficulties LIMIT 1')) return;
   for (const item of DEFAULT_DIFFICULTIES) {
-    run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
+    await run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
       item.level,
       item.name,
       item.color,
@@ -299,15 +299,15 @@ function seedDifficulties(): void {
   invalidateDifficulties();
 }
 
-function seedTags(): Map<string, number> {
+async function seedTags(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   for (const tag of TAGS) {
-    const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [tag.name]);
+    const existing = await get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [tag.name]);
     if (existing) {
       map.set(tag.name, existing.id);
       continue;
     }
-    const info = run('INSERT INTO tags (name, color, category) VALUES (?, ?, ?)', [
+    const info = await run('INSERT INTO tags (name, color, category) VALUES (?, ?, ?)', [
       tag.name,
       tag.color,
       tag.category,
@@ -317,15 +317,15 @@ function seedTags(): Map<string, number> {
   return map;
 }
 
-function seedProblems(authorId: number, tagIds: Map<string, number>): number[] {
+async function seedProblems(authorId: number, tagIds: Map<string, number>): Promise<number[]> {
   const created: number[] = [];
   for (const problem of PROBLEMS) {
-    const existing = get<{ id: number }>('SELECT id FROM problems WHERE pid = ?', [problem.pid]);
+    const existing = await get<{ id: number }>('SELECT id FROM problems WHERE pid = ?', [problem.pid]);
     if (existing) {
       created.push(existing.id);
       continue;
     }
-    const info = run(
+    const info = await run(
       `INSERT INTO problems
         (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
          provider, time_limit, memory_limit, judge_mode, spj_language, spj_code, subtasks, samples,
@@ -356,11 +356,11 @@ function seedProblems(authorId: number, tagIds: Map<string, number>): number[] {
     created.push(problemId);
     for (const name of problem.tags) {
       const tagId = tagIds.get(name);
-      if (tagId) run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, tagId]);
+      if (tagId) await run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, tagId]);
     }
-    problem.testcases.forEach((testcase, index) => {
+    for (const [index, testcase] of problem.testcases.entries()) {
       const saved = saveTestcase(problemId, index + 1, testcase.input, testcase.output);
-      run(
+      await run(
         `INSERT INTO testcases (problem_id, idx, subtask_id, score, input_file, output_file, is_sample)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -373,15 +373,15 @@ function seedProblems(authorId: number, tagIds: Map<string, number>): number[] {
           index < problem.samples.length ? 1 : 0,
         ],
       );
-    });
+    }
     // mark solved counts realistically (nobody has submitted yet)
-    run('UPDATE problems SET submit_count = 0, accepted_count = 0 WHERE id = ?', [problemId]);
+    await run('UPDATE problems SET submit_count = 0, accepted_count = 0 WHERE id = ?', [problemId]);
   }
 
   return created;
 }
 
-function seedContests(ownerId: number, problemIds: number[]): void {
+async function seedContests(ownerId: number, problemIds: number[]): Promise<void> {
   const now = Date.now();
   const fmt = (ms: number) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
   const contests = [
@@ -406,24 +406,24 @@ function seedContests(ownerId: number, problemIds: number[]): void {
     },
   ];
   for (const contest of contests) {
-    if (get('SELECT id FROM contests WHERE title = ?', [contest.title])) continue;
-    const info = run(
+    if (await get('SELECT id FROM contests WHERE title = ?', [contest.title])) continue;
+    const info = await run(
       `INSERT INTO contests (title, subtitle, description, rules, start_time, end_time, freeze_minutes,
          is_public, need_register, show_rank, rated, origin, owner_id, author_id, review_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 1, 'official', ?, ?, 'approved')`,
       [contest.title, contest.subtitle, contest.description, contest.rules, contest.start, contest.end, 0, ownerId, ownerId],
     );
     const contestId = Number(info.lastInsertRowid);
-    contest.problems.forEach((problemId, index) => {
-      run(
+    for (const [index, problemId] of contest.problems.entries()) {
+      await run(
         `INSERT INTO contest_problems (contest_id, problem_id, order_no, label, score) VALUES (?, ?, ?, ?, 100)`,
         [contestId, problemId, index + 1, String.fromCharCode(65 + index)],
       );
-    });
+    }
   }
 }
 
-function seedCommunity(userIds: Record<string, number>, problemIds: number[]): void {
+async function seedCommunity(userIds: Record<string, number>, problemIds: number[]): Promise<void> {
   const boards = [
     { slug: 'general', name: '综合讨论', description: '随便聊聊' },
     { slug: 'algorithm', name: '算法讨论', description: '算法与数据结构' },
@@ -432,15 +432,15 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
     { slug: 'announce', name: '站务公告', description: '站点相关公告' },
   ];
   for (const board of boards) {
-    if (get('SELECT id FROM discussion_boards WHERE slug = ?', [board.slug])) continue;
-    run('INSERT INTO discussion_boards (slug, name, description) VALUES (?, ?, ?)', [
+    if (await get('SELECT id FROM discussion_boards WHERE slug = ?', [board.slug])) continue;
+    await run('INSERT INTO discussion_boards (slug, name, description) VALUES (?, ?, ?)', [
       board.slug,
       board.name,
       board.description,
     ]);
   }
-  const general = get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', ['general']);
-  const help = get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', ['help']);
+  const general = await get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', ['general']);
+  const help = await get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', ['help']);
 
   const posts = [
     {
@@ -466,23 +466,23 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
     },
   ];
   for (const post of posts) {
-    if (get('SELECT id FROM discussions WHERE title = ?', [post.title])) continue;
-    const info = run(
+    if (await get('SELECT id FROM discussions WHERE title = ?', [post.title])) continue;
+    const info = await run(
       `INSERT INTO discussions (board_id, title, content, author_id, reply_count, last_reply_at, last_reply_user_id)
        VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
       [post.boardId, post.title, post.content, post.authorId, post.replies.length, post.authorId],
     );
     const discussionId = Number(info.lastInsertRowid);
-    post.replies.forEach((reply, index) => {
-      run(
+    for (const [index, reply] of post.replies.entries()) {
+      await run(
         `INSERT INTO discussion_replies (discussion_id, author_id, content, floor) VALUES (?, ?, ?, ?)`,
         [discussionId, reply.author, reply.content, index + 1],
       );
-    });
+    }
   }
 
-  if (!get('SELECT id FROM articles LIMIT 1')) {
-    run(
+  if (!await get('SELECT id FROM articles LIMIT 1')) {
+    await run(
       `INSERT INTO articles (title, summary, content, category, author_id, is_public)
        VALUES (?, ?, ?, ?, ?, 1)`,
       [
@@ -495,25 +495,25 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
     );
   }
 
-  if (!get('SELECT id FROM lists LIMIT 1')) {
-    const info = run(
+  if (!await get('SELECT id FROM lists LIMIT 1')) {
+    const info = await run(
       `INSERT INTO lists (title, description, type, difficulty, author_id, is_public)
        VALUES (?, ?, 'official', 2, ?, 1)`,
       ['OGOJ 新手题单', '从 A+B 到图论，循序渐进地掌握基础算法。', userIds.root],
     );
     const listId = Number(info.lastInsertRowid);
-    problemIds.slice(0, 4).forEach((problemId, index) => {
-      run('INSERT INTO list_problems (list_id, problem_id, order_no, note) VALUES (?, ?, ?, ?)', [
+    for (const [index, problemId] of problemIds.slice(0, 4).entries()) {
+      await run('INSERT INTO list_problems (list_id, problem_id, order_no, note) VALUES (?, ?, ?, ?)', [
         listId,
         problemId,
         index + 1,
         '',
       ]);
-    });
+    }
   }
 
-  if (!get('SELECT id FROM teams LIMIT 1')) {
-    const info = run(
+  if (!await get('SELECT id FROM teams LIMIT 1')) {
+    const info = await run(
       `INSERT INTO teams (name, slug, description, owner_id, member_count) VALUES (?, ?, ?, ?, 3)`,
       ['OGOJ 官方团队', 'ogoj-official', 'OGOJ 官方团队，负责题库与比赛的组织。', userIds.root],
     );
@@ -523,9 +523,9 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
       [userIds.admin, 'admin'],
       [userIds.alice, 'member'],
     ] as [number, string][]) {
-      run('INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [teamId, userId, role]);
+      await run('INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)', [teamId, userId, role]);
     }
-    run('INSERT INTO team_announcements (team_id, author_id, title, content) VALUES (?, ?, ?, ?)', [
+    await run('INSERT INTO team_announcements (team_id, author_id, title, content) VALUES (?, ?, ?, ?)', [
       teamId,
       userIds.root,
       '团队成立',
@@ -534,8 +534,8 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
   }
 
   // 三种公开程度各准备一支示例团队，方便在团队页面直接看到不同徽章
-  if (!get('SELECT id FROM teams WHERE slug = ?', ['night-sail'])) {
-    const info = run(
+  if (!await get('SELECT id FROM teams WHERE slug = ?', ['night-sail'])) {
+    const info = await run(
       `INSERT INTO teams (name, slug, description, category, join_policy, is_public, member_count, owner_id)
        VALUES (?, ?, ?, ?, ?, 1, 1, ?)`,
       [
@@ -548,8 +548,8 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
       ],
     );
     const teamId = Number(info.lastInsertRowid);
-    run(`INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'owner')`, [teamId, userIds.carol!]);
-    run('INSERT INTO team_announcements (team_id, author_id, title, content) VALUES (?, ?, ?, ?)', [
+    await run(`INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'owner')`, [teamId, userIds.carol!]);
+    await run('INSERT INTO team_announcements (team_id, author_id, title, content) VALUES (?, ?, ?, ?)', [
       teamId,
       userIds.carol!,
       '社团成立',
@@ -558,7 +558,7 @@ function seedCommunity(userIds: Record<string, number>, problemIds: number[]): v
   }
 }
 
-function seedShop(): void {
+async function seedShop(): Promise<void> {
   const items = [
     {
       slug: 'create-contest',
@@ -600,8 +600,8 @@ function seedShop(): void {
     },
   ];
   for (const item of items) {
-    if (get('SELECT id FROM shop_items WHERE slug = ?', [item.slug])) continue;
-    run(
+    if (await get('SELECT id FROM shop_items WHERE slug = ?', [item.slug])) continue;
+    await run(
       `INSERT INTO shop_items (name, slug, description, icon, price, kind, stock, max_per_user, is_active, sort, payload)
        VALUES (?, ?, ?, ?, ?, ?, -1, 0, 1, ?, ?)`,
       [
@@ -618,8 +618,8 @@ function seedShop(): void {
   }
 }
 
-function seedHomepage(ownerId: number): void {
-  if (!count('SELECT COUNT(*) AS c FROM carousel')) {
+async function seedHomepage(ownerId: number): Promise<void> {
+  if (!await count('SELECT COUNT(*) AS c FROM carousel')) {
     const banners = [
       {
         title: 'OGOJ · Oganesson Online Judge',
@@ -641,7 +641,7 @@ function seedHomepage(ownerId: number): void {
       },
     ];
     for (const banner of banners) {
-      run('INSERT INTO carousel (title, subtitle, image, link, sort, is_active) VALUES (?, ?, ?, ?, ?, 1)', [
+      await run('INSERT INTO carousel (title, subtitle, image, link, sort, is_active) VALUES (?, ?, ?, ?, ?, 1)', [
         banner.title,
         banner.subtitle,
         '',
@@ -650,8 +650,8 @@ function seedHomepage(ownerId: number): void {
       ]);
     }
   }
-  if (!count('SELECT COUNT(*) AS c FROM announcements')) {
-    run(
+  if (!await count('SELECT COUNT(*) AS c FROM announcements')) {
+    await run(
       `INSERT INTO announcements (title, content, type, is_pinned, is_public, author_id) VALUES (?, ?, 'important', 1, 1, ?)`,
       [
         'OGOJ 正式上线，欢迎使用！',
@@ -659,7 +659,7 @@ function seedHomepage(ownerId: number): void {
         ownerId,
       ],
     );
-    run(
+    await run(
       `INSERT INTO announcements (title, content, type, is_pinned, is_public, author_id) VALUES (?, ?, 'update', 0, 1, ?)`,
       [
         '积分商店上线：做完题目即可兑换比赛与出题资格',
@@ -670,8 +670,8 @@ function seedHomepage(ownerId: number): void {
   }
 }
 
-function seedSubmissions(userIds: Record<string, number>, problemIds: number[]): void {
-  if (count('SELECT COUNT(*) AS c FROM submissions')) return;
+async function seedSubmissions(userIds: Record<string, number>, problemIds: number[]): Promise<void> {
+  if (await count('SELECT COUNT(*) AS c FROM submissions')) return;
   const code =
     '#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    long long a, b;\n    if (cin >> a >> b) cout << a + b << "\\n";\n    return 0;\n}\n';
   const samples: [string, keyof typeof userIds, string, string, number, number][] = [
@@ -682,7 +682,7 @@ function seedSubmissions(userIds: Record<string, number>, problemIds: number[]):
   for (const [, username, status, source, timeMs, memoryKb] of samples) {
     const userId = userIds[username];
     const problemId = problemIds[0]!;
-    const info = run(
+    const info = await run(
       `INSERT INTO submissions (problem_id, user_id, language, code, code_length, status, score, time_ms,
          memory_kb, judged_at, detail)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), '[]')`,
@@ -699,46 +699,49 @@ function seedSubmissions(userIds: Record<string, number>, problemIds: number[]):
       ],
     );
     const submissionId = Number(info.lastInsertRowid);
-    run('UPDATE problems SET submit_count = submit_count + 1 WHERE id = ?', [problemId]);
-    run(
+    await run('UPDATE problems SET submit_count = submit_count + 1 WHERE id = ?', [problemId]);
+    await run(
       `INSERT INTO user_problem_stats (user_id, problem_id, attempts, accepted, first_ac_at, last_submit_at)
        VALUES (?, ?, 1, ?, ?, datetime('now'))
-       ON CONFLICT(user_id, problem_id) DO UPDATE SET attempts = attempts + 1, accepted = accepted + ?`,
+       ON CONFLICT(user_id, problem_id) DO UPDATE SET
+         attempts = user_problem_stats.attempts + 1,
+         accepted = user_problem_stats.accepted + ?`,
       [userId, problemId, status === 'AC' ? 1 : 0, status === 'AC' ? new Date().toISOString().slice(0, 19) : null, status === 'AC' ? 1 : 0],
     );
     if (status === 'AC') {
-      run('UPDATE problems SET accepted_count = accepted_count + 1 WHERE id = ?', [problemId]);
-      run('UPDATE users SET solved_count = solved_count + 1 WHERE id = ?', [userId]);
-      addPoints(userId, 1, '通过题目 P1001', { refType: 'problem', refId: problemId });
+      await run('UPDATE problems SET accepted_count = accepted_count + 1 WHERE id = ?', [problemId]);
+      await run('UPDATE users SET solved_count = solved_count + 1 WHERE id = ?', [userId]);
+      await addPoints(userId, 1, '通过题目 P1001', { refType: 'problem', refId: problemId });
     }
     void submissionId;
   }
   // give the demo accounts a starting balance so the shop can be explored
   for (const username of ['alice', 'bob', 'carol']) {
-    run('UPDATE users SET points = 120 WHERE id = ? AND points < 20', [userIds[username]!]);
+    await run('UPDATE users SET points = 120 WHERE id = ? AND points < 20', [userIds[username]!]);
   }
-  run('UPDATE users SET points = 0 WHERE username = ?', [config.seed.rootUsername]);
+  await run('UPDATE users SET points = 0 WHERE username = ?', [config.seed.rootUsername]);
 }
 
 export async function seed(options: { silent?: boolean } = {}): Promise<void> {
-  migrate();
-  insertSettingsDefaults();
-  invalidateSettings();
+  await migrate();
+  await insertSettingsDefaults();
+  const { warmSettings } = await import('../settings/index.js');
+  await warmSettings();
   const userIds = await seedUsers();
-  cleanDefaultAdminTraces();
-  const tagIds = seedTags();
-  seedDifficulties();
-  const problemIds = seedProblems(userIds.root!, tagIds);
-  seedContests(userIds.root!, problemIds);
-  seedCommunity(userIds, problemIds);
-  seedShop();
-  seedHomepage(userIds.root!);
-  seedSubmissions(userIds, problemIds);
-  const newBadges = seedAchievements();
+  await cleanDefaultAdminTraces();
+  const tagIds = await seedTags();
+  await seedDifficulties();
+  const problemIds = await seedProblems(userIds.root!, tagIds);
+  await seedContests(userIds.root!, problemIds);
+  await seedCommunity(userIds, problemIds);
+  await seedShop();
+  await seedHomepage(userIds.root!);
+  await seedSubmissions(userIds, problemIds);
+  const newBadges = await seedAchievements();
   // Give the demo accounts the badges they already qualify for.
   for (const userId of Object.values(userIds)) {
     try {
-      evaluateAchievements(userId, { silent: true });
+      await evaluateAchievements(userId, { silent: true });
     } catch {
       /* ignore */
     }
@@ -746,13 +749,13 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
 
   if (!options.silent) {
     const stats = {
-      users: count('SELECT COUNT(*) AS c FROM users'),
-      problems: count('SELECT COUNT(*) AS c FROM problems'),
-      testcases: count('SELECT COUNT(*) AS c FROM testcases'),
-      contests: count('SELECT COUNT(*) AS c FROM contests'),
-      submissions: count('SELECT COUNT(*) AS c FROM submissions'),
-      shopItems: count('SELECT COUNT(*) AS c FROM shop_items'),
-      achievements: count('SELECT COUNT(*) AS c FROM achievements'),
+      users: await count('SELECT COUNT(*) AS c FROM users'),
+      problems: await count('SELECT COUNT(*) AS c FROM problems'),
+      testcases: await count('SELECT COUNT(*) AS c FROM testcases'),
+      contests: await count('SELECT COUNT(*) AS c FROM contests'),
+      submissions: await count('SELECT COUNT(*) AS c FROM submissions'),
+      shopItems: await count('SELECT COUNT(*) AS c FROM shop_items'),
+      achievements: await count('SELECT COUNT(*) AS c FROM achievements'),
     };
     // eslint-disable-next-line no-console
     console.log('OGOJ seed complete:');
@@ -768,19 +771,15 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
 }
 
 /** Remove every row from the database (keeps the schema and test data files). */
-export function wipe(): void {
-  const tables = all<{ name: string }>(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
+export async function wipe(): Promise<void> {
+  const tables = await all<{ name: string }>(
+    `SELECT table_name AS name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
   );
-  tx(() => {
-    db.exec('PRAGMA foreign_keys = OFF');
-    for (const table of tables) {
-      if (table.name === 'settings') continue;
-      run(`DELETE FROM "${table.name}"`);
-    }
-    run(`DELETE FROM sqlite_sequence`);
-    db.exec('PRAGMA foreign_keys = ON');
-  });
+  const names = tables.map((table) => table.name).filter((name) => name !== 'settings');
+  if (names.length) {
+    await run(`TRUNCATE TABLE ${names.map((name) => `"${name}"`).join(', ')} RESTART IDENTITY CASCADE`);
+  }
   for (const dir of [config.paths.testdata]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });

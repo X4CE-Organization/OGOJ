@@ -10,16 +10,16 @@ async function main() {
   const app = await buildApp();
 
   if (config.judge.enabled) {
-    startWorker({ concurrency: num('judge_concurrency', config.judge.concurrency) });
+    await startWorker({ concurrency: num('judge_concurrency', config.judge.concurrency) });
     app.log.warn(`[ogoj] judge worker started (concurrency=${num('judge_concurrency', config.judge.concurrency)})`);
   }
 
   if (bool('auto_backup', true)) {
     const hours = Math.max(1, num('backup_interval_hours', 24));
     setInterval(
-      () => {
+      () => { void (async () => {
         try {
-          const file = backupDatabase('auto');
+          const file = await backupDatabase('auto');
           const keep = Math.max(1, num('backup_keep', 10));
           const backups = listBackups().filter((b) => b.file.includes('-auto-'));
           for (const old of backups.slice(keep)) {
@@ -33,7 +33,7 @@ async function main() {
         } catch (error) {
           app.log.error(`[ogoj] backup failed: ${String(error)}`);
         }
-      },
+      })(); },
       hours * 3600_000,
     ).unref();
   }

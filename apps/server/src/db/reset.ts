@@ -4,7 +4,7 @@ import { invalidateSettings } from '../settings/index.js';
 
 async function main() {
   console.log('Wiping all data...');
-  wipe();
+  await wipe();
   invalidateSettings();
   await seed();
   console.log('Database reset complete.');

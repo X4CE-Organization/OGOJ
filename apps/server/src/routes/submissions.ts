@@ -10,10 +10,10 @@ import { judgeStats, rejudge } from '../judge/index.js';
 import { languageAvailable } from '../judge/languages.js';
 import { contestStatus } from './public.js';
 
-function findSubmission(idOrId: string): any {
+async function findSubmission(idOrId: string): Promise<any> {
   const id = Number(idOrId);
   if (!Number.isInteger(id)) throw badRequest('无效的提交编号');
-  const row = get<any>(
+  const row = await get<any>(
     `SELECT s.*, p.pid, p.title AS problem_title, p.is_public AS problem_public,
             u.username, u.display_name, u.avatar
        FROM submissions s JOIN problems p ON p.id = s.problem_id JOIN users u ON u.id = s.user_id
@@ -24,9 +24,9 @@ function findSubmission(idOrId: string): any {
   return row;
 }
 
-function contestOf(contestId: number | null): any {
+async function contestOf(contestId: number | null): Promise<any> {
   if (!contestId) return null;
-  return get<any>('SELECT * FROM contests WHERE id = ?', [contestId]);
+  return await get<any>('SELECT * FROM contests WHERE id = ?', [contestId]);
 }
 
 export async function registerSubmissionRoutes(app: FastifyInstance): Promise<void> {
@@ -34,7 +34,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
   app.post('/api/submissions', {
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     handler: async (request) => {
-      const user = requireUser(request);
+      const user = await requireUser(request);
       if (!bool('allow_submit', true)) throw forbidden('本站暂时关闭了提交');
       const body = (request.body ?? {}) as any;
       const language = String(body.language ?? '').trim();
@@ -53,8 +53,8 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
 
       const problemRef = body.problemId ?? body.pid;
       const problem = Number.isInteger(Number(problemRef))
-        ? get<any>('SELECT * FROM problems WHERE id = ?', [Number(problemRef)])
-        : get<any>('SELECT * FROM problems WHERE pid = ?', [String(problemRef ?? '')]);
+        ? await get<any>('SELECT * FROM problems WHERE id = ?', [Number(problemRef)])
+        : await get<any>('SELECT * FROM problems WHERE pid = ?', [String(problemRef ?? '')]);
       if (!problem || problem.deleted_at) throw notFound('题目不存在');
 
       const allowedLanguages = JSON.parse(problem.allow_languages || '[]') as string[];
@@ -68,7 +68,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
       }
       const dailyLimit = num('max_submissions_per_day', 0);
       if (dailyLimit > 0) {
-        const todayCount = count(
+        const todayCount = await count(
           `SELECT COUNT(*) AS c FROM submissions WHERE user_id = ? AND created_at >= date('now')`,
           [user.id],
         );
@@ -77,17 +77,17 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
 
       let contestId: number | null = null;
       if (body.contestId) {
-        const contest = get<any>('SELECT * FROM contests WHERE id = ?', [Number(body.contestId)]);
+        const contest = await get<any>('SELECT * FROM contests WHERE id = ?', [Number(body.contestId)]);
         if (!contest) throw notFound('比赛不存在');
         const status = contestStatus(contest.start_time, contest.end_time);
         if (status === 'upcoming') throw forbidden('比赛尚未开始');
         if (status === 'ended') throw forbidden('比赛已经结束');
-        const linked = get('SELECT 1 AS x FROM contest_problems WHERE contest_id = ? AND problem_id = ?', [
+        const linked = await get('SELECT 1 AS x FROM contest_problems WHERE contest_id = ? AND problem_id = ?', [
           contest.id,
           problem.id,
         ]);
         if (!linked) throw badRequest('该题目不在本场比赛中');
-        const registered = get('SELECT 1 AS x FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
+        const registered = await get('SELECT 1 AS x FROM contest_registrations WHERE contest_id = ? AND user_id = ?', [
           contest.id,
           user.id,
         ]);
@@ -109,7 +109,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
         if (!isOwner) throw forbidden('该题目仅在比赛中开放');
       }
 
-      const info = run(
+      const info = await run(
         `INSERT INTO submissions (problem_id, user_id, contest_id, language, code, code_length, priority)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -123,15 +123,15 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
         ],
       );
       const submissionId = Number(info.lastInsertRowid);
-      run('UPDATE problems SET submit_count = submit_count + 1 WHERE id = ?', [problem.id]);
-      run(
+      await run('UPDATE problems SET submit_count = submit_count + 1 WHERE id = ?', [problem.id]);
+      await run(
         `INSERT INTO user_problem_stats (user_id, problem_id, attempts, accepted, last_submit_at)
          VALUES (?, ?, 1, 0, datetime('now'))
-         ON CONFLICT(user_id, problem_id) DO UPDATE SET attempts = attempts + 1,
+         ON CONFLICT(user_id, problem_id) DO UPDATE SET attempts = user_problem_stats.attempts + 1,
            last_submit_at = datetime('now')`,
         [user.id, problem.id],
       );
-      audit(request, 'submission.create', {
+      await audit(request, 'submission.create', {
         targetType: 'submission',
         targetId: submissionId,
         detail: { problemId: problem.id, language },
@@ -148,7 +148,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
     const params: unknown[] = [];
 
     if (query.problem) {
-      const problem = get<{ id: number }>(
+      const problem = await get<{ id: number }>(
         Number.isInteger(Number(query.problem))
           ? 'SELECT id FROM problems WHERE id = ?'
           : 'SELECT id FROM problems WHERE pid = ?',
@@ -162,7 +162,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
       params.push(String(query.user));
     }
     if (query.mine === 'true') {
-      const user = requireUser(request);
+      const user = await requireUser(request);
       conditions.push('s.user_id = ?');
       params.push(user.id);
     }
@@ -195,7 +195,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
       params.push(viewer?.id ?? -1);
     }
 
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.id, s.problem_id, s.user_id, s.language, s.status, s.score, s.time_ms, s.memory_kb,
               s.code_length, s.contest_id, s.created_at, p.pid, p.title AS problem_title,
               u.username, u.display_name, u.avatar
@@ -204,7 +204,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
         ORDER BY s.id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM submissions s JOIN problems p ON p.id = s.problem_id JOIN users u ON u.id = s.user_id
         WHERE ${conditions.join(' AND ')}`,
       params,
@@ -214,9 +214,9 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
 
   /* ----------------------------------------------------------------- detail */
   app.get('/api/submissions/:id', async (request) => {
-    const row = findSubmission(String((request.params as any).id));
+    const row = await findSubmission(String((request.params as any).id));
     const viewer = request.user;
-    const contest = contestOf(row.contest_id);
+    const contest = await contestOf(row.contest_id);
     const isOwner = viewer?.id === row.user_id;
     const isAdmin = hasRole(viewer, 'admin');
     if (!row.is_public && !isOwner && !isAdmin) throw notFound('提交记录不存在');
@@ -226,7 +226,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
       if (!bool('show_others_code', true)) codeHidden = true;
       if (contest && contestStatus(contest.start_time, contest.end_time) === 'running') codeHidden = true;
       if (bool('show_others_code_need_ac', false)) {
-        const solved = get(
+        const solved = await get(
           'SELECT 1 AS x FROM user_problem_stats WHERE user_id = ? AND problem_id = ? AND accepted > 0',
           [viewer?.id ?? -1, row.problem_id],
         );
@@ -271,52 +271,52 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
   });
 
   app.put('/api/submissions/:id/public', async (request) => {
-    const user = requireUser(request);
-    const row = findSubmission(String((request.params as any).id));
+    const user = await requireUser(request);
+    const row = await findSubmission(String((request.params as any).id));
     if (row.user_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const isPublic = (request.body as any)?.isPublic !== false;
-    run('UPDATE submissions SET is_public = ? WHERE id = ?', [isPublic ? 1 : 0, row.id]);
+    await run('UPDATE submissions SET is_public = ? WHERE id = ?', [isPublic ? 1 : 0, row.id]);
     return { ok: true, isPublic };
   });
 
   app.delete('/api/submissions/:id', async (request) => {
-    const user = requireAdmin(request);
-    const row = findSubmission(String((request.params as any).id));
-    run('DELETE FROM submissions WHERE id = ?', [row.id]);
-    audit(request, 'submission.delete', { targetType: 'submission', targetId: row.id });
+    const user = await requireAdmin(request);
+    const row = await findSubmission(String((request.params as any).id));
+    await run('DELETE FROM submissions WHERE id = ?', [row.id]);
+    await audit(request, 'submission.delete', { targetType: 'submission', targetId: row.id });
     void user;
     return { ok: true };
   });
 
   /* ---------------------------------------------------------------- rejudge */
   app.post('/api/submissions/:id/rejudge', async (request) => {
-    requireAdmin(request);
-    const row = findSubmission(String((request.params as any).id));
-    rejudge({ submissionIds: [row.id] });
-    audit(request, 'submission.rejudge', { targetType: 'submission', targetId: row.id });
+    await requireAdmin(request);
+    const row = await findSubmission(String((request.params as any).id));
+    await rejudge({ submissionIds: [row.id] });
+    await audit(request, 'submission.rejudge', { targetType: 'submission', targetId: row.id });
     return { ok: true };
   });
 
   app.post('/api/submissions/rejudge', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const body = (request.body ?? {}) as any;
-    const affected = rejudge({
+    const affected = await rejudge({
       problemId: body.problemId ? Number(body.problemId) : undefined,
       contestId: body.contestId ? Number(body.contestId) : undefined,
       submissionIds: Array.isArray(body.submissionIds) ? body.submissionIds.map(Number) : undefined,
     });
     if (!affected) throw badRequest('请指定要重测的范围');
-    audit(request, 'submission.rejudge_batch', { detail: { ...body, affected } });
+    await audit(request, 'submission.rejudge_batch', { detail: { ...body, affected } });
     return { ok: true, affected };
   });
 
   app.get('/api/judge/status', async (request) => {
     const user = request.user;
-    const stats = judgeStats();
+    const stats = await judgeStats();
     if (!hasRole(user, 'admin')) {
       return { waiting: stats.waiting, judging: stats.judging };
     }
-    const recent = all<any>(
+    const recent = await all<any>(
       `SELECT s.id, s.status, s.time_ms, s.memory_kb, s.created_at, p.pid, u.username
          FROM submissions s JOIN problems p ON p.id = s.problem_id JOIN users u ON u.id = s.user_id
         WHERE s.status IN ('Waiting', 'Judging') ORDER BY s.priority DESC, s.id ASC LIMIT 20`,

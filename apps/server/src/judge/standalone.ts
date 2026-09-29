@@ -12,7 +12,7 @@ import { startWorker, workerState } from './worker.js';
 async function main() {
   migrate();
   console.log(`[ogoj-judge] starting worker (concurrency=${config.judge.concurrency})`);
-  startWorker();
+  await startWorker();
   setInterval(() => {
     const state = workerState();
     console.log(`[ogoj-judge] running=${state.running} active=${state.active}`);

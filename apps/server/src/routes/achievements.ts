@@ -27,19 +27,19 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
   /* ------------------------------------------------- 全部成就 + 我的进度 */
   app.get('/api/achievements', async (request) => {
     const user = request.user;
-    const definitions = all<any>(
+    const definitions = await all<any>(
       `SELECT a.*, (SELECT COUNT(*) FROM user_achievements ua WHERE ua.achievement_id = a.id) AS holder_count
          FROM achievements a WHERE a.is_active = 1 ORDER BY a.sort ASC, a.id ASC`,
     );
     const unlocked = user
       ? new Map(
-          all<{ achievement_id: number; unlocked_at: string }>(
+          (await all<{ achievement_id: number; unlocked_at: string }>(
             'SELECT achievement_id, unlocked_at FROM user_achievements WHERE user_id = ?',
             [user.id],
-          ).map((row) => [row.achievement_id, row.unlocked_at]),
+          )).map((row) => [row.achievement_id, row.unlocked_at]),
         )
       : new Map<number, string>();
-    const stats = user ? collectStats(user.id) : null;
+    const stats = user ? await collectStats(user.id) : null;
     const items = definitions.map((definition) => {
       const condition = parseCondition(definition.condition);
       return {
@@ -72,9 +72,9 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
 
   app.get('/api/users/:username/achievements', async (request) => {
     const username = String((request.params as any).username);
-    const user = get<any>('SELECT id, username FROM users WHERE username = ?', [username]);
+    const user = await get<any>('SELECT id, username FROM users WHERE username = ?', [username]);
     if (!user) throw notFound('用户不存在');
-    const items = achievementsForUser(user.id);
+    const items = await achievementsForUser(user.id);
     const unlocked = items.filter((item) => item.unlocked);
     return {
       items: bool('achievement_show_locked', true)
@@ -97,14 +97,14 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
 
   /** Used by the "评估我的成就" button and after important events. */
   app.post('/api/achievements/check', async (request) => {
-    const user = requireUser(request);
-    const unlocked = evaluateAchievements(user.id);
+    const user = await requireUser(request);
+    const unlocked = await evaluateAchievements(user.id);
     return { ok: true, unlocked };
   });
 
   /* ------------------------------------------------------------ 排行榜 */
   app.get('/api/achievements/rank', async () => {
-    const items = all<any>(
+    const items = await all<any>(
       `SELECT u.id, u.username, u.display_name, u.avatar, COUNT(ua.achievement_id) AS achievement_count,
               (SELECT COALESCE(SUM(a2.points), 0) FROM user_achievements ua2
                  JOIN achievements a2 ON a2.id = ua2.achievement_id
@@ -117,8 +117,8 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
 
   /* ------------------------------------------------------- 管理员：增删改 */
   app.get('/api/admin/achievements', async (request) => {
-    requireAdmin(request);
-    const items = all<any>(
+    await requireAdmin(request);
+    const items = await all<any>(
       `SELECT a.*, (SELECT COUNT(*) FROM user_achievements ua WHERE ua.achievement_id = a.id) AS holder_count
          FROM achievements a ORDER BY a.sort ASC, a.id ASC`,
     );
@@ -127,16 +127,16 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
       stats: {
         total: items.length,
         active: items.filter((item) => item.is_active).length,
-        unlocked: count('SELECT COUNT(*) AS c FROM user_achievements'),
+        unlocked: await count('SELECT COUNT(*) AS c FROM user_achievements'),
       },
     };
   });
 
   app.post('/api/admin/achievements', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const code = String(body.code ?? '').trim() || `custom_${Date.now().toString(36)}`;
-    if (get('SELECT id FROM achievements WHERE code = ?', [code])) throw conflict('成就代码已存在');
+    if (await get('SELECT id FROM achievements WHERE code = ?', [code])) throw conflict('成就代码已存在');
     const name = String(body.name ?? '').trim();
     if (!name) throw badRequest('请填写成就名称');
     const condition = typeof body.condition === 'string' ? body.condition : JSON.stringify(body.condition ?? {});
@@ -145,7 +145,7 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
     } catch {
       throw badRequest('成就条件必须是合法的 JSON');
     }
-    const info = run(
+    const info = await run(
       `INSERT INTO achievements (code, name, description, icon, category, rarity, condition, points, is_active, is_builtin, sort)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
       [
@@ -161,15 +161,15 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
         Number(body.sort ?? 100) || 100,
       ],
     );
-    audit(request, 'achievement.create', { targetType: 'achievement', targetId: Number(info.lastInsertRowid) });
+    await audit(request, 'achievement.create', { targetType: 'achievement', targetId: Number(info.lastInsertRowid) });
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 
   app.put('/api/admin/achievements/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
     const body = (request.body ?? {}) as any;
-    const row = get<any>('SELECT * FROM achievements WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM achievements WHERE id = ?', [id]);
     if (!row) throw notFound('成就不存在');
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -201,36 +201,36 @@ export async function registerAchievementRoutes(app: FastifyInstance): Promise<v
       fields.push('is_active = ?');
       values.push(body.isActive ? 1 : 0);
     }
-    if (fields.length) run(`UPDATE achievements SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
-    audit(request, 'achievement.update', { targetType: 'achievement', targetId: id });
+    if (fields.length) await run(`UPDATE achievements SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    await audit(request, 'achievement.update', { targetType: 'achievement', targetId: id });
     return { ok: true };
   });
 
   app.delete('/api/admin/achievements/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    run('DELETE FROM achievements WHERE id = ?', [id]);
-    audit(request, 'achievement.delete', { targetType: 'achievement', targetId: id });
+    await run('DELETE FROM achievements WHERE id = ?', [id]);
+    await audit(request, 'achievement.delete', { targetType: 'achievement', targetId: id });
     return { ok: true };
   });
 
   /** Manually grant an achievement to a user. */
   app.post('/api/admin/achievements/:id/grant', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
     const body = (request.body ?? {}) as any;
-    const achievement = get<any>('SELECT * FROM achievements WHERE id = ?', [id]);
+    const achievement = await get<any>('SELECT * FROM achievements WHERE id = ?', [id]);
     if (!achievement) throw notFound('成就不存在');
     const target = body.userId
-      ? get<any>('SELECT id, username FROM users WHERE id = ?', [Number(body.userId)])
-      : get<any>('SELECT id, username FROM users WHERE username = ?', [String(body.username ?? '')]);
+      ? await get<any>('SELECT id, username FROM users WHERE id = ?', [Number(body.userId)])
+      : await get<any>('SELECT id, username FROM users WHERE username = ?', [String(body.username ?? '')]);
     if (!target) throw notFound('用户不存在');
-    run('INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, context) VALUES (?, ?, ?)', [
+    await run('INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, context) VALUES (?, ?, ?)', [
       target.id,
       id,
       'manual',
     ]);
-    audit(request, 'achievement.grant', {
+    await audit(request, 'achievement.grant', {
       targetType: 'achievement',
       targetId: id,
       detail: { username: target.username },

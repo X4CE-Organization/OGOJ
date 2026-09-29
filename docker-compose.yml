@@ -1,9 +1,29 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: ogoj-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ogoj
+      POSTGRES_USER: ogoj
+      # 生产环境务必在 .env 里改掉
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ogoj-change-me}
+    volumes:
+      - ogoj-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ogoj -d ogoj']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   ogoj:
     build: .
     image: ogoj:latest
     container_name: ogoj
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - '8080:8080'
     environment:
@@ -11,6 +31,7 @@ services:
       PORT: 8080
       HOST: 0.0.0.0
       SITE_URL: http://localhost:8080
+      DATABASE_URL: postgres://ogoj:${POSTGRES_PASSWORD:-ogoj-change-me}@db:5432/ogoj
       # CHANGE THIS to a long random string: openssl rand -hex 48
       JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-string}
       JUDGE_CONCURRENCY: '2'
@@ -24,3 +45,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+
+volumes:
+  ogoj-db:

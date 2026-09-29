@@ -152,7 +152,7 @@ export async function fetchProfile(
 }
 
 /** Turn a third-party nickname into a valid, unused local username. */
-export function safeUsername(raw: string, exists: (name: string) => boolean): string {
+export async function safeUsername(raw: string, exists: (name: string) => Promise<boolean> | boolean): Promise<string> {
   const base =
     raw
       .replace(/[^A-Za-z0-9_\u4e00-\u9fa5-]/g, '')
@@ -161,7 +161,7 @@ export function safeUsername(raw: string, exists: (name: string) => boolean): st
   let candidate = base;
   if (candidate.length < 3) candidate = `${candidate}${Math.floor(Math.random() * 900 + 100)}`;
   let index = 1;
-  while (exists(candidate)) {
+  while (await exists(candidate)) {
     candidate = `${base}${index}`;
     index += 1;
   }

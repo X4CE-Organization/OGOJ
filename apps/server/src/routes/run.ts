@@ -18,7 +18,7 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
     '/api/run',
     { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request) => {
-      requireUser(request);
+      await requireUser(request);
       if (!bool('enable_custom_test', true)) throw forbidden('本站已关闭自测功能');
       if (customRunBusy()) throw tooMany('自测任务有点多，请稍后再试');
 
@@ -47,8 +47,8 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
       let memoryLimitMb: number | undefined;
       if (problemRef !== undefined && problemRef !== null && String(problemRef) !== '') {
         const problem = Number.isInteger(Number(problemRef))
-          ? get<any>('SELECT * FROM problems WHERE id = ?', [Number(problemRef)])
-          : get<any>('SELECT * FROM problems WHERE pid = ?', [String(problemRef)]);
+          ? await get<any>('SELECT * FROM problems WHERE id = ?', [Number(problemRef)])
+          : await get<any>('SELECT * FROM problems WHERE pid = ?', [String(problemRef)]);
         if (!problem || problem.deleted_at) throw notFound('题目不存在');
         const allowed = JSON.parse(problem.allow_languages || '[]') as string[];
         if (allowed.length && !allowed.includes(language)) throw badRequest('该题目不允许使用此语言');
@@ -57,7 +57,7 @@ export async function registerRunRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const result = await runCustomTest({ language, code, input, timeLimitMs, memoryLimitMb });
-      if (result.status === 'SE') audit(request, 'code.self_test_error', { detail: { language } });
+      if (result.status === 'SE') await audit(request, 'code.self_test_error', { detail: { language } });
       return { ok: true, result };
     },
   );

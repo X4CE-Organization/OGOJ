@@ -6,7 +6,7 @@
 
 题目 · 评测 · 比赛 · 成就徽章 · 工单 · 第三方登录 · 讨论 · 题解 · 文章广场 · 题单 · 团队 · 积分商店 · 系统设置
 
-**当前版本：2.1.0**
+**当前版本：3.0.0**
 
 </div>
 
@@ -257,7 +257,7 @@
 | --- | --- |
 | 前端 | React 18 + TypeScript + Vite + Tailwind CSS + React Router + CodeMirror 6 + KaTeX + Recharts |
 | 后端 | Node.js 22 + Fastify 5 + TypeScript（原生 ESM） |
-| 数据库 | SQLite（better-sqlite3，WAL 模式，零外部依赖） |
+| 数据库 | PostgreSQL 14+（node-postgres 连接池，事务 + 连接复用；旧版 SQLite 数据可一键导入） |
 | 评测机 | 自研沙箱（rlimit + 墙钟看门狗 + RSS 采样 + `/usr/bin/time` 精确峰值内存），支持多语言、SPJ、交互题、子任务 |
 | 鉴权 | JWT（HS256，无第三方依赖）+ bcrypt 密码哈希 |
 | 部署 | 单进程（API + 内置评测 worker），也可用 Docker 一键部署 |
@@ -297,6 +297,19 @@ npm install
 cp .env.example .env
 ```
 
+同时准备一个 PostgreSQL 数据库（3.0 起数据库改用 PostgreSQL）：
+
+```bash
+# 本地安装（Debian / Ubuntu）
+sudo apt install postgresql
+sudo -u postgres psql -c "CREATE USER ogoj WITH PASSWORD 'ogoj';"
+sudo -u postgres psql -c "CREATE DATABASE ogoj OWNER ogoj;"
+
+# 或直接用 docker 起一个
+docker run -d --name ogoj-db -e POSTGRES_DB=ogoj -e POSTGRES_USER=ogoj \
+  -e POSTGRES_PASSWORD=ogoj -p 5432:5432 postgres:16-alpine
+```
+
 编辑 `.env`，**至少修改 `JWT_SECRET`**：
 
 ```bash
@@ -311,7 +324,9 @@ openssl rand -hex 48     # 生成一个随机密钥
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `SITE_URL` | `http://localhost:8080` | 站点对外地址 |
 | `JWT_SECRET` | — | **必须修改**，登录令牌签名密钥 |
-| `DATABASE_FILE` | `./data/ogoj.db` | SQLite 数据库文件 |
+| `DATABASE_URL` | `postgres://ogoj:ogoj@localhost:5432/ogoj` | PostgreSQL 连接串（3.0 起必填） |
+| `DATABASE_POOL_SIZE` | `10` | 数据库连接池大小 |
+| `SQLITE_FILE` | `./data/ogoj.db` | 仅用于把旧版 SQLite 数据导入 PostgreSQL |
 | `DATA_DIR` | `./data` | 测试数据、上传文件、备份存放目录 |
 | `JUDGE_CONCURRENCY` | `2` | 同时评测的提交数量 |
 | `JUDGE_ENABLED` | `true` | 是否在本进程内运行评测 worker |
@@ -384,7 +399,7 @@ sudo systemctl enable --now ogoj
 npm run judge        # 仅运行评测 worker，不启动 HTTP 服务
 ```
 
-只需让该机器能访问同一个数据库文件（例如通过共享存储）即可。也可以在同一台机器上启动多个 worker 进程。
+只要该机器能连上同一个 PostgreSQL（设置 `DATABASE_URL`）即可。也可以在同一台机器上启动多个 worker 进程。
 
 ---
 
@@ -551,17 +566,36 @@ OGOJ/
 
 ### 备份
 
-需要同时备份两处，它们互相引用：
+数据库备份（也可以用 控制面板 → 备份与维护 → 立即备份，会调用 `pg_dump`）：
 
 ```bash
-# 数据库（也可以用 控制面板 → 备份与维护 → 立即备份）
-cp data/ogoj.db data/ogoj-$(date +%F).db
+# 数据库导出成 SQL
+pg_dump --no-owner --no-privileges "$DATABASE_URL" > ogoj-$(date +%F).sql
+# 恢复
+psql "$DATABASE_URL" < ogoj-2026-01-01.sql
+```
 
-# 测试数据与上传文件
+上传文件与题库测试数据在 `data/` 下，单独打包即可：
+
+```bash
 tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 ```
 
 系统默认每天自动备份数据库到 `data/backups/`（可在系统设置中调整间隔与保留份数）。
+
+### 从 SQLite 升级到 3.0（PostgreSQL）
+
+3.0 起数据库改为 PostgreSQL。旧的 `data/ogoj.db` 可以整体导入，不会丢数据：
+
+```bash
+git pull            # 拿到 3.0 代码
+npm install
+# 在 .env 里配好 DATABASE_URL，然后导入旧库
+SQLITE_FILE=./data/ogoj.db npm run migrate:sqlite -w @ogoj/server
+npm run build && npm start
+```
+
+导入脚本会按外键顺序搬运所有表、校正自增序列，可重复执行（每次会清空目标表后重新写入）。
 
 ### 升级
 
@@ -619,6 +653,14 @@ npm run reset
 ---
 
 ## 更新日志
+
+### 3.0.0
+
+- **数据库由 SQLite 换成 PostgreSQL**：全部数据访问改为异步、使用连接池与事务，支持多实例 / 独立评测机直连同一个数据库
+- 新增 `npm run migrate:sqlite`：把旧版 `data/ogoj.db` 的数据整体导入 PostgreSQL（按外键顺序、自动校正自增序列、可重复执行）
+- `docker-compose.yml` 增加 PostgreSQL 服务（`db`），应用通过 `DATABASE_URL` 连接；备份改为 `pg_dump`
+- 配置项变化：`DATABASE_FILE` → `DATABASE_URL`（新增 `DATABASE_POOL_SIZE`，`SQLITE_FILE` 仅用于数据迁移）
+- 商店商品「比赛资格 ×5」改名「创建比赛资格 ×5」
 
 ### 2.1.0
 

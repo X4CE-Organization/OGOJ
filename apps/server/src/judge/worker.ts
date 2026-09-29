@@ -11,8 +11,8 @@ let timer: NodeJS.Timeout | null = null;
  * Claim the next waiting submission. SQLite guarantees the sub-select + update
  * is atomic, so several worker processes can safely share the same queue.
  */
-function claimNext(): number | null {
-  const row = get<{ id: number }>(
+async function claimNext(): Promise<number | null> {
+  const row = await get<{ id: number }>(
     `UPDATE submissions
         SET status = 'Judging', claimed_at = datetime('now')
       WHERE id = (
@@ -27,8 +27,8 @@ function claimNext(): number | null {
 }
 
 /** Re-queue submissions that were left in "Judging" after a crash. */
-export function requeueStale(olderThanMinutes = 15): number {
-  const info = run(
+export async function requeueStale(olderThanMinutes = 15): Promise<number> {
+  const info = await run(
     `UPDATE submissions SET status = 'Waiting', claimed_at = NULL
       WHERE status = 'Judging'
         AND (claimed_at IS NULL OR claimed_at < datetime('now', ?))`,
@@ -37,33 +37,33 @@ export function requeueStale(olderThanMinutes = 15): number {
   return info.changes;
 }
 
-export function startWorker(options: { concurrency?: number; pollIntervalMs?: number } = {}): void {
+export async function startWorker(options: { concurrency?: number; pollIntervalMs?: number } = {}): Promise<void> {
   const concurrency = options.concurrency ?? config.judge.concurrency;
   const pollInterval = options.pollIntervalMs ?? config.judge.pollIntervalMs;
   if (running) return;
   running = true;
   stopped = false;
-  requeueStale();
+  await requeueStale();
 
   const pump = async () => {
     if (stopped) return;
     while (active < concurrency && !stopped) {
-      const id = claimNext();
+      const id = await claimNext();
       if (id === null) break;
       active += 1;
       judgeSubmission(id)
-        .catch((error) => {
+        .catch(async (error) => {
           // eslint-disable-next-line no-console
           console.error(`[judge] submission #${id} crashed:`, error);
-          run(
+          await run(
             `UPDATE submissions SET status = 'SE', compile_output = ?
               WHERE id = ? AND status = 'Judging'`,
             [`评测进程异常：${error instanceof Error ? error.message : String(error)}`, id],
           );
         })
-        .finally(() => {
+        .finally(async () => {
           active -= 1;
-          void pump();
+          void await pump();
         });
     }
   };

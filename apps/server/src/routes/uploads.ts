@@ -21,7 +21,7 @@ const ALLOWED_SUBDIRS = new Set(['avatar', 'banner', 'carousel', 'article', 'pro
 
 export async function registerUploadRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/upload', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const file = await (request as any).file({
       limits: { fileSize: num('max_upload_size_mb', 64) * 1024 * 1024 },
     });
@@ -39,7 +39,7 @@ export async function registerUploadRoutes(app: FastifyInstance): Promise<void> 
     const name = `${Date.now().toString(36)}-${randomBytes(6).toString('hex')}${ext}`;
     const dir = uploadDir(category);
     fs.writeFileSync(path.join(dir, name), buffer);
-    audit(request, 'upload.file', { detail: { category, name, size: buffer.length } });
+    await audit(request, 'upload.file', { detail: { category, name, size: buffer.length } });
     return {
       ok: true,
       url: publicUploadPath(path.join(category, name)),
@@ -51,7 +51,7 @@ export async function registerUploadRoutes(app: FastifyInstance): Promise<void> 
   });
 
   app.get('/api/upload/files', async (request) => {
-    requireUser(request);
+    await requireUser(request);
     const category = ALLOWED_SUBDIRS.has(String((request.query as any)?.category ?? ''))
       ? String((request.query as any).category)
       : 'misc';

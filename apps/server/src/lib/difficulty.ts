@@ -13,11 +13,11 @@ export function invalidateDifficulties(): void {
   cache = null;
 }
 
-export function difficultyDefs(): DifficultyDef[] {
+export async function difficultyDefs(): Promise<DifficultyDef[]> {
   if (cache) return cache;
   let rows: any[] = [];
   try {
-    rows = all<any>('SELECT id, level, name, color, color_dark FROM difficulties ORDER BY level ASC');
+    rows = await all<any>('SELECT id, level, name, color, color_dark FROM difficulties ORDER BY level ASC');
   } catch {
     rows = [];
   }
@@ -34,12 +34,12 @@ export function difficultyDefs(): DifficultyDef[] {
 }
 
 /** 取某个难度等级的定义，越界时退回最低等级 */
-export function difficultyOf(level: number): DifficultyDef {
-  const list = difficultyDefs();
+export async function difficultyOf(level: number): Promise<DifficultyDef> {
+  const list = await difficultyDefs();
   return list.find((item) => item.level === Number(level)) ?? list[0]!;
 }
 
-export function maxDifficultyLevel(): number {
-  const list = difficultyDefs();
+export async function maxDifficultyLevel(): Promise<number> {
+  const list = await difficultyDefs();
   return list[list.length - 1]?.level ?? 1;
 }

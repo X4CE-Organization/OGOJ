@@ -44,7 +44,7 @@ function stickerPayload(row: any, viewerId: number | null) {
 export async function registerStickerRoutes(app: FastifyInstance): Promise<void> {
   /* ------------------------------------------------------------- 列表 */
   app.get('/api/stickers', async (request) => {
-    const viewer = requireUser(request);
+    const viewer = await requireUser(request);
     const query = (request.query ?? {}) as Record<string, string>;
     const scope = ['mine', 'favorites', 'public'].includes(query.scope) ? query.scope : 'mine';
     const keyword = String(query.q ?? '').trim();
@@ -65,7 +65,7 @@ export async function registerStickerRoutes(app: FastifyInstance): Promise<void>
       params.push(`%${keyword}%`, `%${keyword}%`);
     }
 
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.*, u.username AS owner_username, u.display_name AS owner_display, u.avatar AS owner_avatar,
               EXISTS (SELECT 1 FROM user_stickers us WHERE us.sticker_id = s.id AND us.user_id = ?) AS collected
          FROM stickers s LEFT JOIN users u ON u.id = s.owner_id
@@ -79,19 +79,19 @@ export async function registerStickerRoutes(app: FastifyInstance): Promise<void>
       scope,
       items: rows.map((row) => stickerPayload(row, viewer.id)),
       counts: {
-        mine: count('SELECT COUNT(*) AS c FROM stickers WHERE owner_id = ? AND is_deleted = 0', [viewer.id]),
-        favorites: count(
+        mine: await count('SELECT COUNT(*) AS c FROM stickers WHERE owner_id = ? AND is_deleted = 0', [viewer.id]),
+        favorites: await count(
           'SELECT COUNT(*) AS c FROM user_stickers us JOIN stickers s ON s.id = us.sticker_id AND s.is_deleted = 0 WHERE us.user_id = ?',
           [viewer.id],
         ),
-        public: count('SELECT COUNT(*) AS c FROM stickers WHERE is_public = 1 AND is_deleted = 0'),
+        public: await count('SELECT COUNT(*) AS c FROM stickers WHERE is_public = 1 AND is_deleted = 0'),
       },
     };
   });
 
   /* ------------------------------------------------------------- 上传 */
   app.post('/api/stickers', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const query = (request.query ?? {}) as Record<string, string>;
     const file = await (request as any).file({
       limits: { fileSize: num('max_upload_size_mb', 64) * 1024 * 1024 },
@@ -113,13 +113,13 @@ export async function registerStickerRoutes(app: FastifyInstance): Promise<void>
     fs.writeFileSync(path.join(dir, filename), buffer);
     const url = publicUploadPath(path.join('sticker', filename));
 
-    const info = run(
+    const info = await run(
       `INSERT INTO stickers (owner_id, name, pack, url, mimetype, is_public) VALUES (?, ?, ?, ?, ?, ?)`,
       [user.id, name, pack, url, mimetype, isPublic ? 1 : 0],
     );
     const id = Number(info.lastInsertRowid);
-    audit(request, 'sticker.create', { targetType: 'sticker', targetId: id, detail: { name, pack, isPublic } });
-    const row = get<any>(
+    await audit(request, 'sticker.create', { targetType: 'sticker', targetId: id, detail: { name, pack, isPublic } });
+    const row = await get<any>(
       `SELECT s.*, u.username AS owner_username, u.display_name AS owner_display, u.avatar AS owner_avatar, 1 AS collected
          FROM stickers s LEFT JOIN users u ON u.id = s.owner_id WHERE s.id = ?`,
       [id],
@@ -129,40 +129,40 @@ export async function registerStickerRoutes(app: FastifyInstance): Promise<void>
 
   /* ------------------------------------------------------------- 删除 */
   app.delete('/api/stickers/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = Number((request.params as any).id);
-    const row = get<any>('SELECT * FROM stickers WHERE id = ? AND is_deleted = 0', [id]);
+    const row = await get<any>('SELECT * FROM stickers WHERE id = ? AND is_deleted = 0', [id]);
     if (!row) throw notFound('表情不存在');
     if (row.owner_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己上传的表情');
-    run('UPDATE stickers SET is_deleted = 1 WHERE id = ?', [id]);
-    audit(request, 'sticker.delete', { targetType: 'sticker', targetId: id });
+    await run('UPDATE stickers SET is_deleted = 1 WHERE id = ?', [id]);
+    await audit(request, 'sticker.delete', { targetType: 'sticker', targetId: id });
     return { ok: true };
   });
 
   /* ------------------------------------------------------------- 收藏 */
   app.post('/api/stickers/:id/collect', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = Number((request.params as any).id);
-    const row = get<any>('SELECT * FROM stickers WHERE id = ? AND is_deleted = 0', [id]);
+    const row = await get<any>('SELECT * FROM stickers WHERE id = ? AND is_deleted = 0', [id]);
     if (!row) throw notFound('表情不存在');
     if (row.owner_id !== user.id && !row.is_public) throw forbidden('这个表情没有公开');
-    run('INSERT OR IGNORE INTO user_stickers (user_id, sticker_id) VALUES (?, ?)', [user.id, id]);
-    audit(request, 'sticker.collect', { targetType: 'sticker', targetId: id });
+    await run('INSERT OR IGNORE INTO user_stickers (user_id, sticker_id) VALUES (?, ?)', [user.id, id]);
+    await audit(request, 'sticker.collect', { targetType: 'sticker', targetId: id });
     return { ok: true, collected: true };
   });
 
   app.delete('/api/stickers/:id/collect', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = Number((request.params as any).id);
-    run('DELETE FROM user_stickers WHERE user_id = ? AND sticker_id = ?', [user.id, id]);
+    await run('DELETE FROM user_stickers WHERE user_id = ? AND sticker_id = ?', [user.id, id]);
     return { ok: true, collected: false };
   });
 
   /* ------------------------------------------------------------- 使用计数 */
   app.post('/api/stickers/:id/use', async (request) => {
-    requireUser(request);
+    await requireUser(request);
     const id = Number((request.params as any).id);
-    run('UPDATE stickers SET use_count = use_count + 1 WHERE id = ? AND is_deleted = 0', [id]);
+    await run('UPDATE stickers SET use_count = use_count + 1 WHERE id = ? AND is_deleted = 0', [id]);
     return { ok: true };
   });
 }

@@ -92,11 +92,11 @@ interface TestcaseRow {
   is_sample: number;
 }
 
-function loadTestcases(problemId: number): TestcaseRow[] {
-  return all<TestcaseRow>(
+async function loadTestcases(problemId: number): Promise<TestcaseRow[]> {
+  return (await all<TestcaseRow>(
     'SELECT * FROM testcases WHERE problem_id = ? ORDER BY idx ASC',
     [problemId],
-  ).filter(
+  )).filter(
     (row) => fs.existsSync(testcasePath(row.input_file)) && fs.existsSync(testcasePath(row.output_file)),
   );
 }
@@ -317,7 +317,7 @@ async function runInteractiveCase(
 /* -------------------------------------------------------------------------- */
 
 export async function judgeSubmission(submissionId: number): Promise<JudgeOutcome | null> {
-  const submission = get<{
+  const submission = await get<{
     id: number;
     problem_id: number;
     user_id: number;
@@ -329,9 +329,9 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
   ]);
   if (!submission) return null;
 
-  const problem = get<ProblemRow>('SELECT * FROM problems WHERE id = ?', [submission.problem_id]);
+  const problem = await get<ProblemRow>('SELECT * FROM problems WHERE id = ?', [submission.problem_id]);
   if (!problem) {
-    finish(submissionId, {
+    await finish(submissionId, {
       status: 'SE',
       score: 0,
       timeMs: 0,
@@ -344,7 +344,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
 
   const language = getLanguage(submission.language);
   if (!language) {
-    finish(submissionId, {
+    await finish(submissionId, {
       status: 'CE',
       score: 0,
       timeMs: 0,
@@ -355,15 +355,15 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
     return null;
   }
 
-  const testcases = loadTestcases(problem.id);
+  const testcases = await loadTestcases(problem.id);
   const sandboxDir = ensureDir(
     path.join(config.paths.judge, `${submissionId}-${Date.now().toString(36)}`),
   );
   const showData = bool('show_testcase_data', false);
   const liveDetail: CaseResult[] = [];
 
-  const publish = (status: Verdict, compileOutput: string, extra: Partial<JudgeOutcome> = {}) => {
-    run(
+  const publish = async (status: Verdict, compileOutput: string, extra: Partial<JudgeOutcome> = {}) => {
+    await run(
       `UPDATE submissions SET status = ?, compile_output = ?, detail = ?, score = ?,
          time_ms = ?, memory_kb = ? WHERE id = ?`,
       [
@@ -388,7 +388,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
         detail: [],
         compileOutput: '该题目还没有测试数据，请联系管理员。',
       };
-      finish(submissionId, outcome, submission);
+      await finish(submissionId, outcome, submission);
       return outcome;
     }
 
@@ -410,7 +410,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
           detail: [],
           compileOutput: compileOutput || '编译失败',
         };
-        finish(submissionId, outcome, submission);
+        await finish(submissionId, outcome, submission);
         return outcome;
       }
     }
@@ -448,7 +448,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
         detail: [],
         compileOutput: compileOutput ? `${compileOutput}\n${checkerSystemError}` : checkerSystemError,
       };
-      finish(submissionId, outcome, submission);
+      await finish(submissionId, outcome, submission);
       return outcome;
     }
 
@@ -479,7 +479,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
         };
         if (showData && !testcase.is_sample) caseResult.input = preview(fs.readFileSync(inputFile, 'utf8'));
         liveDetail.push(caseResult);
-        publish('Judging', compileOutput, { score: 0, timeMs: maxTime, memoryKb: maxMemory });
+        await publish('Judging', compileOutput, { score: 0, timeMs: maxTime, memoryKb: maxMemory });
         if (result.status !== 'AC' && !firstFailure) firstFailure = result.status;
         continue;
       }
@@ -561,7 +561,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
       liveDetail.push(caseResult);
 
       if (status !== 'AC' && !firstFailure) firstFailure = status;
-      publish(firstFailure ?? 'Judging', compileOutput, {
+      await publish(firstFailure ?? 'Judging', compileOutput, {
         score: 0,
         timeMs: maxTime,
         memoryKb: maxMemory,
@@ -643,7 +643,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
       detail: liveDetail,
       compileOutput,
     };
-    finish(submissionId, outcome, submission);
+    await finish(submissionId, outcome, submission);
     return outcome;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -655,7 +655,7 @@ export async function judgeSubmission(submissionId: number): Promise<JudgeOutcom
       detail: liveDetail,
       compileOutput: `评测系统错误：${message}`,
     };
-    finish(submissionId, outcome, submission);
+    await finish(submissionId, outcome, submission);
     return outcome;
   } finally {
     removeDir(sandboxDir);
@@ -673,14 +673,14 @@ interface SubmissionRef {
   contest_id: number | null;
 }
 
-function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): void {
+async function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): Promise<void> {
   const ref =
     submission ??
-    get<SubmissionRef>('SELECT id, problem_id, user_id, contest_id FROM submissions WHERE id = ?', [id]);
+    await get<SubmissionRef>('SELECT id, problem_id, user_id, contest_id FROM submissions WHERE id = ?', [id]);
 
   // Figure out what the submission looked like before this judgement so that
   // Rejudges adjust the counters instead of inflating them.
-  const previous = get<{ status: string; score: number; judged_at: string | null }>(
+  const previous = await get<{ status: string; score: number; judged_at: string | null }>(
     'SELECT status, score, judged_at FROM submissions WHERE id = ?',
     [id],
   );
@@ -688,7 +688,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
   const wasAccepted = previous?.status === 'AC';
   const nowAccepted = outcome.status === 'AC';
 
-  run(
+  await run(
     `UPDATE submissions SET status = ?, score = ?, time_ms = ?, memory_kb = ?,
        compile_output = ?, detail = ?, judged_at = datetime('now') WHERE id = ?`,
     [
@@ -703,9 +703,9 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
   );
   if (!ref) return;
 
-  tx(() => {
+  await tx(async () => {
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const existing = get<{ attempts: number; accepted: number; first_ac_at: string | null }>(
+    const existing = await get<{ attempts: number; accepted: number; first_ac_at: string | null }>(
       'SELECT attempts, accepted, first_ac_at FROM user_problem_stats WHERE user_id = ? AND problem_id = ?',
       [ref.user_id, ref.problem_id],
     );
@@ -714,7 +714,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
       if (wasJudged) {
         // Rejudge: correct the accepted counter instead of adding to it.
         const delta = acceptedNow - (wasAccepted ? 1 : 0);
-        run(
+        await run(
           `UPDATE user_problem_stats SET accepted = MAX(0, accepted + ?),
              first_ac_at = CASE WHEN accepted + ? > 0 THEN first_ac_at ELSE NULL END,
              last_submit_at = ?
@@ -722,7 +722,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
           [delta, delta, now, ref.user_id, ref.problem_id],
         );
       } else {
-        run(
+        await run(
           `UPDATE user_problem_stats SET attempts = attempts + 1, accepted = accepted + ?,
              first_ac_at = COALESCE(first_ac_at, ?), last_submit_at = ?
            WHERE user_id = ? AND problem_id = ?`,
@@ -730,7 +730,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
         );
       }
     } else {
-      run(
+      await run(
         `INSERT INTO user_problem_stats (user_id, problem_id, attempts, accepted, first_ac_at, last_submit_at)
          VALUES (?, ?, 1, ?, ?, ?)`,
         [ref.user_id, ref.problem_id, acceptedNow, acceptedNow ? now : null, now],
@@ -739,33 +739,33 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
 
     if (nowAccepted !== wasAccepted) {
       const delta = nowAccepted ? 1 : -1;
-      run('UPDATE problems SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.problem_id]);
-      run('UPDATE users SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.user_id]);
+      await run('UPDATE problems SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.problem_id]);
+      await run('UPDATE users SET accepted_count = MAX(0, accepted_count + ?) WHERE id = ?', [delta, ref.user_id]);
     }
     if (!wasJudged) {
-      run('UPDATE users SET submission_count = submission_count + 1 WHERE id = ?', [ref.user_id]);
+      await run('UPDATE users SET submission_count = submission_count + 1 WHERE id = ?', [ref.user_id]);
     }
 
     const isFirstSolve = nowAccepted && !wasAccepted && (existing?.accepted ?? 0) === 0;
     const lostSolve = wasAccepted && !nowAccepted;
     if (isFirstSolve || lostSolve) {
       const delta = isFirstSolve ? 1 : -1;
-      run('UPDATE users SET solved_count = MAX(0, solved_count + ?) WHERE id = ?', [delta, ref.user_id]);
+      await run('UPDATE users SET solved_count = MAX(0, solved_count + ?) WHERE id = ?', [delta, ref.user_id]);
     }
     if (isFirstSolve) {
       const perProblem = num('points_per_accepted', 1);
       if (perProblem > 0 && bool('enable_points', true)) {
-        addPoints(ref.user_id, perProblem, `通过题目 ${ref.problem_id}`, {
+        await addPoints(ref.user_id, perProblem, `通过题目 ${ref.problem_id}`, {
           refType: 'problem',
           refId: ref.problem_id,
         });
-        const firstBloodGlobal = get<{ c: number }>(
+        const firstBloodGlobal = await get<{ c: number }>(
           `SELECT COUNT(*) AS c FROM user_problem_stats WHERE problem_id = ? AND accepted > 0 AND user_id <> ?`,
           [ref.problem_id, ref.user_id],
         );
         const bonus = num('points_first_ac_bonus', 0);
         if (bonus > 0 && (firstBloodGlobal?.c ?? 0) === 0) {
-          addPoints(ref.user_id, bonus, `全站首杀题目 ${ref.problem_id}`, {
+          await addPoints(ref.user_id, bonus, `全站首杀题目 ${ref.problem_id}`, {
             refType: 'problem',
             refId: ref.problem_id,
           });
@@ -775,14 +775,14 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
   });
 
   // The achievement engine sends its own notification for every new badge.
-  if (nowAccepted) evaluateAchievements(ref.user_id);
+  if (nowAccepted) await evaluateAchievements(ref.user_id);
 
   if (bool('notify_on_judge', false)) {
-    const problem = get<{ pid: string; title: string }>(
+    const problem = await get<{ pid: string; title: string }>(
       'SELECT pid, title FROM problems WHERE id = ?',
       [ref.problem_id],
     );
-    sendMessage({
+    await sendMessage({
       to: ref.user_id,
       title: `评测完成 #${id}：${outcome.status}`,
       content: `题目 ${problem?.pid ?? ''} ${problem?.title ?? ''}\n结果：${outcome.status}（${outcome.score} 分）`,
@@ -794,7 +794,7 @@ function finish(id: number, outcome: JudgeOutcome, submission?: SubmissionRef): 
 }
 
 /** Re-queue submissions for judging. */
-export function rejudge(where: { problemId?: number; submissionIds?: number[]; contestId?: number }): number {
+export async function rejudge(where: { problemId?: number; submissionIds?: number[]; contestId?: number }): Promise<number> {
   const clauses: string[] = [];
   const params: unknown[] = [];
   if (where.problemId) {
@@ -810,7 +810,7 @@ export function rejudge(where: { problemId?: number; submissionIds?: number[]; c
     params.push(...where.submissionIds);
   }
   if (!clauses.length) return 0;
-  const info = run(
+  const info = await run(
     `UPDATE submissions SET status = 'Waiting', score = 0, detail = '[]', compile_output = '',
        time_ms = NULL, memory_kb = NULL, claimed_at = NULL, judged_at = NULL
      WHERE ${clauses.join(' AND ')}`,
@@ -819,11 +819,11 @@ export function rejudge(where: { problemId?: number; submissionIds?: number[]; c
   return info.changes;
 }
 
-export function judgeStats(): { waiting: number; judging: number; concurrency: number; available: string[] } {
+export async function judgeStats(): Promise<{ waiting: number; judging: number; concurrency: number; available: string[] }> {
   const available = settingJson<string[]>('enabled_languages', []);
   return {
-    waiting: Number(get<{ c: number }>(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'Waiting'`)?.c ?? 0),
-    judging: Number(get<{ c: number }>(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'Judging'`)?.c ?? 0),
+    waiting: Number((await get<{ c: number }>(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'Waiting'`))?.c ?? 0),
+    judging: Number((await get<{ c: number }>(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'Judging'`))?.c ?? 0),
     concurrency: config.judge.concurrency,
     available,
   };

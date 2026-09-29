@@ -33,12 +33,12 @@ export function tokenFromRequest(request: FastifyRequest): string | null {
   return cookie ?? null;
 }
 
-export function resolveUser(request: FastifyRequest): AuthUser | null {
+export async function resolveUser(request: FastifyRequest): Promise<AuthUser | null> {
   const token = tokenFromRequest(request);
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload) return null;
-  const user = get<AuthUser & { role: Role }>(
+  const user = await get<AuthUser & { role: Role }>(
     `SELECT id, username, role, display_name, avatar, points, is_banned, ban_reason, solved_count
        FROM users WHERE id = ?`,
     [payload.sub],
@@ -48,8 +48,8 @@ export function resolveUser(request: FastifyRequest): AuthUser | null {
   return user;
 }
 
-export function requireUser(request: FastifyRequest): AuthUser {
-  const user = request.user ?? resolveUser(request);
+export async function requireUser(request: FastifyRequest): Promise<AuthUser> {
+  const user = request.user ?? await resolveUser(request);
   if (!user) throw unauthorized();
   return user;
 }
@@ -59,15 +59,15 @@ export function hasRole(user: AuthUser | null, role: Role): boolean {
   return ROLE_LEVEL[user.role] >= ROLE_LEVEL[role];
 }
 
-export function requireRole(request: FastifyRequest, role: Role): AuthUser {
-  const user = requireUser(request);
+export async function requireRole(request: FastifyRequest, role: Role): Promise<AuthUser> {
+  const user = await requireUser(request);
   if (!hasRole(user, role)) throw forbidden();
   return user;
 }
 
 /** 普通管理员：可以管理题目；超级管理员：全部权限。 */
-export const requireAdmin = (request: FastifyRequest) => requireRole(request, 'admin');
-export const requireSuperAdmin = (request: FastifyRequest) => requireRole(request, 'superadmin');
+export const requireAdmin = async (request: FastifyRequest) => await requireRole(request, 'admin');
+export const requireSuperAdmin = async (request: FastifyRequest) => await requireRole(request, 'superadmin');
 
 export function isSuperAdmin(user: AuthUser | null): boolean {
   return hasRole(user, 'superadmin');

@@ -145,7 +145,7 @@ function normalizeSamples(raw: unknown): { input: string; output: string; explan
     }));
 }
 
-function applyTags(problemId: number, tags: unknown): void {
+async function applyTags(problemId: number, tags: unknown): Promise<void> {
   if (!Array.isArray(tags)) return;
   const ids: number[] = [];
   for (const tag of tags) {
@@ -155,35 +155,35 @@ function applyTags(problemId: number, tags: unknown): void {
     }
     const name = String(tag ?? '').trim().slice(0, 32);
     if (!name) continue;
-    const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
+    const existing = await get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
     if (existing) ids.push(existing.id);
       // 自动创建的标签统一进「默认」分组，管理员可以在后台调整分组
       else {
         ids.push(
           Number(
-            run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
+            (await run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
               name,
               autoTagColor(name),
               '默认',
-            ]).lastInsertRowid,
+            ])).lastInsertRowid,
           ),
         );
       }
   }
-  run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
-  for (const id of ids) run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, id]);
+  await run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
+  for (const id of ids) await run('INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)', [problemId, id]);
 }
 
 /** 建题：题目编号优先沿用文件里的，被占用时自动分配一个 */
-function createProblem(request: FastifyRequest, input: ProblemInput): number {
+async function createProblem(request: FastifyRequest, input: ProblemInput): Promise<number> {
   const title = String(input.title ?? '').trim().slice(0, 120) || '未命名题目';
   let pid = String(input.pid ?? '').trim().slice(0, 32);
-  if (!pid || get('SELECT id FROM problems WHERE pid = ?', [pid])) pid = nextProblemPid();
+  if (!pid || await get('SELECT id FROM problems WHERE pid = ?', [pid])) pid = await nextProblemPid();
   const judgeMode = ['standard', 'spj', 'interactive'].includes(String(input.judgeMode))
     ? String(input.judgeMode)
     : 'standard';
   const userId = request.user?.id ?? null;
-  const info = run(
+  const info = await run(
     `INSERT INTO problems
       (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
        provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
@@ -217,18 +217,18 @@ function createProblem(request: FastifyRequest, input: ProblemInput): number {
     ],
   );
   const problemId = Number(info.lastInsertRowid);
-  applyTags(problemId, input.tags);
+  await applyTags(problemId, input.tags);
   return problemId;
 }
 
 /** 写入测试点：文件落到 data/testdata/<id>/，同时写 testcases 表 */
-function attachTestcases(problemId: number, cases: TestcaseInput[]): number {
+async function attachTestcases(problemId: number, cases: TestcaseInput[]): Promise<number> {
   let saved = 0;
   for (const item of cases) {
     const idx = item.idx > 0 ? item.idx : saved + 1;
-    if (get('SELECT id FROM testcases WHERE problem_id = ? AND idx = ?', [problemId, idx])) continue;
+    if (await get('SELECT id FROM testcases WHERE problem_id = ? AND idx = ?', [problemId, idx])) continue;
     const files = saveTestcase(problemId, idx, item.input, item.output);
-    run(
+    await run(
       `INSERT INTO testcases (problem_id, idx, subtask_id, score, input_file, output_file, is_sample)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [problemId, idx, item.subtask, Math.max(0, item.score), files.inputFile, files.outputFile, item.isSample ? 1 : 0],
@@ -240,12 +240,12 @@ function attachTestcases(problemId: number, cases: TestcaseInput[]): number {
 
 /* ------------------------------------------------------------------ ZIP */
 
-function buildProblemMeta(problem: any): Record<string, unknown> {
-  const tags = all<{ name: string }>(
+async function buildProblemMeta(problem: any): Promise<Record<string, unknown>> {
+  const tags = (await all<{ name: string }>(
     `SELECT t.name FROM problem_tags pt JOIN tags t ON t.id = pt.tag_id
       WHERE pt.problem_id = ? ORDER BY t.name`,
     [problem.id],
-  ).map((row) => row.name);
+  )).map((row) => row.name);
   return {
     format: PACK_FORMAT,
     version: 1,
@@ -378,7 +378,7 @@ function splitFpsTags(source: string): string[] {
 export async function registerProblemTransferRoutes(app: FastifyInstance): Promise<void> {
   /* ---------------------------------------------------------- 批量导出 */
   app.get('/api/admin/problems/export', async (request, reply) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const raw = String((request.query as any)?.ids ?? '');
     const ids = [...new Set(raw.split(',').map((value) => Number(value.trim())))]
       .filter((value) => Number.isInteger(value) && value > 0);
@@ -386,7 +386,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
     if (ids.length > MAX_EXPORT_PROBLEMS) throw badRequest(`一次最多导出 ${MAX_EXPORT_PROBLEMS} 道题目`);
 
     const placeholders = ids.map(() => '?').join(',');
-    const problems = all<any>(
+    const problems = await all<any>(
       `SELECT * FROM problems WHERE id IN (${placeholders}) AND deleted_at IS NULL ORDER BY pid`,
       ids,
     );
@@ -403,7 +403,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
 
     for (const problem of problems) {
       const dir = `problems/${safeSegment(problem.pid)}`;
-      const cases = all<any>('SELECT * FROM testcases WHERE problem_id = ? ORDER BY idx', [problem.id]);
+      const cases = await all<any>('SELECT * FROM testcases WHERE problem_id = ? ORDER BY idx', [problem.id]);
       const testcases: Record<string, unknown>[] = [];
       for (const item of cases) {
         const inputPath = `testcases/${item.idx}.in`;
@@ -423,7 +423,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
       }
       zip.addFile(
         `${dir}/problem.json`,
-        Buffer.from(JSON.stringify({ ...buildProblemMeta(problem), testcases }, null, 2), 'utf8'),
+        Buffer.from(JSON.stringify({ ...await buildProblemMeta(problem), testcases }, null, 2), 'utf8'),
       );
       (manifest.problems as unknown[]).push({
         pid: problem.pid,
@@ -434,7 +434,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
     }
 
     zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'));
-    audit(request, 'problem.export', { detail: { count: problems.length, ids } });
+    await audit(request, 'problem.export', { detail: { count: problems.length, ids } });
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     reply.header('Content-Type', 'application/zip');
     reply.header('Content-Disposition', `attachment; filename="ogoj-problems-${stamp}.zip"`);
@@ -443,7 +443,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
 
   /* ------------------------------------------------------------ 导入 */
   app.post('/api/admin/problems/import', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const query = (request.query ?? {}) as Record<string, string>;
     const format = String(query.format ?? 'zip').toLowerCase() === 'fps' ? 'fps' : 'zip';
     const difficulty = clampInt(query.difficulty, 1, 6, 1);
@@ -463,7 +463,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
     if (format === 'fps') {
       const items = parseFpsItems(buffer.toString('utf8'));
       if (items.length > MAX_IMPORT_ITEMS) throw badRequest(`一次最多导入 ${MAX_IMPORT_ITEMS} 道题目`);
-      items.forEach((item, index) => {
+      for (const [index, item] of items.entries()) {
         const title = nodeText(item.title).trim() || `未命名题目 ${index + 1}`;
         try {
           const testcases: TestcaseInput[] = [];
@@ -488,7 +488,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
             samples.push({ input, output, explanation: '' });
           }
 
-          const problemId = createProblem(request, {
+          const problemId = await createProblem(request, {
             title,
             statement: nodeText(item.description),
             inputFormat: nodeText(item.input),
@@ -523,7 +523,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
             .filter((entry) => entry.src && entry.base64);
           let savedImages = 0;
           if (images.length) {
-            const problem = get<any>('SELECT * FROM problems WHERE id = ?', [problemId]);
+            const problem = await get<any>('SELECT * FROM problems WHERE id = ?', [problemId]);
             const fields: Record<string, string> = {
               background: String(problem?.background ?? ''),
               statement: String(problem?.statement ?? ''),
@@ -539,15 +539,15 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
                 fields[key] = replaceAll(fields[key]!, image.src, url);
               }
             });
-            run(
+            await run(
               `UPDATE problems SET background = ?, statement = ?, input_format = ?, output_format = ?, hint = ?
                 WHERE id = ?`,
               [fields.background, fields.statement, fields.input_format, fields.output_format, fields.hint, problemId],
             );
           }
 
-          const saved = attachTestcases(problemId, testcases);
-          const problem = get<{ pid: string }>('SELECT pid FROM problems WHERE id = ?', [problemId]);
+          const saved = await attachTestcases(problemId, testcases);
+          const problem = await get<{ pid: string }>('SELECT pid FROM problems WHERE id = ?', [problemId]);
           created.push({
             pid: String(problem?.pid ?? ''),
             title,
@@ -558,7 +558,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
         } catch (error) {
           failed.push({ name: title, reason: error instanceof Error ? error.message : '导入失败' });
         }
-      });
+      }
     } else {
       let zip: AdmZip;
       try {
@@ -616,7 +616,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
             });
           }
 
-          const problemId = createProblem(request, {
+          const problemId = await createProblem(request, {
             pid: String(meta?.pid ?? ''),
             title,
             background: meta?.background,
@@ -639,8 +639,8 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
             isPublic: meta?.isPublic === undefined ? isPublic : isPublic && meta.isPublic !== false,
             tags: meta?.tags,
           });
-          const saved = attachTestcases(problemId, testcases);
-          const problem = get<{ pid: string }>('SELECT pid FROM problems WHERE id = ?', [problemId]);
+          const saved = await attachTestcases(problemId, testcases);
+          const problem = await get<{ pid: string }>('SELECT pid FROM problems WHERE id = ?', [problemId]);
           created.push({
             pid: String(problem?.pid ?? ''),
             title,
@@ -655,7 +655,7 @@ export async function registerProblemTransferRoutes(app: FastifyInstance): Promi
     }
 
     if (created.length) {
-      audit(request, 'problem.import', {
+      await audit(request, 'problem.import', {
         detail: { format, count: created.length, failed: failed.length, source: filename },
       });
     }

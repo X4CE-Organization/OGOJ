@@ -2,14 +2,14 @@ import type { FastifyRequest } from 'fastify';
 import { run } from '../db/index.js';
 import { bool } from '../settings/index.js';
 
-export function audit(
+export async function audit(
   request: FastifyRequest,
   action: string,
   options: { targetType?: string; targetId?: string | number; detail?: unknown } = {},
-): void {
+): Promise<void> {
   if (!bool('enable_audit_log', true)) return;
   try {
-    run(
+    await run(
       `INSERT INTO audit_logs (actor_id, actor_name, action, target_type, target_id, detail, ip)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [

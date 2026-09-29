@@ -30,11 +30,11 @@ import { config } from '../config.js';
 import { difficultyDefs, invalidateDifficulties, maxDifficultyLevel } from '../lib/difficulty.js';
 import { autoTagColor } from '../lib/tags.js';
 
-function findProblem(idOrPid: string): any {
+async function findProblem(idOrPid: string): Promise<any> {
   const numeric = Number(idOrPid);
   const row = Number.isInteger(numeric) && String(numeric) === idOrPid
-    ? get<any>('SELECT * FROM problems WHERE id = ?', [numeric])
-    : get<any>('SELECT * FROM problems WHERE pid = ?', [idOrPid]);
+    ? await get<any>('SELECT * FROM problems WHERE id = ?', [numeric])
+    : await get<any>('SELECT * FROM problems WHERE pid = ?', [idOrPid]);
   if (!row) throw notFound('题目不存在');
   return row;
 }
@@ -144,19 +144,19 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     const orderBy = sortMap[String(query.sort ?? 'pid')] ?? sortMap.pid;
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT p.*, u.username AS author_name, u.display_name AS author_display
          FROM problems p LEFT JOIN users u ON u.id = p.author_id
          ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM problems p LEFT JOIN users u ON u.id = p.author_id ${where}`,
       params,
     );
-    const tagMap = tagRows(rows.map((r) => r.id));
+    const tagMap = await tagRows(rows.map((r) => r.id));
     return {
-      items: rows.map((row) => problemSummary(row, { tags: tagMap.get(row.id) ?? [] })),
+      items: await Promise.all(rows.map(async (row) => problemSummary(row, { tags: tagMap.get(row.id) ?? [] }))),
       total,
       page: page.page,
       size: page.size,
@@ -165,23 +165,23 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
   /* ---------------------------------------------------------------- detail */
   app.get('/api/problems/:idOrPid', async (request) => {
-    const problem = findProblem(String((request.params as any).idOrPid));
+    const problem = await findProblem(String((request.params as any).idOrPid));
     if (!isProblemVisibleTo(problem, request.user)) throw notFound('题目不存在或尚未公开');
-    const tags = tagRows([problem.id]).get(problem.id) ?? [];
+    const tags = (await tagRows([problem.id])).get(problem.id) ?? [];
     const author = problem.author_id
-      ? get<any>('SELECT id, username, display_name, avatar FROM users WHERE id = ?', [problem.author_id])
+      ? await get<any>('SELECT id, username, display_name, avatar FROM users WHERE id = ?', [problem.author_id])
       : null;
     const samples = JSON.parse(problem.samples || '[]');
-    const testcaseCount = count('SELECT COUNT(*) AS c FROM testcases WHERE problem_id = ?', [problem.id]);
+    const testcaseCount = await count('SELECT COUNT(*) AS c FROM testcases WHERE problem_id = ?', [problem.id]);
     const myFavorite = request.user
       ? Boolean(
-          get('SELECT 1 AS x FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [
+          await get('SELECT 1 AS x FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [
             request.user.id,
             problem.id,
           ]),
         )
       : false;
-    const contestLinks = all<any>(
+    const contestLinks = await all<any>(
       `SELECT c.id, c.title, c.start_time, c.end_time FROM contest_problems cp
          JOIN contests c ON c.id = cp.contest_id
         WHERE cp.problem_id = ? AND c.is_public = 1 ORDER BY c.start_time DESC LIMIT 10`,
@@ -190,7 +190,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
     return {
       problem: {
-        ...problemSummary(problem, { tags }),
+        ...await problemSummary(problem, { tags }),
         background: problem.background,
         statement: problem.statement,
         inputFormat: problem.input_format,
@@ -208,7 +208,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         updatedAt: problem.updated_at,
       },
       myFavorite,
-      ...problemDetailExtras(problem.id, request.user),
+      ...await problemDetailExtras(problem.id, request.user),
       contestLinks,
       canEdit:
         hasRole(request.user, 'admin') ||
@@ -219,13 +219,13 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
   /* ---------------------------------------------------------------- create */
   app.post('/api/problems', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const body = (request.body ?? {}) as any;
     const isAdmin = hasRole(user, 'admin');
 
     if (!isAdmin) {
       if (!bool('allow_user_create_problem', true)) throw forbidden('本站未开放用户出题');
-      const grant = get<any>(
+      const grant = await get<any>(
         `SELECT * FROM grants WHERE user_id = ? AND kind = 'problem' AND used < total
            AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY id ASC LIMIT 1`,
         [user.id],
@@ -233,7 +233,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       if (!grant) {
         throw forbidden('你需要先在商店兑换「出一道题」资格');
       }
-      tx(() => run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
+      await tx(async () => await run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
     }
 
     const title = String(body.title ?? '').trim();
@@ -249,15 +249,15 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       Math.max(16, Number(body.memoryLimit ?? num('default_memory_limit', 256)) || 256),
     );
 
-    const pid = String(body.pid ?? '').trim() || nextProblemPid();
-    if (get('SELECT id FROM problems WHERE pid = ?', [pid])) throw conflict('该题目编号已存在');
+    const pid = String(body.pid ?? '').trim() || await nextProblemPid();
+    if (await get('SELECT id FROM problems WHERE pid = ?', [pid])) throw conflict('该题目编号已存在');
 
     const judgeMode = ['standard', 'spj', 'interactive'].includes(body.judgeMode) ? body.judgeMode : 'standard';
     if (judgeMode === 'spj' && !bool('enable_spj', true)) throw forbidden('本站未开启 Special Judge');
     if (judgeMode === 'interactive' && !bool('enable_interactive', true)) throw forbidden('本站未开启交互题');
 
     const needReview = !isAdmin && bool('user_problem_need_review', true);
-    const info = run(
+    const info = await run(
       `INSERT INTO problems
         (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
          provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
@@ -271,7 +271,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         String(body.inputFormat ?? ''),
         String(body.outputFormat ?? ''),
         String(body.hint ?? ''),
-        Math.min(maxDifficultyLevel(), Math.max(1, Number(body.difficulty ?? 1) || 1)),
+        Math.min(await maxDifficultyLevel(), Math.max(1, Number(body.difficulty ?? 1) || 1)),
         user.id,
         user.id,
         String(body.provider ?? ''),
@@ -291,9 +291,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       ],
     );
     const problemId = Number(info.lastInsertRowid);
-    applyTags(problemId, body.tags);
+    await applyTags(problemId, body.tags);
     if (needReview) {
-      sendMessage({
+      await sendMessage({
         to: user.id,
         title: '题目已提交审核',
         content: `你的题目 ${pid}「${title}」已提交，管理员审核通过后即可公开。`,
@@ -302,7 +302,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         refId: problemId,
       });
     }
-    audit(request, 'problem.create', { targetType: 'problem', targetId: problemId, detail: { pid, title } });
+    await audit(request, 'problem.create', { targetType: 'problem', targetId: problemId, detail: { pid, title } });
     return {
       ok: true,
       problem: { id: problemId, pid, reviewStatus: needReview ? 'pending' : 'approved' },
@@ -312,8 +312,8 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
   /* ---------------------------------------------------------------- update */
   app.put('/api/problems/:id', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -340,7 +340,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       if (body[key] !== undefined) set(column, String(body[key]));
     }
     if (body.difficulty !== undefined) {
-      set('difficulty', Math.min(maxDifficultyLevel(), Math.max(1, Number(body.difficulty) || 1)));
+      set('difficulty', Math.min(await maxDifficultyLevel(), Math.max(1, Number(body.difficulty) || 1)));
     }
     if (body.timeLimit !== undefined) {
       set('time_limit', Math.min(num('max_time_limit', 10000), Math.max(100, Number(body.timeLimit) || 1000)));
@@ -369,7 +369,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       if (!hasRole(user, 'admin')) throw forbidden('只有管理员可以修改题目编号');
       const pid = String(body.pid).trim();
       if (pid && pid !== problem.pid) {
-        if (get('SELECT id FROM problems WHERE pid = ? AND id <> ?', [pid, problem.id])) {
+        if (await get('SELECT id FROM problems WHERE pid = ? AND id <> ?', [pid, problem.id])) {
           throw conflict('该题目编号已存在');
         }
         set('pid', pid);
@@ -379,40 +379,40 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (!fields.length && body.tags === undefined) return { ok: true, message: '没有需要更新的内容' };
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE problems SET ${fields.join(', ')} WHERE id = ?`, [...values, problem.id]);
+      await run(`UPDATE problems SET ${fields.join(', ')} WHERE id = ?`, [...values, problem.id]);
     }
-    if (body.tags !== undefined) applyTags(problem.id, body.tags);
-    audit(request, 'problem.update', { targetType: 'problem', targetId: problem.id, detail: Object.keys(body) });
+    if (body.tags !== undefined) await applyTags(problem.id, body.tags);
+    await audit(request, 'problem.update', { targetType: 'problem', targetId: problem.id, detail: Object.keys(body) });
 
     let requeued = 0;
     if (bool('rejudge_on_problem_update', false) && (fields.some((f) => f.startsWith('test') || f.startsWith('judge')))) {
-      requeued = rejudge({ problemId: problem.id });
+      requeued = await rejudge({ problemId: problem.id });
     }
     return { ok: true, requeued };
   });
 
   app.delete('/api/problems/:id', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const hard = toBool((request.query as any)?.hard, false) && hasRole(user, 'superadmin');
     if (hard) {
-      run('DELETE FROM problems WHERE id = ?', [problem.id]);
-      run('DELETE FROM testcases WHERE problem_id = ?', [problem.id]);
+      await run('DELETE FROM problems WHERE id = ?', [problem.id]);
+      await run('DELETE FROM testcases WHERE problem_id = ?', [problem.id]);
       deleteProblemTestdata(problem.id);
     } else {
-      run(`UPDATE problems SET deleted_at = datetime('now'), is_public = 0 WHERE id = ?`, [problem.id]);
+      await run(`UPDATE problems SET deleted_at = datetime('now'), is_public = 0 WHERE id = ?`, [problem.id]);
     }
-    audit(request, 'problem.delete', { targetType: 'problem', targetId: problem.id, detail: { hard } });
+    await audit(request, 'problem.delete', { targetType: 'problem', targetId: problem.id, detail: { hard } });
     return { ok: true };
   });
 
   /* ------------------------------------------------------------- testcases */
   app.get('/api/problems/:id/testcases', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT id, idx, subtask_id, score, is_sample, input_file, output_file
          FROM testcases WHERE problem_id = ? ORDER BY idx`,
       [problem.id],
@@ -431,10 +431,10 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.get('/api/problems/:id/testcases/:caseId', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
-    const row = get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [
+    const row = await get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [
       parseId((request.params as any).caseId),
       problem.id,
     ]);
@@ -453,23 +453,23 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.post('/api/problems/:id/testcases', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const body = (request.body ?? {}) as any;
     const input = String(body.input ?? '');
     const output = String(body.output ?? '');
     if (!input && !output) throw badRequest('测试点内容不能为空');
-    const existing = get<{ maxIdx: number | null }>(
+    const existing = await get<{ maxIdx: number | null }>(
       'SELECT MAX(idx) AS maxIdx FROM testcases WHERE problem_id = ?',
       [problem.id],
     );
     const idx = Number(body.idx) > 0 ? Number(body.idx) : (existing?.maxIdx ?? 0) + 1;
-    if (get('SELECT id FROM testcases WHERE problem_id = ? AND idx = ?', [problem.id, idx])) {
+    if (await get('SELECT id FROM testcases WHERE problem_id = ? AND idx = ?', [problem.id, idx])) {
       throw conflict(`测试点 ${idx} 已存在`);
     }
     const saved = saveTestcase(problem.id, idx, input, output);
-    const info = run(
+    const info = await run(
       `INSERT INTO testcases (problem_id, idx, subtask_id, score, input_file, output_file, is_sample)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -482,55 +482,55 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         body.isSample ? 1 : 0,
       ],
     );
-    audit(request, 'testcase.create', { targetType: 'problem', targetId: problem.id, detail: { idx } });
+    await audit(request, 'testcase.create', { targetType: 'problem', targetId: problem.id, detail: { idx } });
     return { ok: true, id: Number(info.lastInsertRowid), idx };
   });
 
   app.put('/api/problems/:id/testcases/:caseId', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const caseId = parseId((request.params as any).caseId);
-    const row = get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [caseId, problem.id]);
+    const row = await get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [caseId, problem.id]);
     if (!row) throw notFound('测试点不存在');
     const body = (request.body ?? {}) as any;
     if (body.input !== undefined || body.output !== undefined) {
       const input = body.input !== undefined ? String(body.input) : readTestcaseFile(row.input_file);
       const output = body.output !== undefined ? String(body.output) : readTestcaseFile(row.output_file);
       const saved = saveTestcase(problem.id, row.idx, input, output);
-      run('UPDATE testcases SET input_file = ?, output_file = ? WHERE id = ?', [
+      await run('UPDATE testcases SET input_file = ?, output_file = ? WHERE id = ?', [
         saved.inputFile,
         saved.outputFile,
         caseId,
       ]);
     }
     if (body.subtask !== undefined) {
-      run('UPDATE testcases SET subtask_id = ? WHERE id = ?', [Number(body.subtask) || 0, caseId]);
+      await run('UPDATE testcases SET subtask_id = ? WHERE id = ?', [Number(body.subtask) || 0, caseId]);
     }
-    if (body.score !== undefined) run('UPDATE testcases SET score = ? WHERE id = ?', [Number(body.score) || 0, caseId]);
+    if (body.score !== undefined) await run('UPDATE testcases SET score = ? WHERE id = ?', [Number(body.score) || 0, caseId]);
     if (body.isSample !== undefined) {
-      run('UPDATE testcases SET is_sample = ? WHERE id = ?', [body.isSample ? 1 : 0, caseId]);
+      await run('UPDATE testcases SET is_sample = ? WHERE id = ?', [body.isSample ? 1 : 0, caseId]);
     }
-    audit(request, 'testcase.update', { targetType: 'problem', targetId: problem.id, detail: { caseId } });
+    await audit(request, 'testcase.update', { targetType: 'problem', targetId: problem.id, detail: { caseId } });
     return { ok: true };
   });
 
   app.delete('/api/problems/:id/testcases/:caseId', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     const caseId = parseId((request.params as any).caseId);
-    const row = get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [caseId, problem.id]);
+    const row = await get<any>('SELECT * FROM testcases WHERE id = ? AND problem_id = ?', [caseId, problem.id]);
     if (!row) throw notFound('测试点不存在');
     deleteTestcaseFiles(problem.id, row.idx);
-    run('DELETE FROM testcases WHERE id = ?', [caseId]);
-    audit(request, 'testcase.delete', { targetType: 'problem', targetId: problem.id, detail: { caseId } });
+    await run('DELETE FROM testcases WHERE id = ?', [caseId]);
+    await audit(request, 'testcase.delete', { targetType: 'problem', targetId: problem.id, detail: { caseId } });
     return { ok: true };
   });
 
   app.post('/api/problems/:id/testcases/zip', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     assertProblemAccess(problem, user);
     if (!bool('allow_zip_testdata', true)) throw forbidden('本站已关闭 ZIP 导入');
     const file = await (request as any).file({
@@ -562,16 +562,16 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     const replace = (request.query as any)?.replace === 'true';
     let idx = 0;
     const imported: number[] = [];
-    tx(() => {
+    await tx(async () => {
       if (replace) {
-        const old = all<any>('SELECT * FROM testcases WHERE problem_id = ?', [problem.id]);
+        const old = await all<any>('SELECT * FROM testcases WHERE problem_id = ?', [problem.id]);
         for (const row of old) deleteTestcaseFiles(problem.id, row.idx);
-        run('DELETE FROM testcases WHERE problem_id = ?', [problem.id]);
+        await run('DELETE FROM testcases WHERE problem_id = ?', [problem.id]);
       } else {
-        idx = Number(get<{ maxIdx: number | null }>(
+        idx = Number((await get<{ maxIdx: number | null }>(
           'SELECT MAX(idx) AS maxIdx FROM testcases WHERE problem_id = ?',
           [problem.id],
-        )?.maxIdx ?? 0);
+        ))?.maxIdx ?? 0);
       }
       const subtask = Number((request.query as any)?.subtask ?? 0) || 0;
       const score = Math.max(0, Number((request.query as any)?.score ?? 10) || 10);
@@ -580,7 +580,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         const input = inputs.get(key)!.toString('utf8');
         const output = outputs.get(key)!.toString('utf8');
         const saved = saveTestcase(problem.id, idx, input, output);
-        run(
+        await run(
           `INSERT INTO testcases (problem_id, idx, subtask_id, score, input_file, output_file, is_sample)
            VALUES (?, ?, ?, ?, ?, ?, 0)`,
           [problem.id, idx, subtask, score, saved.inputFile, saved.outputFile],
@@ -588,7 +588,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         imported.push(idx);
       }
     });
-    audit(request, 'testcase.import_zip', {
+    await audit(request, 'testcase.import_zip', {
       targetType: 'problem',
       targetId: problem.id,
       detail: { count: imported.length, replace },
@@ -597,12 +597,12 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.get('/api/problems/:id/testdata.zip', async (request, reply) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
     if (!hasRole(user, 'admin') && !bool('allow_download_testdata', false)) {
       throw forbidden('本站未开放测试数据下载');
     }
-    const rows = all<any>('SELECT * FROM testcases WHERE problem_id = ? ORDER BY idx', [problem.id]);
+    const rows = await all<any>('SELECT * FROM testcases WHERE problem_id = ? ORDER BY idx', [problem.id]);
     const zip = new AdmZip();
     for (const row of rows) {
       const dir = problemTestdataDir(problem.id);
@@ -611,7 +611,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       if (fs.existsSync(inFile)) zip.addLocalFile(inFile, '', `${row.idx}.in`);
       if (fs.existsSync(outFile)) zip.addLocalFile(outFile, '', `${row.idx}.out`);
     }
-    audit(request, 'problem.download_testdata', { targetType: 'problem', targetId: problem.id });
+    await audit(request, 'problem.download_testdata', { targetType: 'problem', targetId: problem.id });
     reply.header('Content-Type', 'application/zip');
     reply.header('Content-Disposition', `attachment; filename="${problem.pid}-testdata.zip"`);
     return reply.send(zip.toBuffer());
@@ -623,9 +623,9 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
    * 只返回自己的提交，因此不受「比赛期间隐藏代码」「关闭他人代码可见性」影响。
    */
   app.get('/api/problems/:id/last-code', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
-    const submission = get<any>(
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
+    const submission = await get<any>(
       `SELECT id, language, code, status, score, created_at
          FROM submissions
         WHERE problem_id = ? AND user_id = ?
@@ -646,34 +646,34 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.post('/api/problems/:id/favorite', async (request) => {
-    const user = requireUser(request);
-    const problem = findProblem(String((request.params as any).id));
-    const existing = get('SELECT 1 AS x FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [
+    const user = await requireUser(request);
+    const problem = await findProblem(String((request.params as any).id));
+    const existing = await get('SELECT 1 AS x FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [
       user.id,
       problem.id,
     ]);
     if (existing) {
-      run('DELETE FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [user.id, problem.id]);
-      run('UPDATE problems SET favorite_count = MAX(0, favorite_count - 1) WHERE id = ?', [problem.id]);
+      await run('DELETE FROM problem_favorites WHERE user_id = ? AND problem_id = ?', [user.id, problem.id]);
+      await run('UPDATE problems SET favorite_count = MAX(0, favorite_count - 1) WHERE id = ?', [problem.id]);
       return { ok: true, favorite: false };
     }
-    run('INSERT INTO problem_favorites (user_id, problem_id) VALUES (?, ?)', [user.id, problem.id]);
-    run('UPDATE problems SET favorite_count = favorite_count + 1 WHERE id = ?', [problem.id]);
+    await run('INSERT INTO problem_favorites (user_id, problem_id) VALUES (?, ?)', [user.id, problem.id]);
+    await run('UPDATE problems SET favorite_count = favorite_count + 1 WHERE id = ?', [problem.id]);
     return { ok: true, favorite: true };
   });
 
   app.post('/api/problems/:id/vote', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_difficulty_vote', true)) throw forbidden('本站已关闭难度投票');
-    const problem = findProblem(String((request.params as any).id));
+    const problem = await findProblem(String((request.params as any).id));
     const score = Math.min(7, Math.max(1, Number((request.body as any)?.score) || 0));
     if (!score) throw badRequest('请选择难度');
-    run(
+    await run(
       `INSERT INTO problem_votes (problem_id, user_id, score) VALUES (?, ?, ?)
        ON CONFLICT(problem_id, user_id) DO UPDATE SET score = excluded.score`,
       [problem.id, user.id, score],
     );
-    const result = get<{ avg: number | null; count: number }>(
+    const result = await get<{ avg: number | null; count: number }>(
       'SELECT AVG(score) AS avg, COUNT(*) AS count FROM problem_votes WHERE problem_id = ?',
       [problem.id],
     );
@@ -681,26 +681,26 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.get('/api/problems/:id/statistics', async (request) => {
-    const problem = findProblem(String((request.params as any).id));
-    const statuses = all<any>(
+    const problem = await findProblem(String((request.params as any).id));
+    const statuses = await all<any>(
       'SELECT status, COUNT(*) AS c FROM submissions WHERE problem_id = ? GROUP BY status ORDER BY c DESC',
       [problem.id],
     );
-    const languages = all<any>(
+    const languages = await all<any>(
       'SELECT language, COUNT(*) AS c FROM submissions WHERE problem_id = ? GROUP BY language ORDER BY c DESC',
       [problem.id],
     );
-    const hardest = all<any>(
+    const hardest = await all<any>(
       `SELECT s.id, s.status, s.time_ms, s.memory_kb, u.username FROM submissions s
          JOIN users u ON u.id = s.user_id
         WHERE s.problem_id = ? AND s.status <> 'AC' ORDER BY s.time_ms DESC LIMIT 5`,
       [problem.id],
     );
-    return { statuses, languages, hardest, tags: tagRows([problem.id]).get(problem.id) ?? [] };
+    return { statuses, languages, hardest, tags: (await tagRows([problem.id])).get(problem.id) ?? [] };
   });
 
   app.get('/api/problems/:id/submissions', async (request) => {
-    const problem = findProblem(String((request.params as any).id));
+    const problem = await findProblem(String((request.params as any).id));
     const query = request.query as any;
     const page = parsePage(query, num('submission_page_size', 50));
     const conditions = ['s.problem_id = ?'];
@@ -720,7 +720,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       conditions.push('s.language = ?');
       params.push(String(query.language));
     }
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.id, s.problem_id, s.user_id, s.language, s.status, s.score, s.time_ms, s.memory_kb,
               s.code_length, s.contest_id, s.created_at, p.pid, p.title AS problem_title,
               u.username, u.display_name, u.avatar
@@ -728,7 +728,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
         WHERE ${conditions.join(' AND ')} ORDER BY s.id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM submissions s JOIN users u ON u.id = s.user_id
         WHERE ${conditions.join(' AND ')}`,
       params,
@@ -742,7 +742,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   /* ------------------------------------------------------------------ tags */
   app.get('/api/tags', async () => {
     return {
-      tags: all<any>(
+      tags: await all<any>(
         `SELECT t.*, (SELECT COUNT(*) FROM problem_tags pt
                         JOIN problems p ON p.id = pt.problem_id AND p.is_public = 1 AND p.deleted_at IS NULL
                        WHERE pt.tag_id = t.id) AS problem_count
@@ -754,24 +754,24 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.post('/api/tags', async (request) => {
-    const user = requireAdmin(request);
+    const user = await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const name = String(body.name ?? '').trim();
     if (!name) throw badRequest('标签名称不能为空');
-    if (get('SELECT id FROM tags WHERE name = ?', [name])) throw conflict('标签已存在');
-    const info = run('INSERT INTO tags (name, color, category, sort) VALUES (?, ?, ?, ?)', [
+    if (await get('SELECT id FROM tags WHERE name = ?', [name])) throw conflict('标签已存在');
+    const info = await run('INSERT INTO tags (name, color, category, sort) VALUES (?, ?, ?, ?)', [
       name,
       String(body.color ?? autoTagColor(name)),
       String(body.category ?? '默认').trim() || '默认',
       Number(body.sort ?? 0) || 0,
     ]);
-    audit(request, 'tag.create', { targetType: 'tag', targetId: Number(info.lastInsertRowid), detail: { name } });
+    await audit(request, 'tag.create', { targetType: 'tag', targetId: Number(info.lastInsertRowid), detail: { name } });
     void user;
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 
   app.put('/api/tags/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -792,25 +792,25 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       fields.push('sort = ?');
       values.push(Number(body.sort) || 0);
     }
-    if (fields.length) run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
-    audit(request, 'tag.update', { targetType: 'tag', targetId: id });
+    if (fields.length) await run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    await audit(request, 'tag.update', { targetType: 'tag', targetId: id });
     return { ok: true };
   });
 
   app.delete('/api/tags/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    run('DELETE FROM tags WHERE id = ?', [id]);
-    audit(request, 'tag.delete', { targetType: 'tag', targetId: id });
+    await run('DELETE FROM tags WHERE id = ?', [id]);
+    await audit(request, 'tag.delete', { targetType: 'tag', targetId: id });
     return { ok: true };
   });
 
   /* --------------------------------------------------------- 标签分组 */
   /** 分组就是标签的 category 字段，这里按分组聚合给后台管理用 */
   app.get('/api/admin/tag-groups', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     return {
-      groups: all<any>(
+      groups: await all<any>(
         `SELECT category AS name, COUNT(*) AS count, MIN(sort) AS sort
            FROM tags GROUP BY category
           ORDER BY CASE WHEN category = ? THEN 0 ELSE 1 END, MIN(sort) ASC, category ASC`,
@@ -821,50 +821,50 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
   /** 重命名分组（也可以用来合并：把 from 的分组并到 to） */
   app.put('/api/admin/tag-groups', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const from = String(body.from ?? '').trim();
     const to = String(body.to ?? '').trim();
     if (!from) throw badRequest('请指定要修改的分组');
     if (!to) throw badRequest('分组名称不能为空');
     if (to.length > 32) throw badRequest('分组名称最多 32 个字符');
-    const affected = run('UPDATE tags SET category = ? WHERE category = ?', [to, from]).changes;
-    audit(request, 'tag_group.rename', { detail: { from, to, affected } });
+    const affected = (await run('UPDATE tags SET category = ? WHERE category = ?', [to, from])).changes;
+    await audit(request, 'tag_group.rename', { detail: { from, to, affected } });
     return { ok: true, affected };
   });
 
   /** 删除分组：分组里的标签统一挪到指定分组（默认「默认」） */
   app.delete('/api/admin/tag-groups', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const query = request.query as any;
     const name = String(query.name ?? '').trim();
     const moveTo = String(query.moveTo ?? '默认').trim() || '默认';
     if (!name) throw badRequest('请指定要删除的分组');
     if (name === moveTo) throw badRequest('不能把分组并到它自己');
-    const affected = run('UPDATE tags SET category = ? WHERE category = ?', [moveTo, name]).changes;
-    audit(request, 'tag_group.delete', { detail: { name, moveTo, affected } });
+    const affected = (await run('UPDATE tags SET category = ? WHERE category = ?', [moveTo, name])).changes;
+    await audit(request, 'tag_group.delete', { detail: { name, moveTo, affected } });
     return { ok: true, affected };
   });
 
   /** 给分组里的标签按名称重新配色（用于把以前清一色蓝的标签刷成彩色） */
   app.put('/api/admin/tag-groups/colors', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const group = String(body.group ?? '').trim();
     const rows = group
-      ? all<{ id: number; name: string }>('SELECT id, name FROM tags WHERE category = ?', [group])
-      : all<{ id: number; name: string }>('SELECT id, name FROM tags');
+      ? await all<{ id: number; name: string }>('SELECT id, name FROM tags WHERE category = ?', [group])
+      : await all<{ id: number; name: string }>('SELECT id, name FROM tags');
     for (const row of rows) {
-      run('UPDATE tags SET color = ? WHERE id = ?', [autoTagColor(row.name), row.id]);
+      await run('UPDATE tags SET color = ? WHERE id = ?', [autoTagColor(row.name), row.id]);
     }
-    audit(request, 'tag_group.recolor', { detail: { group: group || '全部', count: rows.length } });
+    await audit(request, 'tag_group.recolor', { detail: { group: group || '全部', count: rows.length } });
     return { ok: true, affected: rows.length };
   });
 
   /* ------------------------------------------------------------- 难度等级 */
   /** 全部难度等级（前台筛选、出题、导入都要用） */
   app.get('/api/difficulties', async () => ({
-    difficulties: difficultyDefs().map((item) => ({
+    difficulties: (await difficultyDefs()).map((item) => ({
       id: item.id,
       value: item.level,
       name: item.name,
@@ -875,28 +875,28 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
 
   /** 新建一个难度等级（接在最高级之后） */
   app.post('/api/admin/difficulties', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const name = String(body.name ?? '').trim().slice(0, 24);
     if (!name) throw badRequest('请填写难度名称');
-    if (difficultyDefs().some((item) => item.name === name)) throw conflict('该难度名称已存在');
-    const level = maxDifficultyLevel() + 1;
-    const info = run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
+    if ((await difficultyDefs()).some((item) => item.name === name)) throw conflict('该难度名称已存在');
+    const level = await maxDifficultyLevel() + 1;
+    const info = await run('INSERT INTO difficulties (level, name, color, color_dark) VALUES (?, ?, ?, ?)', [
       level,
       name,
       String(body.color ?? '#60a5fa'),
       String(body.colorDark ?? body.color ?? '#60a5fa'),
     ]);
     invalidateDifficulties();
-    audit(request, 'difficulty.create', { detail: { level, name } });
+    await audit(request, 'difficulty.create', { detail: { level, name } });
     return { ok: true, id: Number(info.lastInsertRowid), level };
   });
 
   /** 修改难度名称与配色 */
   app.put('/api/admin/difficulties/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
     if (!row) throw notFound('难度不存在');
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -904,7 +904,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (body.name !== undefined) {
       const name = String(body.name).trim().slice(0, 24);
       if (!name) throw badRequest('难度名称不能为空');
-      const dup = get('SELECT id FROM difficulties WHERE name = ? AND id <> ?', [name, id]);
+      const dup = await get('SELECT id FROM difficulties WHERE name = ? AND id <> ?', [name, id]);
       if (dup) throw conflict('该难度名称已存在');
       fields.push('name = ?');
       values.push(name);
@@ -917,52 +917,59 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       fields.push('color_dark = ?');
       values.push(String(body.colorDark));
     }
-    if (fields.length) run(`UPDATE difficulties SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    if (fields.length) await run(`UPDATE difficulties SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     invalidateDifficulties();
-    audit(request, 'difficulty.update', { targetType: 'difficulty', targetId: id });
+    await audit(request, 'difficulty.update', { targetType: 'difficulty', targetId: id });
     return { ok: true };
   });
 
   /** 删除难度：还有题目在用、或只剩一个时不允许删 */
   app.delete('/api/admin/difficulties/:id', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM difficulties WHERE id = ?', [id]);
     if (!row) throw notFound('难度不存在');
-    const defs = difficultyDefs();
+    const defs = await difficultyDefs();
     if (defs.length <= 1) throw badRequest('至少要保留一个难度等级');
-    const used = count('SELECT COUNT(*) AS c FROM problems WHERE difficulty = ? AND deleted_at IS NULL', [row.level]);
+    const used = await count('SELECT COUNT(*) AS c FROM problems WHERE difficulty = ? AND deleted_at IS NULL', [row.level]);
     if (used > 0) throw conflict(`还有 ${used} 道题使用「${row.name}」，请先调整这些题目的难度`);
-    run('DELETE FROM difficulties WHERE id = ?', [id]);
+    await run('DELETE FROM difficulties WHERE id = ?', [id]);
     invalidateDifficulties();
-    audit(request, 'difficulty.delete', { detail: { level: row.level, name: row.name } });
+    await audit(request, 'difficulty.delete', { detail: { level: row.level, name: row.name } });
     return { ok: true };
   });
 
   /* ------------------------------------------------------------ favourites */
   app.get('/api/favorites', async (request) => {
-    const user = requireUser(request);
-    const rows = all<any>(
+    const user = await requireUser(request);
+    const rows = await all<any>(
       `SELECT p.*, u.username AS author_name, u.display_name AS author_display, f.created_at AS favorited_at
          FROM problem_favorites f JOIN problems p ON p.id = f.problem_id
          LEFT JOIN users u ON u.id = p.author_id
         WHERE f.user_id = ? AND p.deleted_at IS NULL ORDER BY f.created_at DESC LIMIT 200`,
       [user.id],
     );
-    const tagMap = tagRows(rows.map((r) => r.id));
-    return { items: rows.map((row) => ({ ...problemSummary(row, { tags: tagMap.get(row.id) ?? [] }), favoritedAt: row.favorited_at })) };
+    const tagMap = await tagRows(rows.map((r) => r.id));
+    return {
+      items: await Promise.all(
+        rows.map(async (row) => ({
+          ...(await problemSummary(row, { tags: tagMap.get(row.id) ?? [] })),
+          favoritedAt: row.favorited_at,
+        })),
+      ),
+    };
   });
 
   /* ----------------------------------------------------------- 题解 by pid */
   app.get('/api/problems/:id/solutions', async (request) => {
-    const problem = findProblem(String((request.params as any).id));
+    const problem = await findProblem(String((request.params as any).id));
     if (!bool('enable_solution', true)) return { items: [] };
     const query = request.query as any;
     const page = parsePage(query, 20);
     const viewer = request.user;
     const solved = viewer
       ? Boolean(
-          get('SELECT 1 AS x FROM user_problem_stats WHERE user_id = ? AND problem_id = ? AND accepted > 0', [
+          await get('SELECT 1 AS x FROM user_problem_stats WHERE user_id = ? AND problem_id = ? AND accepted > 0', [
             viewer.id,
             problem.id,
           ]),
@@ -971,7 +978,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (!solved && !bool('enable_problem_solution_visible', true) && !hasRole(viewer, 'admin')) {
       return { items: [], locked: true, message: '通过本题后才能查看题解' };
     }
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.id, s.title, s.author_id, s.upvotes, s.downvotes, s.views, s.created_at, s.is_public,
               u.username, u.display_name, u.avatar,
               (SELECT value FROM solution_votes v WHERE v.solution_id = s.id AND v.user_id = ?) AS my_vote
@@ -988,7 +995,7 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
   });
 }
 
-function applyTags(problemId: number, tags: unknown): void {
+async function applyTags(problemId: number, tags: unknown): Promise<void> {
   if (!Array.isArray(tags)) return;
   const ids: number[] = [];
   for (const tag of tags) {
@@ -996,25 +1003,25 @@ function applyTags(problemId: number, tags: unknown): void {
       ids.push(tag);
     } else if (typeof tag === 'string' && tag.trim()) {
       const name = tag.trim().slice(0, 32);
-      const existing = get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
+      const existing = await get<{ id: number }>('SELECT id FROM tags WHERE name = ?', [name]);
       if (existing) ids.push(existing.id);
       // 自动创建的标签统一归到「默认」分组，管理员可在后台改分组
       else {
         ids.push(
           Number(
-            run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
+            (await run(`INSERT INTO tags (name, color, category) VALUES (?, ?, ?)`, [
               name,
               autoTagColor(name),
               '默认',
-            ]).lastInsertRowid,
+            ])).lastInsertRowid,
           ),
         );
       }
     }
   }
-  run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
+  await run('DELETE FROM problem_tags WHERE problem_id = ?', [problemId]);
   const stmt = 'INSERT OR IGNORE INTO problem_tags (problem_id, tag_id) VALUES (?, ?)';
-  for (const id of ids) run(stmt, [problemId, id]);
+  for (const id of ids) await run(stmt, [problemId, id]);
 }
 
 function fileSize(relative: string): number {

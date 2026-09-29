@@ -220,6 +220,34 @@ CREATE TABLE IF NOT EXISTS user_problem_stats (
 -- ---------------------------------------------------------------------------
 -- Contests
 -- ---------------------------------------------------------------------------
+-- 团队表要在比赛之前建（比赛可以挂在团队下）
+CREATE TABLE IF NOT EXISTS teams (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL UNIQUE,
+  slug        TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  avatar      TEXT DEFAULT '',
+  background  TEXT NOT NULL DEFAULT '',
+  announcement TEXT NOT NULL DEFAULT '',
+  join_policy TEXT NOT NULL DEFAULT 'open',
+  category    TEXT NOT NULL DEFAULT '',
+  max_members INTEGER NOT NULL DEFAULT 0,
+  allow_member_invite INTEGER NOT NULL DEFAULT 1,
+  invite_code TEXT NOT NULL DEFAULT '',
+  experience  INTEGER NOT NULL DEFAULT 0,
+  owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_public   INTEGER NOT NULL DEFAULT 1,
+  member_count INTEGER NOT NULL DEFAULT 1,
+  problem_count INTEGER NOT NULL DEFAULT 0,
+  discuss_count INTEGER NOT NULL DEFAULT 0,
+  assignment_count INTEGER NOT NULL DEFAULT 0,
+  contest_count INTEGER NOT NULL DEFAULT 0,
+  list_count  INTEGER NOT NULL DEFAULT 0,
+  file_count  INTEGER NOT NULL DEFAULT 0,
+  is_deleted  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS contests (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   title           TEXT NOT NULL,
@@ -407,33 +435,6 @@ CREATE TABLE IF NOT EXISTS list_favorites (
 -- ---------------------------------------------------------------------------
 -- 团队
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS teams (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT NOT NULL UNIQUE,
-  slug        TEXT NOT NULL UNIQUE,
-  description TEXT NOT NULL DEFAULT '',
-  avatar      TEXT DEFAULT '',
-  background  TEXT NOT NULL DEFAULT '',
-  announcement TEXT NOT NULL DEFAULT '',          -- 团队公告（成员可见）
-  join_policy TEXT NOT NULL DEFAULT 'open',       -- open 公开团队 | approval 保护团队 | closed 私有团队
-  category    TEXT NOT NULL DEFAULT '',           -- 团队分类，例如 竞赛 / 学校 / 兴趣
-  max_members INTEGER NOT NULL DEFAULT 0,         -- 0 表示不限
-  allow_member_invite INTEGER NOT NULL DEFAULT 1, -- 是否允许普通成员邀请
-  invite_code TEXT NOT NULL DEFAULT '',           -- 邀请码，凭码可直接加入
-  experience  INTEGER NOT NULL DEFAULT 0,         -- 团队经验值（由成员活跃自动累积）
-  owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  is_public   INTEGER NOT NULL DEFAULT 1,
-  member_count INTEGER NOT NULL DEFAULT 1,
-  problem_count INTEGER NOT NULL DEFAULT 0,
-  discuss_count INTEGER NOT NULL DEFAULT 0,
-  assignment_count INTEGER NOT NULL DEFAULT 0,
-  contest_count INTEGER NOT NULL DEFAULT 0,
-  list_count  INTEGER NOT NULL DEFAULT 0,
-  file_count  INTEGER NOT NULL DEFAULT 0,
-  is_deleted  INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS team_members (
   team_id   INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

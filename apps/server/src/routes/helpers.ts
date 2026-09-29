@@ -71,10 +71,10 @@ export function levelOf(solvedCount: number): { name: string; index: number; nex
   };
 }
 
-export function tagRows(problemIds: number[]): Map<number, any[]> {
+export async function tagRows(problemIds: number[]): Promise<Map<number, any[]>> {
   const map = new Map<number, any[]>();
   if (!problemIds.length) return map;
-  const rows = all<any>(
+  const rows = await all<any>(
     `SELECT pt.problem_id, t.id, t.name, t.color, t.category
        FROM problem_tags pt JOIN tags t ON t.id = pt.tag_id
       WHERE pt.problem_id IN (${problemIds.map(() => '?').join(',')})`,
@@ -88,7 +88,7 @@ export function tagRows(problemIds: number[]): Map<number, any[]> {
   return map;
 }
 
-export function problemSummary(row: any, options: { tags?: any[]; showRate?: boolean } = {}) {
+export async function problemSummary(row: any, options: { tags?: any[]; showRate?: boolean } = {}) {
   const total = row.submit_count ?? 0;
   const accepted = row.accepted_count ?? 0;
   return {
@@ -96,9 +96,9 @@ export function problemSummary(row: any, options: { tags?: any[]; showRate?: boo
     pid: row.pid,
     title: row.title,
     difficulty: row.difficulty,
-    difficultyName: difficultyOf(row.difficulty).name,
-    difficultyColor: difficultyOf(row.difficulty).color,
-    difficultyColorDark: difficultyOf(row.difficulty).colorDark,
+    difficultyName: (await difficultyOf(row.difficulty)).name,
+    difficultyColor: (await difficultyOf(row.difficulty)).color,
+    difficultyColorDark: (await difficultyOf(row.difficulty)).colorDark,
     tags: options.tags ?? [],
     provider: row.provider ?? '',
     submitCount: total,
@@ -158,10 +158,10 @@ export function isProblemVisibleTo(row: any, user: AuthUser | null): boolean {
   return false;
 }
 
-export function nextProblemPid(): string {
+export async function nextProblemPid(): Promise<string> {
   const prefix = str('problem_id_prefix', 'P') || 'P';
   const start = num('problem_id_start', 1001);
-  const rows = all<{ pid: string }>(
+  const rows = await all<{ pid: string }>(
     `SELECT pid FROM problems WHERE pid LIKE ? ORDER BY LENGTH(pid) DESC, pid DESC LIMIT 2000`,
     [`${prefix}%`],
   );
@@ -173,12 +173,12 @@ export function nextProblemPid(): string {
   return `${prefix}${Math.max(max + 1, start)}`;
 }
 
-export function problemDetailExtras(problemId: number, user: AuthUser | null) {
-  const stats = get<any>(
+export async function problemDetailExtras(problemId: number, user: AuthUser | null) {
+  const stats = await get<any>(
     'SELECT attempts, accepted, first_ac_at FROM user_problem_stats WHERE user_id = ? AND problem_id = ?',
     [user?.id ?? 0, problemId],
   );
-  const votes = get<{ avg: number | null; count: number }>(
+  const votes = await get<{ avg: number | null; count: number }>(
     'SELECT AVG(score) AS avg, COUNT(*) AS count FROM problem_votes WHERE problem_id = ?',
     [problemId],
   );

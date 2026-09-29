@@ -29,7 +29,7 @@ function userBrief(row: any) {
 export async function registerCommunityRoutes(app: FastifyInstance): Promise<void> {
   /* ---------------------------------------------------------------- boards */
   app.get('/api/boards', async () => {
-    const rows = all<any>('SELECT * FROM discussion_boards ORDER BY sort ASC, id ASC');
+    const rows = await all<any>('SELECT * FROM discussion_boards ORDER BY sort ASC, id ASC');
     return { boards: rows.length ? rows : settingJson<any[]>('board_names', []) };
   });
 
@@ -66,7 +66,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         : query.sort === 'new_reply'
           ? 'COALESCE(d.last_reply_at, d.created_at) DESC'
           : 'd.is_pinned DESC, d.id DESC';
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT d.id, d.title, d.problem_id, d.contest_id, d.is_pinned, d.is_locked, d.views, d.reply_count,
               d.created_at, d.last_reply_at, d.board_id, b.slug AS board_slug, b.name AS board_name,
               u.id AS author_id, u.username, u.display_name, u.avatar, u.solved_count,
@@ -79,7 +79,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         ORDER BY ${order} LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM discussions d JOIN users u ON u.id = d.author_id
          LEFT JOIN discussion_boards b ON b.id = d.board_id WHERE ${conditions.join(' AND ')}`,
       params,
@@ -107,7 +107,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
 
   app.get('/api/discussions/:id', async (request) => {
     const id = parseId((request.params as any).id);
-    const row = get<any>(
+    const row = await get<any>(
       `SELECT d.*, b.slug AS board_slug, b.name AS board_name,
               u.id AS author_id, u.username, u.display_name, u.avatar, u.solved_count,
               p.pid AS problem_pid, p.title AS problem_title
@@ -117,8 +117,8 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       [id],
     );
     if (!row || (row.is_deleted && !hasRole(request.user, 'admin'))) throw notFound('帖子不存在');
-    run('UPDATE discussions SET views = views + 1 WHERE id = ?', [id]);
-    const replies = all<any>(
+    await run('UPDATE discussions SET views = views + 1 WHERE id = ?', [id]);
+    const replies = await all<any>(
       `SELECT r.id, r.content, r.floor, r.created_at, r.is_deleted, r.reply_to_id,
               u.id AS author_id, u.username, u.display_name, u.avatar, u.solved_count,
               s.username AS reply_to_username
@@ -159,10 +159,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.post('/api/discussions', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_discussion', true)) throw forbidden('讨论区已关闭');
     const minSolved = num('post_min_solved', 0);
-    const solved = get<{ solved_count: number }>('SELECT solved_count FROM users WHERE id = ?', [user.id]);
+    const solved = await get<{ solved_count: number }>('SELECT solved_count FROM users WHERE id = ?', [user.id]);
     if (minSolved > 0 && (solved?.solved_count ?? 0) < minSolved) {
       throw forbidden(`发帖需要至少通过 ${minSolved} 道题目`);
     }
@@ -180,23 +180,23 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
 
     let boardId: number | null = null;
     if (body.board) {
-      const board = get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', [String(body.board)]);
+      const board = await get<{ id: number }>('SELECT id FROM discussion_boards WHERE slug = ?', [String(body.board)]);
       boardId = board?.id ?? null;
       if (!boardId) {
         const fromSettings = settingJson<any[]>('board_names', []).find((b) => b.slug === body.board);
         if (fromSettings) {
           boardId = Number(
-            run('INSERT INTO discussion_boards (slug, name, description) VALUES (?, ?, ?)', [
+            (await run('INSERT INTO discussion_boards (slug, name, description) VALUES (?, ?, ?)', [
               fromSettings.slug,
               fromSettings.name,
               fromSettings.description ?? '',
-            ]).lastInsertRowid,
+            ])).lastInsertRowid,
           );
         }
       }
     }
 
-    const info = run(
+    const info = await run(
       `INSERT INTO discussions (board_id, problem_id, contest_id, title, content, author_id, last_reply_at, last_reply_user_id)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
       [
@@ -212,17 +212,17 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const discussionId = Number(info.lastInsertRowid);
     const points = num('points_per_discussion', 0);
     if (points > 0 && bool('enable_points', true)) {
-      addPoints(user.id, points, '发布讨论', { refType: 'discussion', refId: discussionId });
+      await addPoints(user.id, points, '发布讨论', { refType: 'discussion', refId: discussionId });
     }
-    evaluateAchievements(user.id);
-    audit(request, 'discussion.create', { targetType: 'discussion', targetId: discussionId });
+    await evaluateAchievements(user.id);
+    await audit(request, 'discussion.create', { targetType: 'discussion', targetId: discussionId });
     return { ok: true, id: discussionId };
   });
 
   app.put('/api/discussions/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
     if (!row) throw notFound('帖子不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
@@ -253,27 +253,27 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE discussions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+      await run(`UPDATE discussions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
-    audit(request, 'discussion.update', { targetType: 'discussion', targetId: id });
+    await audit(request, 'discussion.update', { targetType: 'discussion', targetId: id });
     return { ok: true };
   });
 
   app.delete('/api/discussions/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
     if (!row) throw notFound('帖子不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己的帖子');
-    run('UPDATE discussions SET is_deleted = 1 WHERE id = ?', [id]);
-    audit(request, 'discussion.delete', { targetType: 'discussion', targetId: id });
+    await run('UPDATE discussions SET is_deleted = 1 WHERE id = ?', [id]);
+    await audit(request, 'discussion.delete', { targetType: 'discussion', targetId: id });
     return { ok: true };
   });
 
   app.post('/api/discussions/:id/replies', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const discussion = get<any>('SELECT * FROM discussions WHERE id = ? AND is_deleted = 0', [id]);
+    const discussion = await get<any>('SELECT * FROM discussions WHERE id = ? AND is_deleted = 0', [id]);
     if (!discussion) throw notFound('帖子不存在');
     if (discussion.is_locked && !hasRole(user, 'admin')) throw forbidden('该帖子已锁定，无法回复');
     const interval = num('post_interval_seconds', 15);
@@ -284,22 +284,22 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (content.length > 10000) throw badRequest('回复内容过长');
     checkBannedWords(content);
 
-    const floor = (get<{ maxFloor: number | null }>(
+    const floor = ((await get<{ maxFloor: number | null }>(
       'SELECT MAX(floor) AS maxFloor FROM discussion_replies WHERE discussion_id = ?',
       [id],
-    )?.maxFloor ?? 0) + 1;
-    const info = run(
+    ))?.maxFloor ?? 0) + 1;
+    const info = await run(
       `INSERT INTO discussion_replies (discussion_id, author_id, content, floor, reply_to_id)
        VALUES (?, ?, ?, ?, ?)`,
       [id, user.id, content, floor, body.replyToId ? Number(body.replyToId) : null],
     );
-    run(
+    await run(
       `UPDATE discussions SET reply_count = reply_count + 1, last_reply_at = datetime('now'),
          last_reply_user_id = ? WHERE id = ?`,
       [user.id, id],
     );
     if (discussion.author_id !== user.id && bool('notify_on_reply', true)) {
-      sendMessage({
+      await sendMessage({
         to: discussion.author_id,
         from: user.id,
         title: `你的帖子「${discussion.title}」有新回复`,
@@ -310,9 +310,9 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       });
     }
     if (body.replyToId) {
-      const parent = get<any>('SELECT author_id FROM discussion_replies WHERE id = ?', [Number(body.replyToId)]);
+      const parent = await get<any>('SELECT author_id FROM discussion_replies WHERE id = ?', [Number(body.replyToId)]);
       if (parent && parent.author_id !== user.id && parent.author_id !== discussion.author_id) {
-        sendMessage({
+        await sendMessage({
           to: parent.author_id,
           from: user.id,
           title: '有人回复了你',
@@ -323,26 +323,26 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         });
       }
     }
-    evaluateAchievements(user.id, { silent: true });
+    await evaluateAchievements(user.id, { silent: true });
     return { ok: true, id: Number(info.lastInsertRowid), floor };
   });
 
   app.delete('/api/discussion-replies/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM discussion_replies WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM discussion_replies WHERE id = ?', [id]);
     if (!row) throw notFound('回复不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己的回复');
-    run('UPDATE discussion_replies SET is_deleted = 1, content = ? WHERE id = ?', ['[该回复已被删除]', id]);
-    run('UPDATE discussions SET reply_count = MAX(0, reply_count - 1) WHERE id = ?', [row.discussion_id]);
-    audit(request, 'reply.delete', { targetType: 'reply', targetId: id });
+    await run('UPDATE discussion_replies SET is_deleted = 1, content = ? WHERE id = ?', ['[该回复已被删除]', id]);
+    await run('UPDATE discussions SET reply_count = MAX(0, reply_count - 1) WHERE id = ?', [row.discussion_id]);
+    await audit(request, 'reply.delete', { targetType: 'reply', targetId: id });
     return { ok: true };
   });
 
   /* ----------------------------------------------------------------- 题解 */
   app.get('/api/solutions/:id', async (request) => {
     const id = parseId((request.params as any).id);
-    const row = get<any>(
+    const row = await get<any>(
       `SELECT s.*, u.username, u.display_name, u.avatar, p.pid, p.title AS problem_title,
               (SELECT value FROM solution_votes v WHERE v.solution_id = s.id AND v.user_id = ?) AS my_vote
          FROM solutions s JOIN users u ON u.id = s.author_id JOIN problems p ON p.id = s.problem_id
@@ -353,7 +353,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (!row.is_public && row.author_id !== request.user?.id && !hasRole(request.user, 'admin')) {
       throw forbidden('该题解尚未公开');
     }
-    run('UPDATE solutions SET views = views + 1 WHERE id = ?', [id]);
+    await run('UPDATE solutions SET views = views + 1 WHERE id = ?', [id]);
     return {
       solution: {
         ...row,
@@ -364,19 +364,19 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.post('/api/solutions', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_solution', true)) throw forbidden('题解区已关闭');
     const minSolved = num('solution_min_solved', 0);
-    const stats = get<{ solved_count: number }>('SELECT solved_count FROM users WHERE id = ?', [user.id]);
+    const stats = await get<{ solved_count: number }>('SELECT solved_count FROM users WHERE id = ?', [user.id]);
     if (minSolved > 0 && (stats?.solved_count ?? 0) < minSolved) {
       throw forbidden(`发布题解需要至少通过 ${minSolved} 道题目`);
     }
     const body = (request.body ?? {}) as any;
     const problemId = Number(body.problemId);
-    const problem = get<any>('SELECT id, pid, owner_id, author_id FROM problems WHERE id = ?', [problemId]);
+    const problem = await get<any>('SELECT id, pid, owner_id, author_id FROM problems WHERE id = ?', [problemId]);
     if (!problem) throw notFound('题目不存在');
 
-    const solved = get(
+    const solved = await get(
       'SELECT 1 AS x FROM user_problem_stats WHERE user_id = ? AND problem_id = ? AND accepted > 0',
       [user.id, problemId],
     );
@@ -388,24 +388,24 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const content = String(body.content ?? '').trim();
     if (content.length < 10) throw badRequest('题解内容太短');
     const needApprove = bool('solution_need_approved', false) && !hasRole(user, 'admin');
-    const info = run(
+    const info = await run(
       `INSERT INTO solutions (problem_id, author_id, title, content, is_public) VALUES (?, ?, ?, ?, ?)`,
       [problemId, user.id, title.slice(0, 150), content, needApprove ? 0 : 1],
     );
     const solutionId = Number(info.lastInsertRowid);
     const points = num('points_per_solution', 0);
     if (points > 0 && bool('enable_points', true)) {
-      addPoints(user.id, points, '发布题解', { refType: 'solution', refId: solutionId });
+      await addPoints(user.id, points, '发布题解', { refType: 'solution', refId: solutionId });
     }
-    evaluateAchievements(user.id);
-    audit(request, 'solution.create', { targetType: 'solution', targetId: solutionId });
+    await evaluateAchievements(user.id);
+    await audit(request, 'solution.create', { targetType: 'solution', targetId: solutionId });
     return { ok: true, id: solutionId, pending: needApprove };
   });
 
   app.put('/api/solutions/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
@@ -425,36 +425,36 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE solutions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+      await run(`UPDATE solutions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
     return { ok: true };
   });
 
   app.delete('/api/solutions/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
-    run('UPDATE solutions SET is_deleted = 1 WHERE id = ?', [id]);
-    audit(request, 'solution.delete', { targetType: 'solution', targetId: id });
+    await run('UPDATE solutions SET is_deleted = 1 WHERE id = ?', [id]);
+    await audit(request, 'solution.delete', { targetType: 'solution', targetId: id });
     return { ok: true };
   });
 
   app.post('/api/solutions/:id/vote', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
     const value = Number((request.body as any)?.value) === -1 ? -1 : 1;
-    const existing = get<any>('SELECT value FROM solution_votes WHERE solution_id = ? AND user_id = ?', [
+    const existing = await get<any>('SELECT value FROM solution_votes WHERE solution_id = ? AND user_id = ?', [
       id,
       user.id,
     ]);
     if (existing) {
       if (existing.value === value) {
-        run('DELETE FROM solution_votes WHERE solution_id = ? AND user_id = ?', [id, user.id]);
-        run(
+        await run('DELETE FROM solution_votes WHERE solution_id = ? AND user_id = ?', [id, user.id]);
+        await run(
           `UPDATE solutions SET ${value === 1 ? 'upvotes' : 'downvotes'} = MAX(0, ${
             value === 1 ? 'upvotes' : 'downvotes'
           } - 1) WHERE id = ?`,
@@ -462,16 +462,16 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         );
         return { ok: true, vote: 0 };
       }
-      run('UPDATE solution_votes SET value = ? WHERE solution_id = ? AND user_id = ?', [value, id, user.id]);
+      await run('UPDATE solution_votes SET value = ? WHERE solution_id = ? AND user_id = ?', [value, id, user.id]);
       if (value === 1) {
-        run('UPDATE solutions SET upvotes = upvotes + 1, downvotes = MAX(0, downvotes - 1) WHERE id = ?', [id]);
+        await run('UPDATE solutions SET upvotes = upvotes + 1, downvotes = MAX(0, downvotes - 1) WHERE id = ?', [id]);
       } else {
-        run('UPDATE solutions SET downvotes = downvotes + 1, upvotes = MAX(0, upvotes - 1) WHERE id = ?', [id]);
+        await run('UPDATE solutions SET downvotes = downvotes + 1, upvotes = MAX(0, upvotes - 1) WHERE id = ?', [id]);
       }
       return { ok: true, vote: value };
     }
-    run('INSERT INTO solution_votes (solution_id, user_id, value) VALUES (?, ?, ?)', [id, user.id, value]);
-    run(`UPDATE solutions SET ${value === 1 ? 'upvotes' : 'downvotes'} = ${
+    await run('INSERT INTO solution_votes (solution_id, user_id, value) VALUES (?, ?, ?)', [id, user.id, value]);
+    await run(`UPDATE solutions SET ${value === 1 ? 'upvotes' : 'downvotes'} = ${
       value === 1 ? 'upvotes' : 'downvotes'
     } + 1 WHERE id = ?`, [id]);
     return { ok: true, vote: value };
@@ -497,7 +497,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       const like = sqlLike(String(query.q));
       params.push(like, like);
     }
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT a.id, a.title, a.summary, a.cover, a.category, a.views, a.is_pinned, a.created_at,
               u.id AS author_id, u.username, u.display_name, u.avatar
          FROM articles a JOIN users u ON u.id = a.author_id
@@ -505,7 +505,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         ORDER BY a.is_pinned DESC, a.id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(
+    const total = await count(
       `SELECT COUNT(*) AS c FROM articles a JOIN users u ON u.id = a.author_id WHERE ${conditions.join(' AND ')}`,
       params,
     );
@@ -519,7 +519,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
 
   app.get('/api/articles/:id', async (request) => {
     const id = parseId((request.params as any).id);
-    const row = get<any>(
+    const row = await get<any>(
       `SELECT a.*, u.id AS author_id, u.username, u.display_name, u.avatar
          FROM articles a JOIN users u ON u.id = a.author_id WHERE a.id = ?`,
       [id],
@@ -528,7 +528,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (!row.is_public && row.author_id !== request.user?.id && !hasRole(request.user, 'admin')) {
       throw forbidden('无权查看该文章');
     }
-    run('UPDATE articles SET views = views + 1 WHERE id = ?', [id]);
+    await run('UPDATE articles SET views = views + 1 WHERE id = ?', [id]);
     return {
       article: {
         ...row,
@@ -539,7 +539,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.post('/api/articles', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_article', true)) throw forbidden('文章广场已关闭');
     const body = (request.body ?? {}) as any;
     const title = String(body.title ?? '').trim();
@@ -547,7 +547,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (title.length < 3) throw badRequest('标题至少 3 个字符');
     if (content.length < 20) throw badRequest('正文太短');
     checkBannedWords(`${title}\n${content}`);
-    const info = run(
+    const info = await run(
       `INSERT INTO articles (title, summary, content, cover, category, author_id, is_public)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -560,14 +560,14 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         body.isPublic === false ? 0 : 1,
       ],
     );
-    evaluateAchievements(user.id);
+    await evaluateAchievements(user.id);
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 
   app.put('/api/articles/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM articles WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM articles WHERE id = ?', [id]);
     if (!row) throw notFound('文章不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
@@ -595,19 +595,19 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
-      run(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+      await run(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
     return { ok: true };
   });
 
   app.delete('/api/articles/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM articles WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM articles WHERE id = ?', [id]);
     if (!row) throw notFound('文章不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
-    run('UPDATE articles SET is_deleted = 1 WHERE id = ?', [id]);
-    audit(request, 'article.delete', { targetType: 'article', targetId: id });
+    await run('UPDATE articles SET is_deleted = 1 WHERE id = ?', [id]);
+    await audit(request, 'article.delete', { targetType: 'article', targetId: id });
     return { ok: true };
   });
 
@@ -617,7 +617,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const targetType = String(query.targetType ?? '');
     const targetId = Number(query.targetId ?? 0);
     if (!targetType || !targetId) throw badRequest('缺少评论目标');
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT c.id, c.content, c.created_at, c.parent_id, c.is_deleted,
               u.id AS author_id, u.username, u.display_name, u.avatar
          FROM comments c JOIN users u ON u.id = c.author_id
@@ -628,7 +628,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.post('/api/comments', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     if (!bool('enable_comment', true)) throw forbidden('评论功能已关闭');
     const body = (request.body ?? {}) as any;
     const targetType = String(body.targetType ?? '');
@@ -637,7 +637,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const content = String(body.content ?? '').trim();
     if (!content) throw badRequest('评论内容不能为空');
     checkBannedWords(content);
-    const info = run(
+    const info = await run(
       `INSERT INTO comments (target_type, target_id, author_id, content, parent_id) VALUES (?, ?, ?, ?, ?)`,
       [targetType, targetId, user.id, content.slice(0, 2000), body.parentId ? Number(body.parentId) : null],
     );
@@ -645,18 +645,18 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.delete('/api/comments/:id', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const id = parseId((request.params as any).id);
-    const row = get<any>('SELECT * FROM comments WHERE id = ?', [id]);
+    const row = await get<any>('SELECT * FROM comments WHERE id = ?', [id]);
     if (!row) throw notFound('评论不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
-    run('UPDATE comments SET is_deleted = 1 WHERE id = ?', [id]);
+    await run('UPDATE comments SET is_deleted = 1 WHERE id = ?', [id]);
     return { ok: true };
   });
 
   /* -------------------------------------------------------- admin 审核题解 */
   app.get('/api/admin/solutions', async (request) => {
-    requireAdmin(request);
+    await requireAdmin(request);
     const query = request.query as any;
     const page = parsePage(query, 30);
     const conditions = ['s.is_deleted = 0'];
@@ -666,13 +666,13 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       conditions.push(`s.title LIKE ? ESCAPE '\\'`);
       params.push(sqlLike(String(query.q)));
     }
-    const rows = all<any>(
+    const rows = await all<any>(
       `SELECT s.*, u.username, p.pid, p.title AS problem_title FROM solutions s
          JOIN users u ON u.id = s.author_id JOIN problems p ON p.id = s.problem_id
         WHERE ${conditions.join(' AND ')} ORDER BY s.id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
-    const total = count(`SELECT COUNT(*) AS c FROM solutions s WHERE ${conditions.join(' AND ')}`, params);
+    const total = await count(`SELECT COUNT(*) AS c FROM solutions s WHERE ${conditions.join(' AND ')}`, params);
     return { items: rows, total, page: page.page, size: page.size };
   });
 }

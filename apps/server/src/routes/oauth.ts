@@ -36,7 +36,7 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/auth/oauth/providers', async (request) => {
     const providers = enabledProviders();
     const bindings = request.user
-      ? all<any>('SELECT provider, provider_username, provider_email, created_at FROM oauth_accounts WHERE user_id = ?', [
+      ? await all<any>('SELECT provider, provider_username, provider_email, created_at FROM oauth_accounts WHERE user_id = ?', [
           request.user.id,
         ])
       : [];
@@ -70,7 +70,7 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
     const bind = query.bind === '1' || query.bind === 'true';
     if (bind) {
       if (!bool('oauth_allow_bind', true)) throw forbidden('本站未开放第三方账号绑定');
-      requireUser(request);
+      await requireUser(request);
     }
     const state = signJson(
       {
@@ -106,47 +106,47 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
 
     const token = await exchangeCode(config, code);
     if ('error' in token) {
-      audit(request, 'oauth.error', { detail: { provider: providerId, error: token.error } });
+      await audit(request, 'oauth.error', { detail: { provider: providerId, error: token.error } });
       return frontendRedirect(reply, { error: token.error });
     }
     const profileResult = await fetchProfile(config, token.accessToken);
     if ('error' in profileResult) {
-      audit(request, 'oauth.error', { detail: { provider: providerId, error: profileResult.error } });
+      await audit(request, 'oauth.error', { detail: { provider: providerId, error: profileResult.error } });
       return frontendRedirect(reply, { error: profileResult.error });
     }
     const { profile } = profileResult;
 
-    const link = get<any>('SELECT * FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?', [
+    const link = await get<any>('SELECT * FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?', [
       providerId,
       profile.providerUserId,
     ]);
 
     /* ------------------------------------------------------------- binding */
     if (state.u) {
-      const user = get<any>('SELECT * FROM users WHERE id = ?', [state.u]);
+      const user = await get<any>('SELECT * FROM users WHERE id = ?', [state.u]);
       if (!user) return frontendRedirect(reply, { error: '账号不存在' });
       if (link && link.user_id !== user.id) {
         return frontendRedirect(reply, { error: '该第三方账号已绑定到其他用户' });
       }
       if (!link) {
-        run(
+        await run(
           `INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email, avatar)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [user.id, providerId, profile.providerUserId, profile.username, profile.email, profile.avatar],
         );
       }
-      audit(request, 'oauth.bind', { targetType: 'user', targetId: user.id, detail: { provider: providerId } });
-      evaluateAchievements(user.id);
+      await audit(request, 'oauth.bind', { targetType: 'user', targetId: user.id, detail: { provider: providerId } });
+      await evaluateAchievements(user.id);
       return frontendRedirect(reply, { bound: providerId });
     }
 
     /* --------------------------------------------------------------- login */
-    let user = link ? get<any>('SELECT * FROM users WHERE id = ?', [link.user_id]) : null;
+    let user = link ? await get<any>('SELECT * FROM users WHERE id = ?', [link.user_id]) : null;
 
     if (!user && profile.email && bool('oauth_bind_by_email', true)) {
-      user = get<any>('SELECT * FROM users WHERE email IS NOT NULL AND email = ?', [profile.email.toLowerCase()]);
+      user = await get<any>('SELECT * FROM users WHERE email IS NOT NULL AND email = ?', [profile.email.toLowerCase()]);
       if (user) {
-        run(
+        await run(
           `INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email, avatar)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [user.id, providerId, profile.providerUserId, profile.username, profile.email, profile.avatar],
@@ -161,10 +161,10 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
       const role = str('oauth_default_role', 'user') === 'admin' ? 'admin' : 'user';
       const username = safeUsername(
         profile.username,
-        (candidate) => Boolean(get('SELECT id FROM users WHERE username = ?', [candidate])),
+        async (candidate) => Boolean(await get('SELECT id FROM users WHERE username = ?', [candidate])),
       );
-      const userId = tx(() => {
-        const info = run(
+      const userId = await tx(async () => {
+        const info = await run(
           `INSERT INTO users (username, email, password_hash, role, display_name, avatar, is_private)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -180,15 +180,15 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
           ],
         );
         const id = Number(info.lastInsertRowid);
-        run(
+        await run(
           `INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email, avatar)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [id, providerId, profile.providerUserId, profile.username, profile.email, profile.avatar],
         );
         return id;
       });
-      user = get<any>('SELECT * FROM users WHERE id = ?', [userId]);
-      audit(request, 'oauth.register', {
+      user = await get<any>('SELECT * FROM users WHERE id = ?', [userId]);
+      await audit(request, 'oauth.register', {
         targetType: 'user',
         targetId: userId,
         detail: { provider: providerId },
@@ -202,7 +202,7 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
 
     /* ------------------------------------------------------- keep in sync */
     if (link) {
-      run('UPDATE oauth_accounts SET provider_username = ?, provider_email = ?, avatar = ? WHERE id = ?', [
+      await run('UPDATE oauth_accounts SET provider_username = ?, provider_email = ?, avatar = ? WHERE id = ?', [
         profile.username,
         profile.email,
         profile.avatar,
@@ -210,13 +210,13 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
       ]);
     }
     if (!user.avatar && profile.avatar) {
-      run('UPDATE users SET avatar = ? WHERE id = ?', [profile.avatar, user.id]);
+      await run('UPDATE users SET avatar = ? WHERE id = ?', [profile.avatar, user.id]);
     }
-    run(`UPDATE users SET last_login_at = datetime('now'), last_login_ip = ? WHERE id = ?`, [
+    await run(`UPDATE users SET last_login_at = datetime('now'), last_login_ip = ? WHERE id = ?`, [
       request.ip,
       user.id,
     ]);
-    run(
+    await run(
       'INSERT INTO login_logs (user_id, username, ip, user_agent, success) VALUES (?, ?, ?, ?, 1)',
       [user.id, user.username, request.ip, `oauth:${providerId}`],
     );
@@ -224,15 +224,15 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
     const days = num('session_days', 14);
     const jwt = signToken({ sub: user.id, username: user.username, role: user.role }, days * 86400);
     setAuthCookie(reply, jwt, days);
-    audit(request, 'oauth.login', { targetType: 'user', targetId: user.id, detail: { provider: providerId } });
-    evaluateAchievements(user.id);
+    await audit(request, 'oauth.login', { targetType: 'user', targetId: user.id, detail: { provider: providerId } });
+    await evaluateAchievements(user.id);
     return frontendRedirect(reply, { token: jwt, redirect: state.r || '/' });
   });
 
   /* ------------------------------------------------------- bind / unbind */
   app.get('/api/auth/oauth/bindings', async (request) => {
-    const user = requireUser(request);
-    const bindings = all<any>(
+    const user = await requireUser(request);
+    const bindings = await all<any>(
       `SELECT provider, provider_username, provider_email, created_at FROM oauth_accounts
         WHERE user_id = ? ORDER BY created_at ASC`,
       [user.id],
@@ -246,23 +246,23 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/auth/oauth/bindings/:provider', async (request) => {
-    const user = requireUser(request);
+    const user = await requireUser(request);
     const provider = String((request.params as any).provider);
-    const row = get<any>('SELECT * FROM oauth_accounts WHERE user_id = ? AND provider = ?', [user.id, provider]);
+    const row = await get<any>('SELECT * FROM oauth_accounts WHERE user_id = ? AND provider = ?', [user.id, provider]);
     if (!row) throw notFound('未绑定该第三方账号');
-    const remaining = all<any>('SELECT provider FROM oauth_accounts WHERE user_id = ?', [user.id]).length;
+    const remaining = (await all<any>('SELECT provider FROM oauth_accounts WHERE user_id = ?', [user.id])).length;
     if (remaining <= 1) {
-      const hasPassword = Boolean(get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [user.id]));
+      const hasPassword = Boolean(await get<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [user.id]));
       if (!hasPassword) throw badRequest('解绑后你将无法登录，请先设置密码');
     }
-    run('DELETE FROM oauth_accounts WHERE id = ?', [row.id]);
-    audit(request, 'oauth.unbind', { targetType: 'user', targetId: user.id, detail: { provider } });
+    await run('DELETE FROM oauth_accounts WHERE id = ?', [row.id]);
+    await audit(request, 'oauth.unbind', { targetType: 'user', targetId: user.id, detail: { provider } });
     return { ok: true };
   });
 
   /* ---------------------------------------------- simulate for local tests */
   app.get('/api/auth/oauth/debug/callback-url', async (request) => {
-    requireUser(request);
+    await requireUser(request);
     return {
       base: redirectBase(),
       callbacks: enabledProviders().map((provider) => ({

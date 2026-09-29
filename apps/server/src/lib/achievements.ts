@@ -40,14 +40,14 @@ export interface AchievementStats {
   perfectScore: boolean;
 }
 
-export function collectStats(userId: number): AchievementStats {
-  const user = get<any>(
+export async function collectStats(userId: number): Promise<AchievementStats> {
+  const user = await get<any>(
     `SELECT solved_count, accepted_count, submission_count, points, contest_count,
-            julianday('now') - julianday(created_at) AS days
+            EXTRACT(EPOCH FROM ((now() at time zone 'utc') - created_at::timestamp)) / 86400 AS days
        FROM users WHERE id = ?`,
     [userId],
   );
-  const firstBloods = count(
+  const firstBloods = await count(
     `SELECT COUNT(*) AS c FROM user_problem_stats s
       WHERE s.user_id = ? AND s.accepted > 0 AND s.first_ac_at IS NOT NULL
         AND s.first_ac_at <= COALESCE((
@@ -60,31 +60,31 @@ export function collectStats(userId: number): AchievementStats {
     [userId],
   );
   const maxDifficulty = Number(
-    get<{ d: number | null }>(
+    (await get<{ d: number | null }>(
       `SELECT MAX(p.difficulty) AS d FROM user_problem_stats s
          JOIN problems p ON p.id = s.problem_id
         WHERE s.user_id = ? AND s.accepted > 0`,
       [userId],
-    )?.d ?? 0,
+    ))?.d ?? 0,
   );
   const bestDaySolved = Number(
-    get<{ c: number | null }>(
+    (await get<{ c: number | null }>(
       `SELECT MAX(c) AS c FROM (
          SELECT COUNT(*) AS c FROM user_problem_stats
           WHERE user_id = ? AND accepted > 0 AND first_ac_at IS NOT NULL
           GROUP BY date(first_ac_at))`,
       [userId],
-    )?.c ?? 0,
+    ))?.c ?? 0,
   );
   const nightOwl = Boolean(
-    get(
+    await get(
       `SELECT 1 AS x FROM submissions WHERE user_id = ? AND status = 'AC'
         AND CAST(strftime('%H', created_at) AS INTEGER) BETWEEN 0 AND 4 LIMIT 1`,
       [userId],
     ),
   );
   const earlyBird = Boolean(
-    get(
+    await get(
       `SELECT 1 AS x FROM submissions WHERE user_id = ? AND status = 'AC'
         AND CAST(strftime('%H', created_at) AS INTEGER) BETWEEN 5 AND 7 LIMIT 1`,
       [userId],
@@ -98,20 +98,20 @@ export function collectStats(userId: number): AchievementStats {
     registerDays: Math.floor(Number(user?.days ?? 0)),
     contestCount: Number(user?.contest_count ?? 0),
     firstBloods,
-    solutionCount: count('SELECT COUNT(*) AS c FROM solutions WHERE author_id = ? AND is_deleted = 0', [userId]),
-    articleCount: count('SELECT COUNT(*) AS c FROM articles WHERE author_id = ? AND is_deleted = 0', [userId]),
-    discussionCount: count('SELECT COUNT(*) AS c FROM discussions WHERE author_id = ? AND is_deleted = 0', [userId]),
-    replyCount: count('SELECT COUNT(*) AS c FROM discussion_replies WHERE author_id = ? AND is_deleted = 0', [userId]),
-    orderCount: count(`SELECT COUNT(*) AS c FROM shop_orders WHERE user_id = ? AND status IN ('approved','completed')`, [userId]),
+    solutionCount: await count('SELECT COUNT(*) AS c FROM solutions WHERE author_id = ? AND is_deleted = 0', [userId]),
+    articleCount: await count('SELECT COUNT(*) AS c FROM articles WHERE author_id = ? AND is_deleted = 0', [userId]),
+    discussionCount: await count('SELECT COUNT(*) AS c FROM discussions WHERE author_id = ? AND is_deleted = 0', [userId]),
+    replyCount: await count('SELECT COUNT(*) AS c FROM discussion_replies WHERE author_id = ? AND is_deleted = 0', [userId]),
+    orderCount: await count(`SELECT COUNT(*) AS c FROM shop_orders WHERE user_id = ? AND status IN ('approved','completed')`, [userId]),
     maxDifficulty,
     bestDaySolved,
     nightOwl,
     earlyBird,
-    teamCount: count('SELECT COUNT(*) AS c FROM team_members WHERE user_id = ?', [userId]),
-    oauthCount: count('SELECT COUNT(*) AS c FROM oauth_accounts WHERE user_id = ?', [userId]),
-    ticketCount: count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ?', [userId]),
+    teamCount: await count('SELECT COUNT(*) AS c FROM team_members WHERE user_id = ?', [userId]),
+    oauthCount: await count('SELECT COUNT(*) AS c FROM oauth_accounts WHERE user_id = ?', [userId]),
+    ticketCount: await count('SELECT COUNT(*) AS c FROM tickets WHERE user_id = ?', [userId]),
     perfectScore: Boolean(
-      get(
+      await get(
         `SELECT 1 AS x FROM submissions WHERE user_id = ? AND status = 'AC' AND score >= 100 LIMIT 1`,
         [userId],
       ),
@@ -199,37 +199,39 @@ export function isUnlocked(condition: AchievementCondition, stats: AchievementSt
  * Evaluate every active badge for a user and unlock the ones whose condition is
  * now satisfied. Returns the list of newly unlocked achievements.
  */
-export function evaluateAchievements(
+export async function evaluateAchievements(
   userId: number,
   options: { silent?: boolean } = {},
-): AchievementRow[] {
+): Promise<AchievementRow[]> {
   if (!bool('achievement_enable', true)) return [];
   const unlocked = new Set(
-    all<{ achievement_id: number }>('SELECT achievement_id FROM user_achievements WHERE user_id = ?', [
+    (await all<{ achievement_id: number }>('SELECT achievement_id FROM user_achievements WHERE user_id = ?', [
       userId,
-    ]).map((row) => row.achievement_id),
+    ])).map((row) => row.achievement_id),
   );
-  const definitions = all<AchievementRow>(
+  const definitions = await all<AchievementRow>(
     'SELECT * FROM achievements WHERE is_active = 1 ORDER BY sort ASC, id ASC',
   );
-  const pending = definitions.filter(
-    (definition) => !unlocked.has(definition.id) && isUnlocked(parseCondition(definition.condition), collectStats(userId)),
-  );
+  // 统计只取一次，再逐条判断是否达标
+  const stats = await collectStats(userId);
+  const pending: AchievementRow[] = [];
+  for (const definition of definitions) {
+    if (unlocked.has(definition.id)) continue;
+    if (isUnlocked(parseCondition(definition.condition), stats)) pending.push(definition);
+  }
   if (!pending.length) return [];
 
-  // Stats are collected once; conditions above already matched against them.
-  const stats = collectStats(userId);
   const newly: AchievementRow[] = [];
-  tx(() => {
+  await tx(async () => {
     for (const definition of pending) {
       const condition = parseCondition(definition.condition);
       if (!isUnlocked(condition, stats)) continue;
-      run(
+      await run(
         `INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, context) VALUES (?, ?, ?)`,
         [userId, definition.id, condition.type],
       );
       if (definition.points > 0 && bool('enable_points', true)) {
-        addPoints(userId, definition.points, `解锁成就「${definition.name}」`, {
+        await addPoints(userId, definition.points, `解锁成就「${definition.name}」`, {
           refType: 'achievement',
           refId: definition.id,
         });
@@ -240,7 +242,7 @@ export function evaluateAchievements(
 
   if (!options.silent && bool('achievement_notify', true)) {
     for (const achievement of newly) {
-      sendMessage({
+      await sendMessage({
         to: userId,
         title: `${achievement.icon} 解锁成就：${achievement.name}`,
         content: `${achievement.description}${achievement.points > 0 ? `\n\n奖励 ${achievement.points} 积分。` : ''}`,
@@ -262,19 +264,19 @@ export interface AchievementWithState extends AchievementRow {
   holderCount: number;
 }
 
-export function achievementsForUser(userId: number): AchievementWithState[] {
-  const stats = collectStats(userId);
-  const unlockedRows = all<{ achievement_id: number; unlocked_at: string }>(
+export async function achievementsForUser(userId: number): Promise<AchievementWithState[]> {
+  const stats = await collectStats(userId);
+  const unlockedRows = await all<{ achievement_id: number; unlocked_at: string }>(
     'SELECT achievement_id, unlocked_at FROM user_achievements WHERE user_id = ?',
     [userId],
   );
   const unlockedMap = new Map(unlockedRows.map((row) => [row.achievement_id, row.unlocked_at]));
   const holders = new Map(
-    all<{ achievement_id: number; c: number }>(
+    (await all<{ achievement_id: number; c: number }>(
       'SELECT achievement_id, COUNT(*) AS c FROM user_achievements GROUP BY achievement_id',
-    ).map((row) => [row.achievement_id, row.c]),
+    )).map((row) => [row.achievement_id, row.c]),
   );
-  return all<AchievementRow>('SELECT * FROM achievements WHERE is_active = 1 ORDER BY sort ASC, id ASC').map(
+  return (await all<AchievementRow>('SELECT * FROM achievements WHERE is_active = 1 ORDER BY sort ASC, id ASC')).map(
     (row) => {
       const condition = parseCondition(row.condition);
       return {
@@ -334,12 +336,12 @@ export const BUILTIN_ACHIEVEMENTS: {
 ];
 
 /** Insert the built-in badge definitions (idempotent). */
-export function seedAchievements(): number {
+export async function seedAchievements(): Promise<number> {
   let created = 0;
   for (const badge of BUILTIN_ACHIEVEMENTS) {
-    const existing = get<{ id: number }>('SELECT id FROM achievements WHERE code = ?', [badge.code]);
+    const existing = await get<{ id: number }>('SELECT id FROM achievements WHERE code = ?', [badge.code]);
     if (existing) continue;
-    run(
+    await run(
       `INSERT INTO achievements (code, name, description, icon, category, rarity, condition, points, is_active, is_builtin, sort)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)`,
       [
