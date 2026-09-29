@@ -582,7 +582,7 @@ function seedShop(): void {
     },
     {
       slug: 'contest-pack-5',
-      name: '比赛资格 ×5',
+      name: '创建比赛资格 ×5',
       kind: 'contest',
       icon: 'package',
       price: 400,
