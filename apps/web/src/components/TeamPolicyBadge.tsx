@@ -17,7 +17,7 @@ export default function TeamPolicyBadge({
     <span
       title={meta.description}
       className={classNames(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium',
         className,
       )}
       style={{
@@ -25,7 +25,6 @@ export default function TeamPolicyBadge({
         color: `color-mix(in srgb, ${meta.color} 72%, ${document.documentElement.classList.contains('dark') ? 'white' : 'black'})`,
       }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
       {text}
     </span>
   );
