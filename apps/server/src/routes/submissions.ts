@@ -9,6 +9,7 @@ import { submissionSummary } from './helpers.js';
 import { judgeStats, rejudge } from '../judge/index.js';
 import { languageAvailable } from '../judge/languages.js';
 import { contestStatus } from './public.js';
+import { publishJudgeWake } from '../lib/redis.js';
 
 async function findSubmission(idOrId: string): Promise<any> {
   const id = Number(idOrId);
@@ -136,6 +137,8 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
         targetId: submissionId,
         detail: { problemId: problem.id, language },
       });
+      // 有 Redis 时立刻唤醒评测 worker，省掉一次轮询等待
+      void publishJudgeWake(submissionId);
       return { ok: true, id: submissionId, status: 'Waiting' };
     },
   });

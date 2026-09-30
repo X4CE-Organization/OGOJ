@@ -6,7 +6,7 @@
 
 题目 · 评测 · 比赛 · 成就徽章 · 工单 · 第三方登录 · 讨论 · 题解 · 文章广场 · 题单 · 团队 · 积分商店 · 系统设置
 
-**当前版本：3.0.0**
+**当前版本：3.1.0**
 
 </div>
 
@@ -258,6 +258,7 @@
 | 前端 | React 18 + TypeScript + Vite + Tailwind CSS + React Router + CodeMirror 6 + KaTeX + Recharts |
 | 后端 | Node.js 22 + Fastify 5 + TypeScript（原生 ESM） |
 | 数据库 | PostgreSQL 14+（node-postgres 连接池，事务 + 连接复用；旧版 SQLite 数据可一键导入） |
+| 缓存 / 队列 | Redis 6+（可选，强烈推荐）：限流共享计数、登录失败锁定、在线人数、首页缓存、评测队列唤醒 |
 | 评测机 | 自研沙箱（rlimit + 墙钟看门狗 + RSS 采样 + `/usr/bin/time` 精确峰值内存），支持多语言、SPJ、交互题、子任务 |
 | 鉴权 | JWT（HS256，无第三方依赖）+ bcrypt 密码哈希 |
 | 部署 | 单进程（API + 内置评测 worker），也可用 Docker 一键部署 |
@@ -316,6 +317,16 @@ docker run -d --name ogoj-db -e POSTGRES_DB=ogoj -e POSTGRES_USER=ogoj \
 openssl rand -hex 48     # 生成一个随机密钥
 ```
 
+同时建议准备一个 Redis（可选，但多实例 / 高并发部署必须配；不配也能跑，只是会自动退回内置单机实现）：
+
+```bash
+# 本地安装（Debian / Ubuntu）
+sudo apt install redis-server
+
+# 或直接用 docker 起一个
+docker run -d --name ogoj-redis -p 6379:6379 redis:7-alpine
+```
+
 主要配置项：
 
 | 变量 | 默认值 | 说明 |
@@ -327,6 +338,8 @@ openssl rand -hex 48     # 生成一个随机密钥
 | `DATABASE_URL` | `postgres://ogoj:ogoj@localhost:5432/ogoj` | PostgreSQL 连接串（3.0 起必填） |
 | `DATABASE_POOL_SIZE` | `10` | 数据库连接池大小 |
 | `SQLITE_FILE` | `./data/ogoj.db` | 仅用于把旧版 SQLite 数据导入 PostgreSQL |
+| `REDIS_URL` | 空 | Redis 连接串，例如 `redis://localhost:6379`；留空则退回内置实现 |
+| `CACHE_TTL_SECONDS` | `20` | 首页等热点数据的 Redis 缓存时间（秒），`0` 表示不缓存 |
 | `DATA_DIR` | `./data` | 测试数据、上传文件、备份存放目录 |
 | `JUDGE_CONCURRENCY` | `2` | 同时评测的提交数量 |
 | `JUDGE_ENABLED` | `true` | 是否在本进程内运行评测 worker |
@@ -653,6 +666,13 @@ npm run reset
 ---
 
 ## 更新日志
+
+### 3.1.0
+
+- **接入 Redis**（可选，配置 `REDIS_URL` 即启用，留空自动退回内置实现）：API 限流改为多实例共享计数、登录失败锁定改用带 TTL 的计数器（不再写数据库）、在线人数按 5 分钟窗口统计、首页热点数据按 `CACHE_TTL_SECONDS` 缓存、提交后发布评测唤醒信号让 worker 立刻开始（省掉一次轮询等待）
+- 后台「控制面板 → 系统信息」新增 Redis 状态（连接状态 / 版本 / Key 数量 / 在线人数）
+- 系统设置、轮播图、公告变更后自动失效首页缓存，后台改完立刻生效
+- `docker-compose.yml` 新增 `redis` 服务（AOF 持久化 + 健康检查），应用通过 `REDIS_URL` 连接
 
 ### 3.0.0
 

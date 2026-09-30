@@ -31,6 +31,21 @@ import { registerProblemTransferRoutes } from './routes/problem-transfer.js';
 import { registerRunRoutes } from './routes/run.js';
 import { registerStickerRoutes } from './routes/stickers.js';
 import { warmSettings } from './settings/index.js';
+import { rateLimitStore, touchOnline } from './lib/redis.js';
+
+/** 在线状态按用户节流写入（同一用户 60 秒最多写一次 Redis） */
+const onlineMarked = new Map<number, number>();
+function markOnline(userId: number): void {
+  const now = Date.now();
+  if ((onlineMarked.get(userId) ?? 0) > now - 60_000) return;
+  onlineMarked.set(userId, now);
+  if (onlineMarked.size > 5000) {
+    for (const [id, at] of onlineMarked) {
+      if (at < now - 600_000) onlineMarked.delete(id);
+    }
+  }
+  void touchOnline(userId);
+}
 
 export async function buildApp(): Promise<FastifyInstance> {
   ensureDataDirs();
@@ -64,6 +79,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Read the limit on every request so the control panel takes effect live.
     max: () => Math.max(60, num('rate_limit_per_minute', 1200)),
     timeWindow: '1 minute',
+    // 配了 Redis 就多实例共享限流计数，否则用内置内存计数
+    redis: rateLimitStore(),
+    // Redis 挂了也不要把请求打成 500，退回「放行」
+    skipOnError: true,
     allowList: () => false,
     errorResponseBuilder: () => ({
       code: 429,
@@ -74,6 +93,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.addHook('onRequest', async (request, reply) => {
     request.user = await resolveUser(request);
+    if (request.user) void markOnline(request.user.id);
 
     const blocked = new Set(
       (JSON.parse(str('blocked_ips', '[]') || '[]') as string[]).filter(Boolean),

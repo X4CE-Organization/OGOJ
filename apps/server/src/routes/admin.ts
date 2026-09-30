@@ -13,6 +13,7 @@ import { judgeStats, rejudge } from '../judge/index.js';
 import { AVAILABLE_LANGUAGE_IDS } from '../judge/languages.js';
 import { workerState } from '../judge/worker.js';
 import { config } from '../config.js';
+import { cacheInvalidate, redisInfo } from '../lib/redis.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   /** Total size of the SQLite database file in bytes. */
@@ -89,6 +90,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       worker: workerState(),
       dbSize: await databaseSize(),
       databaseVersion: (await get<{ v: string }>('SELECT version() AS v'))?.v?.split(' ').slice(0, 2).join(' '),
+      redis: await redisInfo(),
       nodeVersion: process.version,
       platform: process.platform,
       uptime: Math.round(process.uptime()),
@@ -117,6 +119,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (typeof patch !== 'object' || patch === null) throw badRequest('请求体格式不正确');
     const changes = await updateSettings(patch);
     await audit(request, 'settings.update', { detail: changes.map((c) => c.key) });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true, changed: changes.map((c) => c.key), values: allSettings({ maskSecrets: true }) };
   });
 
@@ -125,6 +128,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const keys = (request.body as any)?.keys;
     resetSettings(Array.isArray(keys) && keys.length ? keys.map(String) : undefined);
     await audit(request, 'settings.reset', { detail: { keys } });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true, values: allSettings({ maskSecrets: true }) };
   });
 
@@ -350,6 +354,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       ],
     );
     await audit(request, 'carousel.create', { targetType: 'carousel', targetId: Number(info.lastInsertRowid) });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 
@@ -375,6 +380,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
     if (fields.length) await run(`UPDATE carousel SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     await audit(request, 'carousel.update', { targetType: 'carousel', targetId: id });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true };
   });
 
@@ -383,6 +389,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const id = parseId((request.params as any).id);
     await run('DELETE FROM carousel WHERE id = ?', [id]);
     await audit(request, 'carousel.delete', { targetType: 'carousel', targetId: id });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true };
   });
 
@@ -415,6 +422,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       ],
     );
     await audit(request, 'announcement.create', { targetType: 'announcement', targetId: Number(info.lastInsertRowid) });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true, id: Number(info.lastInsertRowid) };
   });
 
@@ -444,6 +452,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       await run(`UPDATE announcements SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
     await audit(request, 'announcement.update', { targetType: 'announcement', targetId: id });
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true };
   });
 
@@ -451,6 +460,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     await requireAdmin(request);
     const id = parseId((request.params as any).id);
     await run('DELETE FROM announcements WHERE id = ?', [id]);
+    await cacheInvalidate('ogoj:cache:');
     return { ok: true };
   });
 
@@ -584,6 +594,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         engine: 'PostgreSQL',
       },
       backups: listBackups(),
+      redis: await redisInfo(),
       uptime: Math.round(process.uptime()),
     };
   });

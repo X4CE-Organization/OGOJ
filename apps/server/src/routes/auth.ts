@@ -8,6 +8,7 @@ import { json as settingJson, bool, num, str } from '../settings/index.js';
 import { addPoints } from '../lib/points.js';
 import { levelOf, userBrief } from './helpers.js';
 import { evaluateAchievements } from '../lib/achievements.js';
+import { counterGet, counterIncr, counterReset } from '../lib/redis.js';
 
 interface RegisterBody {
   username?: string;
@@ -45,14 +46,18 @@ async function registerLoginAttempt(username: string, ip: string, success: boole
   );
   const key = `login:${username}:${ip}`;
   if (success) {
+    await counterReset(key);
     await run('DELETE FROM rate_limits WHERE key = ?', [key]);
     return;
   }
   const limit = num('login_fail_limit', 10);
   if (limit <= 0) return;
+  const lockMinutes = num('login_lock_minutes', 15);
+  // 有 Redis 就用带 TTL 的计数器，过期自动清理，不用写数据库
+  const counted = await counterIncr(key, lockMinutes * 60);
+  if (counted !== null) return;
   const row = await get<{ count: number }>('SELECT count FROM rate_limits WHERE key = ?', [key]);
   const count = (row?.count ?? 0) + 1;
-  const lockMinutes = num('login_lock_minutes', 15);
   await run(
     `INSERT INTO rate_limits (key, count, expires_at)
      VALUES (?, ?, datetime('now', ?))
@@ -64,13 +69,16 @@ async function registerLoginAttempt(username: string, ip: string, success: boole
 async function lockedOut(username: string, ip: string): Promise<boolean> {
   const limit = num('login_fail_limit', 10);
   if (limit <= 0) return false;
+  const key = `login:${username}:${ip}`;
+  const counted = await counterGet(key);
+  if (counted !== null) return counted >= limit;
   const row = await get<{ count: number; expires_at: string }>(
     'SELECT count, expires_at FROM rate_limits WHERE key = ?',
-    [`login:${username}:${ip}`],
+    [key],
   );
   if (!row) return false;
   if (new Date(`${row.expires_at}Z`).getTime() < Date.now()) {
-    await run('DELETE FROM rate_limits WHERE key = ?', [`login:${username}:${ip}`]);
+    await run('DELETE FROM rate_limits WHERE key = ?', [key]);
     return false;
   }
   return row.count >= limit;

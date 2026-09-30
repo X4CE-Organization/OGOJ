@@ -34,6 +34,10 @@ export const config = {
   databaseUrl:
     process.env.DATABASE_URL ?? 'postgres://localhost:5432/ogoj',
   databasePoolSize: Math.max(2, Number(process.env.DATABASE_POOL_SIZE ?? 10)),
+  /** Redis 连接串（可选：限流 / 在线人数 / 缓存 / 评测唤醒） */
+  redisUrl: (process.env.REDIS_URL ?? '').trim(),
+  /** 首页等热点数据的缓存时间（秒），0 表示不缓存 */
+  cacheTtlSeconds: Math.max(0, Number(process.env.CACHE_TTL_SECONDS ?? 20)),
   /** 仅用于把旧的 SQLite 数据迁移到 PostgreSQL */
   databaseFile: resolveFromRoot(process.env.DATABASE_FILE ?? './data/ogoj.db'),
 

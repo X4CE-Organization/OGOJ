@@ -4,7 +4,9 @@ import { publicSettings, bool, num, str, json as settingJson } from '../settings
 import { parsePage, sqlLike } from '../lib/util.js';
 import { problemSummary, submissionSummary, tagRows } from './helpers.js';
 import { difficultyDefs, invalidateDifficulties, maxDifficultyLevel } from '../lib/difficulty.js';
+import { cacheGet, cacheSet, onlineCount } from '../lib/redis.js';
 import { AVAILABLE_LANGUAGE_IDS, LANGUAGES } from '../judge/languages.js';
+import { config } from '../config.js';
 import { judgeStats } from '../judge/index.js';
 
 export async function registerPublicRoutes(app: FastifyInstance): Promise<void> {
@@ -36,6 +38,9 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
   });
 
   app.get('/api/public/home', async () => {
+    // 首页是访问量最大、又允许短暂陈旧的数据，用 Redis 缓存几秒
+    const cached = await cacheGet<any>('ogoj:cache:home');
+    if (cached) return cached;
     const modules = settingJson<string[]>('show_home_modules', []);
     const carousel = bool('enable_carousel', true)
       ? await all<any>(
@@ -86,7 +91,7 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
     const problemIds = recentProblems.map((p) => p.id);
     const tagMap = await tagRows(problemIds);
 
-    return {
+    const payload: Record<string, any> = {
       modules,
       notice: str('home_notice', ''),
       carousel,
@@ -103,6 +108,10 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       ranklist,
       tags,
     };
+    const online = await onlineCount();
+    if (online !== null) payload.stats.online = online;
+    await cacheSet('ogoj:cache:home', payload, config.cacheTtlSeconds);
+    return payload;
   });
 
   app.get('/api/public/announcements', async (request) => {

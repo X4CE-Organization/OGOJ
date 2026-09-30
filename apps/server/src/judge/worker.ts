@@ -1,11 +1,13 @@
 import { config } from '../config.js';
 import { get, run } from '../db/index.js';
 import { judgeSubmission } from './index.js';
+import { subscribeJudgeWake } from '../lib/redis.js';
 
 let running = false;
 let active = 0;
 let stopped = false;
 let timer: NodeJS.Timeout | null = null;
+let unsubscribeWake: (() => void) | null = null;
 
 /**
  * Claim the next waiting submission. SQLite guarantees the sub-select + update
@@ -78,12 +80,19 @@ export async function startWorker(options: { concurrency?: number; pollIntervalM
     if (!stopped) timer = setTimeout(tick, pollInterval);
   };
   void tick();
+
+  // 有 Redis 时，提交后会被立刻唤醒，不用等下一次轮询
+  unsubscribeWake = subscribeJudgeWake(() => {
+    void pump().catch(() => undefined);
+  });
 }
 
 export function stopWorker(): void {
   stopped = true;
   running = false;
   if (timer) clearTimeout(timer);
+  unsubscribeWake?.();
+  unsubscribeWake = null;
 }
 
 export function workerState(): { running: boolean; active: number } {

@@ -100,9 +100,19 @@ export default function Dashboard() {
               <dd>{formatBytes(data.system.dbSize)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-slate-500">Node / SQLite</dt>
+              <dt className="text-slate-500">Node / PostgreSQL</dt>
               <dd className="text-xs">
-                {data.system.nodeVersion} / {data.system.sqliteVersion}
+                {data.system.nodeVersion} / {data.system.databaseVersion}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Redis</dt>
+              <dd className="text-xs">
+                {data.system.redis?.connected
+                  ? `${data.system.redis.version ?? '已连接'}${data.system.redis.online != null ? ` · 在线 ${data.system.redis.online}` : ''}`
+                  : data.system.redis?.enabled
+                    ? `未连接（${data.system.redis.error ?? '未知错误'}）`
+                    : '未启用'}
               </dd>
             </div>
             <div className="flex justify-between">
