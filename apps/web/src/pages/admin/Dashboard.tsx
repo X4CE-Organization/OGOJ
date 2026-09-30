@@ -100,10 +100,12 @@ export default function Dashboard() {
               <dd>{formatBytes(data.system.dbSize)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-slate-500">Node / PostgreSQL</dt>
-              <dd className="text-xs">
-                {data.system.nodeVersion} / {data.system.databaseVersion}
-              </dd>
+              <dt className="text-slate-500">Node</dt>
+              <dd className="text-xs">{data.system.nodeVersion}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">PostgreSQL</dt>
+              <dd className="text-xs">{data.system.databaseVersion}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Redis</dt>
