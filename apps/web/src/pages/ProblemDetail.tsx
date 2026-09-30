@@ -80,10 +80,6 @@ export default function ProblemDetail() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [testError, setTestError] = useState('');
-  /** 代码来源提示：draft = 上次没提交的草稿，last = 上次提交的代码 */
-  const [codeSource, setCodeSource] = useState<{ kind: 'draft' | 'last'; at?: string; id?: number } | null>(
-    null,
-  );
   /** 编辑器初始内容（模板 / 草稿 / 上次提交），用于判断用户是否真的改过代码 */
   const baseline = useRef('');
   const edited = useRef(false);
@@ -155,7 +151,6 @@ export default function ProblemDetail() {
       setLanguage(pickLanguage(draft.language));
       setCode(draft.code);
       baseline.current = draft.code;
-      setCodeSource({ kind: 'draft', at: new Date(draft.updatedAt).toISOString() });
       return undefined;
     }
 
@@ -175,7 +170,6 @@ export default function ProblemDetail() {
         setLanguage(pickLanguage(past.language));
         setCode(past.code);
         baseline.current = past.code;
-        setCodeSource({ kind: 'last', at: past.createdAt, id: past.id });
       })
       .catch(() => undefined);
     return undefined;
@@ -653,33 +647,6 @@ export default function ProblemDetail() {
                 language={languages.find((item) => item.id === language)?.editor ?? 'cpp'}
                 height="300px"
               />
-              {codeSource && (
-                <div className="mt-2 flex items-center gap-2 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-200">
-                  <span className="min-w-0 flex-1">
-                    {codeSource.kind === 'draft'
-                      ? `已恢复你上次未提交的草稿${codeSource.at ? `（${fromNow(codeSource.at)}）` : ''}`
-                      : `已载入你上次提交的代码${codeSource.id ? ` #${codeSource.id}` : ''}${
-                          codeSource.at ? `（${fromNow(codeSource.at)}）` : ''
-                        }`}
-                  </span>
-                  <button
-                    type="button"
-                    className="shrink-0 underline decoration-dotted hover:text-sky-600"
-                    onClick={() => {
-                      if (!data) return;
-                      clearDraft(user?.id ?? null, data.problem.id);
-                      const template = languages.find((item) => item.id === language)?.template ?? '';
-                      setCode(template);
-                      baseline.current = template;
-                      edited.current = false;
-                      setCodeSource(null);
-                    }}
-                  >
-                    清空
-                  </button>
-                </div>
-              )}
-
               {/* -------------------------------------------- 自测：左输入 右输出 */}
               <div className="mt-3 grid gap-2 sm:grid-cols-2 [&>*]:min-w-0">
                 {/* 左：自定义输入 */}
