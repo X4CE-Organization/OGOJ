@@ -30,9 +30,6 @@
     "pg": "^8.23.0",
     "zod": "^3.24.2"
   },
-  "optionalDependencies": {
-    "better-sqlite3": "^12.2.0"
-  },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.12",

@@ -12,9 +12,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-# 跳过 optional 依赖（better-sqlite3 这类原生模块只在跑 SQLite 迁移时才需要），
-# 构建更快、更省内存和磁盘
-RUN npm ci --omit=optional
+RUN npm ci
 
 COPY . .
 RUN npm run build
