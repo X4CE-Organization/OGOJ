@@ -314,10 +314,10 @@ export default function UserProfile() {
               { key: 'solved', label: '通过题目', badge: data.solvedProblems.length || undefined },
               { key: 'submissions', label: '提交记录' },
               { key: 'contests', label: '比赛记录' },
-              { key: 'solutions', label: '题解' },
-              { key: 'articles', label: '文章广场' },
-              { key: 'discussions', label: '讨论' },
               ...(settings.enable_moment === false ? [] : [{ key: 'moments', label: '动态' }]),
+              { key: 'solutions', label: '题解' },
+              { key: 'articles', label: '文章' },
+              { key: 'discussions', label: '讨论' },
             ]}
           />
           <div className="p-4">
@@ -403,6 +403,25 @@ export default function UserProfile() {
                   ))}
                 </ul>
               )
+            ) : tab === 'moments' ? (
+              moments.length === 0 ? (
+                <EmptyState title="还没有发过动态" />
+              ) : (
+                <div className="space-y-3">
+                  {moments.map((moment) => (
+                    <MomentCard
+                      key={moment.id}
+                      moment={moment}
+                      onUpdate={(patch) =>
+                        setMoments((current) =>
+                          current.map((row) => (row.id === moment.id ? { ...row, ...patch } : row)),
+                        )
+                      }
+                      onDelete={() => setMoments((current) => current.filter((row) => row.id !== moment.id))}
+                    />
+                  ))}
+                </div>
+              )
             ) : tab === 'solutions' ? (
               solutions.length === 0 ? (
                 <EmptyState title="还没有发布题解" />
@@ -433,25 +452,6 @@ export default function UserProfile() {
                     </li>
                   ))}
                 </ul>
-              )
-            ) : tab === 'moments' ? (
-              moments.length === 0 ? (
-                <EmptyState title="还没有发过动态" />
-              ) : (
-                <div className="space-y-3">
-                  {moments.map((moment) => (
-                    <MomentCard
-                      key={moment.id}
-                      moment={moment}
-                      onUpdate={(patch) =>
-                        setMoments((current) =>
-                          current.map((row) => (row.id === moment.id ? { ...row, ...patch } : row)),
-                        )
-                      }
-                      onDelete={() => setMoments((current) => current.filter((row) => row.id !== moment.id))}
-                    />
-                  ))}
-                </div>
               )
             ) : discussions.length === 0 ? (
               <EmptyState title="还没有发过帖" />
