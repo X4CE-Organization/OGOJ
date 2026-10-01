@@ -35,6 +35,12 @@ export default function Dashboard() {
     { label: '比赛总数', value: data.contests.total, sub: `进行中 ${data.contests.running} · 待审 ${data.contests.pending}`, to: '/admin/contests' },
     { label: '讨论帖', value: data.community.discussions, sub: `回复 ${data.community.replies}`, to: '/admin/discussions' },
     { label: '待处理订单', value: data.shop.pendingOrders, sub: `累计订单 ${data.shop.orders}`, to: '/admin/orders' },
+    {
+      label: '动态总数',
+      value: data.community.moments ?? 0,
+      sub: `讨论帖 ${data.community.discussions} · 文章 ${data.community.articles}`,
+      to: '/admin/moments',
+    },
   ];
 
   return (

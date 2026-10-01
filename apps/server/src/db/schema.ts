@@ -836,6 +836,43 @@ CREATE TABLE IF NOT EXISTS ticket_replies (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_replies ON ticket_replies(ticket_id, id);
+
+-- ---------------------------------------------------------------------------
+-- 动态（短动态广场）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS moments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  author_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content       TEXT NOT NULL DEFAULT '',
+  images        TEXT NOT NULL DEFAULT '[]',        -- JSON 数组，最多若干张图片
+  is_pinned     INTEGER NOT NULL DEFAULT 0,        -- 管理员置顶
+  is_deleted    INTEGER NOT NULL DEFAULT 0,
+  like_count    INTEGER NOT NULL DEFAULT 0,
+  comment_count INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_moments_feed ON moments(is_deleted, is_pinned DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_moments_author ON moments(author_id, is_deleted, id DESC);
+
+CREATE TABLE IF NOT EXISTS moment_likes (
+  moment_id  INTEGER NOT NULL REFERENCES moments(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (moment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_moment_likes_user ON moment_likes(user_id, moment_id DESC);
+
+CREATE TABLE IF NOT EXISTS moment_comments (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  moment_id  INTEGER NOT NULL REFERENCES moments(id) ON DELETE CASCADE,
+  author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id  INTEGER,
+  content    TEXT NOT NULL,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_moment_comments ON moment_comments(moment_id, id);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */

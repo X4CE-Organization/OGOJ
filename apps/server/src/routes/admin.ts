@@ -59,6 +59,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       articles: await count('SELECT COUNT(*) AS c FROM articles WHERE is_deleted = 0'),
       solutions: await count('SELECT COUNT(*) AS c FROM solutions WHERE is_deleted = 0'),
       pendingSolutions: await count('SELECT COUNT(*) AS c FROM solutions WHERE is_deleted = 0 AND is_public = 0'),
+      moments: await count('SELECT COUNT(*) AS c FROM moments WHERE is_deleted = 0'),
     };
     const shop = {
       items: await count('SELECT COUNT(*) AS c FROM shop_items'),

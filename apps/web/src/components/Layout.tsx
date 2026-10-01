@@ -11,6 +11,7 @@ import {
   Mail,
   Menu,
   Moon,
+  Radio,
   Search,
   Settings,
   ShoppingBag,
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/training', label: '训练', icon: ListChecks },
   { to: '/teams', label: '团队', icon: Users2 },
   { to: '/discussions', label: '讨论', icon: Users },
+  { to: '/moments', label: '动态', icon: Radio },
   { to: '/articles', label: '文章广场', icon: BookOpen },
   { to: '/rank', label: '排行榜', icon: Trophy },
   { to: '/achievements', label: '成就', icon: Award },
@@ -52,6 +54,12 @@ function Header() {
   const [navOpen, setNavOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [avatarOpen, setAvatarOpen] = useState(false);
+
+  /** 后台关掉动态功能 / 动态入口时，导航里也要跟着消失 */
+  const navItems =
+    settings.enable_moment === false || settings.moment_show_entry === false
+      ? NAV_ITEMS.filter((item) => item.to !== '/moments')
+      : NAV_ITEMS;
   const [avatarDraft, setAvatarDraft] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,7 +104,7 @@ function Header() {
         </Link>
 
         <nav className="hidden flex-1 items-center gap-0.5 lg:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -288,7 +296,7 @@ function Header() {
             />
           </form>
           <div className="grid grid-cols-3 gap-1">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

@@ -69,6 +69,9 @@ import AdminTagGroups from './pages/admin/TagGroupsPanel';
 import Stickers from './pages/Stickers';
 import AdminDifficulties from './pages/admin/DifficultiesPanel';
 import AdminTickets from './pages/admin/TicketsPanel';
+import Moments from './pages/Moments';
+import MomentDetail from './pages/MomentDetail';
+import AdminMoments from './pages/admin/MomentsPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -112,6 +115,8 @@ export default function App() {
         <Route path="/list/:id" element={<ListDetail />} />
         <Route path="/discussions" element={<Discussions />} />
         <Route path="/discussion/:id" element={<DiscussionDetail />} />
+        <Route path="/moments" element={<Moments />} />
+        <Route path="/moment/:id" element={<MomentDetail />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/article/new" element={<RequireAuth><ArticleEditor /></RequireAuth>} />
         <Route path="/article/:id/edit" element={<RequireAuth><ArticleEditor /></RequireAuth>} />
@@ -161,6 +166,7 @@ export default function App() {
           <Route path="carousel" element={<AdminCarousel />} />
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="discussions" element={<AdminDiscussions />} />
+          <Route path="moments" element={<AdminMoments />} />
           <Route path="solutions" element={<AdminSolutions />} />
           <Route path="judge" element={<AdminJudge />} />
           <Route path="achievements" element={<AdminAchievements />} />

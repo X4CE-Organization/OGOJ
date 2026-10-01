@@ -10,7 +10,8 @@ export type ListKey =
   | 'discussions'
   | 'articles'
   | 'tickets'
-  | 'teams';
+  | 'teams'
+  | 'moments';
 
 const keyOf = (key: ListKey) => `ogoj:list-url:${key}`;
 

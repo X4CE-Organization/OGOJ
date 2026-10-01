@@ -481,6 +481,53 @@ async function seedCommunity(userIds: Record<string, number>, problemIds: number
     }
   }
 
+  if (!await get('SELECT id FROM moments LIMIT 1')) {
+    const demoMoments = [
+      {
+        author: userIds.root!,
+        content:
+          '欢迎来到**动态广场**！\n\n在这里可以随时记录刷题日常、思路碎片或者吐槽，支持配图、表情包、点赞和评论。\n\n个人主页也会同步展示你发过的动态。',
+        likes: [userIds.alice!, userIds.bob!, userIds.carol!],
+        comments: [
+          { author: userIds.alice!, content: '界面很清爽，已经发了一条试试水～' },
+          { author: userIds.bob!, content: '希望能加上关注流，我可以只看关注的人。' },
+        ],
+      },
+      {
+        author: userIds.alice!,
+        content: '终于把 [P1003 最大子段和](/problem/P1003) 写过了，前缀和 + 贪心一次 AC，开心 🎉',
+        likes: [userIds.root!, userIds.carol!],
+        comments: [{ author: userIds.carol!, content: '恭喜！我还在超时里挣扎……' }],
+      },
+      {
+        author: userIds.bob!,
+        content: '整理了一份图论模板，等写完就发到文章广场，有需要的可以先收藏 [OGOJ 新手题单](/list/1)。',
+        likes: [userIds.alice!],
+        comments: [],
+      },
+    ];
+    for (const item of demoMoments) {
+      const info = await run('INSERT INTO moments (author_id, content, images, like_count, comment_count) VALUES (?, ?, ?, ?, ?)', [
+        item.author,
+        item.content,
+        JSON.stringify([]),
+        item.likes.length,
+        item.comments.length,
+      ]);
+      const momentId = Number(info.lastInsertRowid);
+      for (const userId of item.likes) {
+        await run('INSERT OR IGNORE INTO moment_likes (moment_id, user_id) VALUES (?, ?)', [momentId, userId]);
+      }
+      for (const comment of item.comments) {
+        await run('INSERT INTO moment_comments (moment_id, author_id, content) VALUES (?, ?, ?)', [
+          momentId,
+          comment.author,
+          comment.content,
+        ]);
+      }
+    }
+  }
+
   if (!await get('SELECT id FROM articles LIMIT 1')) {
     await run(
       `INSERT INTO articles (title, summary, content, category, author_id, is_public)
@@ -756,6 +803,7 @@ export async function seed(options: { silent?: boolean } = {}): Promise<void> {
       submissions: await count('SELECT COUNT(*) AS c FROM submissions'),
       shopItems: await count('SELECT COUNT(*) AS c FROM shop_items'),
       achievements: await count('SELECT COUNT(*) AS c FROM achievements'),
+      moments: await count('SELECT COUNT(*) AS c FROM moments'),
     };
     // eslint-disable-next-line no-console
     console.log('OGOJ seed complete:');

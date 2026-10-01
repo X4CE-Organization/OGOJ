@@ -7,6 +7,7 @@ import { classNames, difficultyList, formatMemory, formatMs, formatTime, fromNow
 import { Avatar, DifficultyBadge, EmptyState, Loading, Modal, StatusText, Tabs, TagBadge } from '../components/ui';
 import BackButton from '../components/BackButton';
 import ImageUploadField from '../components/ImageUploadField';
+import MomentCard from '../components/MomentCard';
 import { useToast } from '../components/Toast';
 
 export default function UserProfile() {
@@ -19,6 +20,7 @@ export default function UserProfile() {
   const [solutions, setSolutions] = useState<any[]>([]);
   const [articles, setArticles] = useState<any[]>([]);
   const [discussions, setDiscussions] = useState<any[]>([]);
+  const [moments, setMoments] = useState<any[]>([]);
   const [badges, setBadges] = useState<{ unlocked: any[]; total: number } | null>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState('');
@@ -48,6 +50,12 @@ export default function UserProfile() {
     }
     if (tab === 'discussions') {
       api.get<any>(`/api/users/${username}/discussions`).then((r) => setDiscussions(r.items)).catch(() => undefined);
+    }
+    if (tab === 'moments') {
+      api
+        .get<any>(`/api/moments?user=${encodeURIComponent(username)}&size=20`)
+        .then((r) => setMoments(r.items ?? []))
+        .catch(() => undefined);
     }
   }, [tab, username]);
 
@@ -309,10 +317,15 @@ export default function UserProfile() {
               { key: 'solutions', label: '题解' },
               { key: 'articles', label: '文章广场' },
               { key: 'discussions', label: '讨论' },
+              ...(settings.enable_moment === false ? [] : [{ key: 'moments', label: '动态' }]),
             ]}
           />
           <div className="p-4">
-            {!profile.canSeeRecords && tab !== 'solutions' && tab !== 'articles' && tab !== 'discussions' ? (
+            {!profile.canSeeRecords &&
+            tab !== 'solutions' &&
+            tab !== 'articles' &&
+            tab !== 'discussions' &&
+            tab !== 'moments' ? (
               <EmptyState title="该用户隐藏了提交记录与通过题目" />
             ) : tab === 'solved' ? (
               data.solvedProblems.length === 0 ? (
@@ -420,6 +433,25 @@ export default function UserProfile() {
                     </li>
                   ))}
                 </ul>
+              )
+            ) : tab === 'moments' ? (
+              moments.length === 0 ? (
+                <EmptyState title="还没有发过动态" />
+              ) : (
+                <div className="space-y-3">
+                  {moments.map((moment) => (
+                    <MomentCard
+                      key={moment.id}
+                      moment={moment}
+                      onUpdate={(patch) =>
+                        setMoments((current) =>
+                          current.map((row) => (row.id === moment.id ? { ...row, ...patch } : row)),
+                        )
+                      }
+                      onDelete={() => setMoments((current) => current.filter((row) => row.id !== moment.id))}
+                    />
+                  ))}
+                </div>
               )
             ) : discussions.length === 0 ? (
               <EmptyState title="还没有发过帖" />

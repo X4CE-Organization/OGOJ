@@ -17,7 +17,17 @@ const IMAGE_TYPES = new Map<string, string>([
   ['image/x-icon', '.ico'],
 ]);
 
-const ALLOWED_SUBDIRS = new Set(['avatar', 'banner', 'carousel', 'article', 'problem', 'misc', 'teams', 'site']);
+const ALLOWED_SUBDIRS = new Set([
+  'avatar',
+  'banner',
+  'carousel',
+  'article',
+  'problem',
+  'misc',
+  'teams',
+  'site',
+  'moment',
+]);
 
 export async function registerUploadRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/upload', async (request) => {
