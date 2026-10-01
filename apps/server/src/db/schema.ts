@@ -873,6 +873,41 @@ CREATE TABLE IF NOT EXISTS moment_comments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_moment_comments ON moment_comments(moment_id, id);
+
+-- ---------------------------------------------------------------------------
+-- 邮件：密码重置 / 邮箱验证码
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mail_codes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  code       TEXT NOT NULL,
+  purpose    TEXT NOT NULL DEFAULT 'reset',   -- reset | verify
+  user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  used       INTEGER NOT NULL DEFAULT 0,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_mail_codes_lookup ON mail_codes(email, purpose, used, id DESC);
+
+-- 用户退订邮件通知（没有记录 = 接收）
+CREATE TABLE IF NOT EXISTS mail_optouts (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 邮件发送记录（后台可查，方便排查投递问题）
+CREATE TABLE IF NOT EXISTS mail_logs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  to_email   TEXT NOT NULL,
+  subject    TEXT NOT NULL DEFAULT '',
+  category   TEXT NOT NULL DEFAULT 'system',
+  status     TEXT NOT NULL DEFAULT 'sent',    -- sent | failed
+  error      TEXT NOT NULL DEFAULT '',
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_mail_logs_time ON mail_logs(id DESC);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */

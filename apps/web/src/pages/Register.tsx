@@ -15,10 +15,41 @@ export default function Register() {
     password: '',
     password2: '',
     invite_code: '',
+    email_code: '',
   });
   const [check, setCheck] = useState<{ available: boolean; reason: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const needEmailVerify = Boolean(settings.mail_register_verify);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const timer = setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const sendEmailCode = async () => {
+    setError('');
+    if (!form.email.trim()) {
+      setError('请先填写邮箱');
+      return;
+    }
+    setSendingCode(true);
+    try {
+      const result = await api.post<{ masked?: string }>('/api/auth/mail-code', {
+        account: form.email.trim(),
+        purpose: 'verify',
+      });
+      toast.success(result.masked ? `验证码已发送至 ${result.masked}` : '验证码已发送');
+      setCooldown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '验证码发送失败');
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -92,9 +123,32 @@ export default function Register() {
             </span>
           )}
         </Field>
-        <Field label="邮箱" hint="用于找回密码与接收通知（可留空）">
+        <Field
+          label="邮箱"
+          hint={needEmailVerify ? '注册需要邮箱验证，也用于找回密码' : '用于找回密码与接收通知（可留空）'}
+        >
           <input className="input" value={form.email} onChange={set('email')} placeholder="you@example.com" />
         </Field>
+        {needEmailVerify && (
+          <Field label="邮箱验证码" required>
+            <div className="flex gap-2">
+              <input
+                className="input flex-1"
+                value={form.email_code}
+                onChange={set('email_code')}
+                placeholder="6 位数字验证码"
+              />
+              <button
+                type="button"
+                className="btn-ghost shrink-0"
+                disabled={sendingCode || cooldown > 0}
+                onClick={sendEmailCode}
+              >
+                {cooldown > 0 ? `${cooldown} 秒后重发` : sendingCode ? '发送中…' : '发送验证码'}
+              </button>
+            </div>
+          </Field>
+        )}
         <Field label="密码" required>
           <input className="input" type="password" value={form.password} onChange={set('password')} />
         </Field>

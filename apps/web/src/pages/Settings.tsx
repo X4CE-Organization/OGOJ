@@ -28,6 +28,25 @@ export default function SettingsPage() {
   const [points, setPoints] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [bindings, setBindings] = useState<{ bindings: any[]; providers: any[] } | null>(null);
+  const [mailPref, setMailPref] = useState<{ email: string; enabled: boolean; serviceEnabled: boolean } | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ email: string; enabled: boolean; serviceEnabled: boolean }>('/api/mail/preferences')
+      .then(setMailPref)
+      .catch(() => undefined);
+  }, []);
+
+  const toggleMail = async (enabled: boolean) => {
+    setMailPref((current) => (current ? { ...current, enabled } : current));
+    try {
+      await api.put('/api/mail/preferences', { enabled });
+      toast.success(enabled ? '已开启邮件通知' : '已关闭邮件通知');
+    } catch (err) {
+      setMailPref((current) => (current ? { ...current, enabled: !enabled } : current));
+      toast.error(err instanceof Error ? err.message : '保存失败');
+    }
+  };
 
   const loadBindings = () => {
     api
@@ -241,6 +260,32 @@ export default function SettingsPage() {
           </div>
         </div>
       </Section>
+
+      {mailPref && (
+        <Section title="邮件通知">
+          <div className="space-y-3 p-4 text-sm">
+            <p className="text-xs text-slate-500">
+              {mailPref.serviceEnabled
+                ? `回复、评论、私信等通知可以同时发到邮箱${mailPref.email ? `（${mailPref.email}）` : ''}。`
+                : '本站暂未开启邮件服务，通知只会出现在站内信里。'}
+            </p>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={mailPref.enabled}
+                disabled={!mailPref.serviceEnabled}
+                onChange={(event) => void toggleMail(event.target.checked)}
+              />
+              接收邮件通知
+            </label>
+            {!mailPref.email && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                你还没有填写邮箱，请先在上面的「个人资料」里补上并保存。
+              </p>
+            )}
+          </div>
+        </Section>
+      )}
 
       <Section title="账号信息">
         <dl className="space-y-2 p-4 text-sm">

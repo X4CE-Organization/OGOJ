@@ -14,6 +14,7 @@ import { AVAILABLE_LANGUAGE_IDS } from '../judge/languages.js';
 import { workerState } from '../judge/worker.js';
 import { config } from '../config.js';
 import { cacheInvalidate, redisInfo } from '../lib/redis.js';
+import { resetMailTransport } from '../lib/mail.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   /** Total size of the SQLite database file in bytes. */
@@ -120,6 +121,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (typeof patch !== 'object' || patch === null) throw badRequest('请求体格式不正确');
     const changes = await updateSettings(patch);
     await audit(request, 'settings.update', { detail: changes.map((c) => c.key) });
+    // SMTP 参数可能变了，丢掉缓存的连接
+    if (changes.some((change) => change.key.startsWith('smtp_') || change.key.startsWith('mail_'))) {
+      resetMailTransport();
+    }
     await cacheInvalidate('ogoj:cache:');
     return { ok: true, changed: changes.map((c) => c.key), values: allSettings({ maskSecrets: true }) };
   });

@@ -31,6 +31,7 @@ import { registerProblemTransferRoutes } from './routes/problem-transfer.js';
 import { registerRunRoutes } from './routes/run.js';
 import { registerStickerRoutes } from './routes/stickers.js';
 import { registerMomentRoutes } from './routes/moments.js';
+import { registerMailRoutes } from './routes/mail.js';
 import { warmSettings } from './settings/index.js';
 import { rateLimitStore, touchOnline } from './lib/redis.js';
 
@@ -217,6 +218,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerListRoutes(app);
   await registerTeamRoutes(app);
   await registerMomentRoutes(app);
+  await registerMailRoutes(app);
   await registerAdminRoutes(app);
   await registerUploadRoutes(app);
 

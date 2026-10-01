@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { classNames } from '../../lib/format';
+import { classNames, fromNow } from '../../lib/format';
 import { Loading, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import ImageUploadField from '../../components/ImageUploadField';
@@ -41,6 +41,48 @@ export default function SettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('');
+  const [testMailTo, setTestMailTo] = useState('');
+  const [mailTesting, setMailTesting] = useState(false);
+  const [mailStatus, setMailStatus] = useState<any>(null);
+
+  const loadMailStatus = async () => {
+    try {
+      setMailStatus(await api.get<any>('/api/admin/mail/status'));
+    } catch {
+      setMailStatus(null);
+    }
+  };
+
+  useEffect(() => {
+    if (active === 'mail') void loadMailStatus();
+  }, [active]);
+
+  const checkMailConnection = async () => {
+    setMailTesting(true);
+    try {
+      const result = await api.post<{ ok: boolean; error?: string }>('/api/admin/mail/verify');
+      if (result.ok) toast.success('SMTP 连接正常');
+      else toast.error(`连接失败：${result.error ?? '未知错误'}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '检测失败');
+    } finally {
+      setMailTesting(false);
+      void loadMailStatus();
+    }
+  };
+
+  const sendTestMail = async () => {
+    setMailTesting(true);
+    try {
+      await api.post('/api/admin/mail/test', { to: testMailTo.trim() });
+      toast.success('测试邮件已发送，请查收');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '发送失败');
+    } finally {
+      setMailTesting(false);
+      void loadMailStatus();
+    }
+  };
 
   const load = async () => {
     try {
@@ -185,6 +227,64 @@ export default function SettingsPanel() {
               : groups.find((group) => group.key === active)?.description
           }
         >
+          {active === 'mail' && !filter && (
+            <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                发送测试邮件
+              </div>
+              <p className="mb-3 text-xs text-slate-500">
+                填好上面的 SMTP 参数并保存后，这里可以立刻验证配置是否可用（会先测试连接，再发一封测试信）。
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  className="input !w-72"
+                  placeholder="接收测试邮件的邮箱"
+                  value={testMailTo}
+                  onChange={(event) => setTestMailTo(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={mailTesting || !testMailTo.trim()}
+                  onClick={checkMailConnection}
+                >
+                  {mailTesting ? '检测中…' : '检测连接'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={mailTesting || !testMailTo.trim()}
+                  onClick={sendTestMail}
+                >
+                  发送测试邮件
+                </button>
+                <span className="text-xs text-slate-400">
+                  {mailStatus ? (mailStatus.enabled ? '当前：已启用' : mailStatus.configured ? '当前：已配置但未启用' : '当前：未配置') : ''}
+                </span>
+              </div>
+              {mailStatus?.logs?.length ? (
+                <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-xs">
+                  {mailStatus.logs.slice(0, 8).map((log: any) => (
+                    <li key={log.id} className="flex flex-wrap items-center gap-2 text-slate-500">
+                      <span
+                        className={
+                          log.status === 'sent'
+                            ? 'rounded bg-emerald-100 px-1 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                            : 'rounded bg-rose-100 px-1 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300'
+                        }
+                      >
+                        {log.status === 'sent' ? '已发送' : '失败'}
+                      </span>
+                      <span className="font-mono">{log.to_email}</span>
+                      <span className="truncate">{log.subject}</span>
+                      <span className="text-slate-400">{fromNow(log.created_at)}</span>
+                      {log.error && <span className="truncate text-rose-500">{log.error}</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          )}
           <div className="grid gap-4 p-4 md:grid-cols-2">
             {visibleFields.map((field) => {
               const value = current(field);

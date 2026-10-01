@@ -8,6 +8,7 @@ import { json as settingJson, bool, num, str } from '../settings/index.js';
 import { addPoints } from '../lib/points.js';
 import { levelOf, userBrief } from './helpers.js';
 import { evaluateAchievements } from '../lib/achievements.js';
+import { consumeMailCode } from '../lib/mail.js';
 import { counterGet, counterIncr, counterReset } from '../lib/redis.js';
 
 interface RegisterBody {
@@ -105,7 +106,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const email = (body.email ?? '').trim().toLowerCase();
-      if (bool('register_need_email', false) && !email) throw badRequest('请填写邮箱');
+      const needVerify = bool('mail_register_verify', false) && bool('smtp_enabled', false);
+      if ((bool('register_need_email', false) || needVerify) && !email) throw badRequest('请填写邮箱');
       if (email) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('邮箱格式不正确');
         const suffixes = settingJson<string[]>('register_email_suffix', []);
@@ -122,6 +124,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
       if (email && await get('SELECT id FROM users WHERE email = ?', [email])) {
         throw conflict('该邮箱已被注册');
+      }
+      if (needVerify) {
+        const code = String((body as any).email_code ?? '').trim();
+        if (!code) throw badRequest('请填写邮箱验证码');
+        if (!(await consumeMailCode({ email, purpose: 'verify', code }))) {
+          throw badRequest('邮箱验证码不正确或已过期');
+        }
       }
 
       const role = str('default_role', 'user') === 'admin' ? 'admin' : 'user';
