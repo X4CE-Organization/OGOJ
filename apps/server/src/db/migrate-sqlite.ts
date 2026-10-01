@@ -6,10 +6,26 @@
  * 特点：表按外键依赖顺序复制、自增序列自动校正、可重复执行（先清空目标表再写）。
  */
 import fs from 'node:fs';
-import Database from 'better-sqlite3';
 import { all, tx, run, closePool } from './index.js';
 import { config } from '../config.js';
 import { migrate } from './index.js';
+
+/**
+ * better-sqlite3 是可选依赖（原生模块，生产镜像里不安装）：
+ * 只有执行 SQLite → PostgreSQL 迁移时才需要它。
+ */
+async function loadSqlite(): Promise<any> {
+  try {
+    // 用变量做说明符，避免在没有安装这个可选依赖时触发类型解析报错
+    const specifier = 'better-sqlite3';
+    const module = (await import(specifier)) as any;
+    return module.default ?? module;
+  } catch {
+    throw new Error(
+      '迁移需要 better-sqlite3，请先在项目根目录执行 `npm i better-sqlite3` 后再运行本命令。',
+    );
+  }
+}
 
 /** 依赖顺序：被引用的表在前 */
 const TABLE_ORDER = [
@@ -79,6 +95,7 @@ async function main() {
   }
   console.log(`从 ${file} 导入到 ${config.databaseUrl.replace(/:[^:@/]+@/, ':***@')}`);
 
+  const Database = await loadSqlite();
   const sqlite = new Database(file, { readonly: true });
   await migrate(); // 先建好 PostgreSQL 表结构
 

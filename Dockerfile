@@ -12,7 +12,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-RUN npm ci
+# 跳过 optional 依赖（better-sqlite3 这类原生模块只在跑 SQLite 迁移时才需要），
+# 构建更快、更省内存和磁盘
+RUN npm ci --omit=optional
 
 COPY . .
 RUN npm run build
@@ -47,7 +49,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-RUN npm ci --omit=dev --workspace @ogoj/server --include-workspace-root \
+RUN npm ci --omit=dev --omit=optional --workspace @ogoj/server --include-workspace-root \
  && npm cache clean --force
 
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
