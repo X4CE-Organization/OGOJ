@@ -17,6 +17,7 @@ import {
 import { bool, num, str } from '../settings/index.js';
 import { audit } from '../lib/audit.js';
 import { evaluateAchievements } from '../lib/achievements.js';
+import { isMirroredAvatar, mirrorAvatar, removeMirroredAvatar } from '../lib/avatar.js';
 
 interface OAuthState {
   p: string;
@@ -159,10 +160,17 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
         return frontendRedirect(reply, { error: '该第三方账号尚未绑定 OGOJ 账号，请联系管理员' });
       }
       const role = str('oauth_default_role', 'user') === 'admin' ? 'admin' : 'user';
-      const username = safeUsername(
+      const candidate = await safeUsername(
         profile.username,
         async (candidate) => Boolean(await get('SELECT id FROM users WHERE username = ?', [candidate])),
       );
+      // 双保险：safeUsername 之外再校验一次，异常用户名一律换成兜底名，绝不让脏数据落库
+      const username = /^[A-Za-z0-9_\u4e00-\u9fa5-]{3,16}$/.test(candidate)
+        ? candidate
+        : `user${Date.now().toString(36).slice(-5)}`;
+      const avatar = profile.avatar
+        ? await mirrorAvatar(profile.avatar, `${providerId}-${profile.providerUserId}`)
+        : '';
       const userId = await tx(async () => {
         const info = await run(
           `INSERT INTO users (username, email, password_hash, role, display_name, avatar, is_private)
@@ -175,7 +183,7 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
             bcrypt.hashSync(randomToken(16), 10),
             role,
             profile.username.slice(0, 32) || username,
-            profile.avatar || null,
+            avatar || null,
             bool('hide_private_by_default', false) ? 1 : 0,
           ],
         );
@@ -209,8 +217,28 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
         link.id,
       ]);
     }
-    if (!user.avatar && profile.avatar) {
-      await run('UPDATE users SET avatar = ? WHERE id = ?', [profile.avatar, user.id]);
+    /**
+     * 头像同步：
+     *   - 用户自己上传/填写的头像（不是我们镜像的）永远不动
+     *   - 本站镜像的第三方头像：供应商换了新地址就重新镜像
+     *   - 老数据里直接存的第三方地址：升级成本站镜像，避免国内访问不了或 URL 失效
+     */
+    const providerAvatar = profile.avatar;
+    const storedAvatar = link?.avatar ?? '';
+    const currentAvatar: string = user.avatar ?? '';
+    if (providerAvatar) {
+      const customized =
+        Boolean(currentAvatar) && !isMirroredAvatar(currentAvatar) && currentAvatar !== storedAvatar;
+      const mirrored = isMirroredAvatar(currentAvatar);
+      const providerChanged = providerAvatar !== storedAvatar;
+      if (!customized && (!currentAvatar || (!mirrored && currentAvatar === storedAvatar) || (mirrored && providerChanged))) {
+        const next = await mirrorAvatar(providerAvatar, `${providerId}-${profile.providerUserId}`);
+        if (next && next !== currentAvatar) {
+          await run('UPDATE users SET avatar = ? WHERE id = ?', [next, user.id]);
+          removeMirroredAvatar(currentAvatar);
+          user.avatar = next;
+        }
+      }
     }
     await run(`UPDATE users SET last_login_at = datetime('now'), last_login_ip = ? WHERE id = ?`, [
       request.ip,

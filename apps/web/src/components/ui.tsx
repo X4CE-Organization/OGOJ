@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   classNames,
   difficultyColor,
@@ -23,12 +23,19 @@ export function Avatar({
   className?: string;
 }) {
   const name = user?.display_name || user?.username || '';
-  if (user?.avatar) {
+  const src = user?.avatar ?? '';
+  // 头像加载失败（第三方地址失效、跨境太慢、文件被删）时回退到首字母，别留个破图
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+  if (src && !failed) {
     return (
       <img
-        src={user.avatar}
+        src={src}
         alt={name}
         style={{ width: size, height: size }}
+        onError={() => setFailed(true)}
         className={classNames('shrink-0 rounded-full object-cover', className)}
       />
     );

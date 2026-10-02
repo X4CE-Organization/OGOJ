@@ -7,6 +7,7 @@
  */
 import { bool, str } from '../settings/index.js';
 import { OAUTH_PRESETS, type OAuthPreset } from '../settings/registry.js';
+import { normalizeAvatarUrl } from './avatar.js';
 
 export interface OAuthProviderConfig extends OAuthPreset {
   clientId: string;
@@ -142,7 +143,8 @@ export async function fetchProfile(
         providerUserId,
         username: String(data.login ?? data.username ?? data.name ?? `user${providerUserId}`),
         email,
-        avatar: String(data.avatar_url ?? data.picture ?? data.avatar ?? ''),
+        // 第三方返回的头像地址不可全信，这里先清洗一遍
+        avatar: normalizeAvatarUrl(data.avatar_url ?? data.picture ?? data.avatar_url_hd ?? data.avatar),
         raw: data,
       },
     };
