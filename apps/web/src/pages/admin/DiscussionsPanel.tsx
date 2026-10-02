@@ -95,12 +95,12 @@ export default function DiscussionsPanel() {
                   <tr key={discussion.id} className={classNames(discussion.is_deleted && 'opacity-60')}>
                     <td>
                       <div className="flex items-center gap-2">
-                        {discussion.is_pinned && <Pin className="h-3 w-3 text-rose-500" />}
-                        {discussion.is_locked && <Lock className="h-3 w-3 text-slate-400" />}
+                        {Boolean(discussion.is_pinned) && <Pin className="h-3 w-3 text-rose-500" />}
+                        {Boolean(discussion.is_locked) && <Lock className="h-3 w-3 text-slate-400" />}
                         <Link to={`/discussion/${discussion.id}`} className="hover:text-primary">
                           {discussion.title}
                         </Link>
-                        {discussion.is_deleted && (
+                        {Boolean(discussion.is_deleted) && (
                           <span className="rounded bg-rose-100 px-1 text-[10px] text-rose-600 dark:bg-rose-500/20">
                             已删除
                           </span>

@@ -291,12 +291,11 @@ export async function tx<T>(fn: () => Promise<T>): Promise<T> {
 export async function migrate(): Promise<void> {
   const { SCHEMA_SQL } = await import('./schema.js');
   await pool.query(translateSql(SCHEMA_SQL));
-  // 用户名唯一性：除了精确匹配的唯一约束，再加一条忽略大小写的唯一索引，
-  // 避免 `chengzhao` 与 `ChengZhao` 同时存在。老库里如果有冲突则以告警跳过，不影响启动。
+  // 用户名查重区分大小写：早期版本建过一条忽略大小写的唯一索引，这里确保删掉它
   try {
-    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
+    await pool.query('DROP INDEX IF EXISTS idx_users_username_lower');
   } catch (error) {
-    console.warn('[ogoj] 忽略大小写的用户名唯一索引创建失败（可能已存在重复用户名）：', (error as Error).message);
+    console.warn('[ogoj] 清理用户名大小写唯一索引失败：', (error as Error).message);
   }
   const existing = await count('SELECT COUNT(*) AS c FROM difficulties');
   if (!existing) {

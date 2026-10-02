@@ -146,7 +146,7 @@ export default function TeamProblems() {
                 {data.items.map((problem: any) => (
                   <tr key={problem.id}>
                     <td className="font-mono text-xs text-slate-400">
-                      {problem.is_pinned && <Pin className="mr-1 inline h-3 w-3 text-rose-500" />}
+                      {Boolean(problem.is_pinned) && <Pin className="mr-1 inline h-3 w-3 text-rose-500" />}
                       {problem.pid}
                     </td>
                     <td>

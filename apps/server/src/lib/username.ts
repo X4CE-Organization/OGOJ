@@ -3,7 +3,7 @@
  *
  * 用户名是唯一标识（个人主页地址、@提及、私信收件人都是它），所以：
  *   - 长度 / 字符集 / 保留名按系统设置校验
- *   - 查重一律**忽略大小写**，避免出现 `chengzhao` 和 `ChengZhao` 这种看起来重复的账号
+ *   - 查重**区分大小写**：`chengzhao` 与 `ChengZhao` 视为两个不同的用户名
  */
 import { get } from '../db/index.js';
 import { badRequest } from './errors.js';
@@ -28,12 +28,12 @@ export function validateUsername(username: string): void {
   if (banned.includes(username.toLowerCase())) throw badRequest('该用户名已被保留，请更换');
 }
 
-/** 大小写不敏感的用户名查重；`exceptId` 用于改名时排除自己 */
+/** 用户名查重（区分大小写）；`exceptId` 用于改名时排除自己 */
 export async function usernameTaken(username: string, exceptId?: number): Promise<boolean> {
   const name = normalizeUsername(username);
   if (!name) return false;
   const row = exceptId
-    ? await get('SELECT id FROM users WHERE lower(username) = lower(?) AND id <> ?', [name, exceptId])
-    : await get('SELECT id FROM users WHERE lower(username) = lower(?)', [name]);
+    ? await get('SELECT id FROM users WHERE username = ? AND id <> ?', [name, exceptId])
+    : await get('SELECT id FROM users WHERE username = ?', [name]);
   return Boolean(row);
 }

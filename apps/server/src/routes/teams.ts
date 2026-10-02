@@ -1084,6 +1084,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         ...row,
         myAccepted: Boolean(row.my_accepted),
         myAttempts: row.my_attempts ?? 0,
+        // 0/1 必须转成布尔值，否则前端 `{is_pinned && <Pin/>}` 会渲染出一个 "0"
+        is_pinned: Boolean(row.is_pinned),
       })),
       total,
       solved,

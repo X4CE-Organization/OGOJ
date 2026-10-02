@@ -106,7 +106,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (await usernameTaken(username)) {
-        throw conflict('该用户名已被注册（用户名不区分大小写）');
+        throw conflict('该用户名已被注册');
       }
       if (email && await get('SELECT id FROM users WHERE email = ?', [email])) {
         throw conflict('该邮箱已被注册');
@@ -258,7 +258,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const next = normalizeUsername(body.username);
       if (next && next !== user.username) {
         validateUsername(next);
-        if (await usernameTaken(next, user.id)) throw conflict('该用户名已被占用（用户名不区分大小写）');
+        if (await usernameTaken(next, user.id)) throw conflict('该用户名已被占用');
         assign('username', next);
       }
     }

@@ -91,7 +91,9 @@ export default function AnnouncementsPanel() {
               <li key={item.id} className="flex items-start gap-3 p-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    {item.is_pinned && <span className="rounded bg-rose-100 px-1 text-xs text-rose-600 dark:bg-rose-500/20">置顶</span>}
+                    {Boolean(item.is_pinned) && (
+                      <span className="rounded bg-rose-100 px-1 text-xs text-rose-600 dark:bg-rose-500/20">置顶</span>
+                    )}
                     <span className="font-medium">{item.title}</span>
                     <span className="rounded bg-slate-100 px-1 text-[11px] text-slate-500 dark:bg-slate-800">{item.type}</span>
                     {!item.is_public && <span className="text-[11px] text-amber-500">未公开</span>}

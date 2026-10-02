@@ -163,13 +163,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
     if (query.banned === 'true') conditions.push('is_banned = 1');
     if (query.banned === 'false') conditions.push('is_banned = 0');
-    const items = await all<any>(
+    const rows = await all<any>(
       `SELECT id, username, email, role, display_name, avatar, points, rating, is_banned, ban_reason,
               solved_count, submission_count, created_at, last_login_at, last_login_ip
          FROM users WHERE ${conditions.join(' AND ')}
         ORDER BY id DESC LIMIT ? OFFSET ?`,
       [...params, page.size, page.offset],
     );
+    // is_banned 是 0/1，必须转成真正的布尔值，否则前端 `{is_banned && <span/>}` 会渲染出一个 "0"
+    const items = rows.map((row) => ({ ...row, is_banned: Boolean(row.is_banned) }));
     const total = await count(`SELECT COUNT(*) AS c FROM users WHERE ${conditions.join(' AND ')}`, params);
     return { items, total, page: page.page, size: page.size };
   });
@@ -230,7 +232,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         const next = normalizeUsername(body.profile.username);
         if (next && next !== target.username) {
           validateUsername(next);
-          if (await usernameTaken(next, id)) throw conflict('该用户名已被占用（用户名不区分大小写）');
+          if (await usernameTaken(next, id)) throw conflict('该用户名已被占用');
           await run('UPDATE users SET username = ? WHERE id = ?', [next, id]);
           await audit(request, 'admin.user_rename', { targetType: 'user', targetId: id, detail: { from: target.username, to: next } });
         }
@@ -414,11 +416,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   /* ------------------------------------------------------------ 公告管理 */
   app.get('/api/admin/announcements', async (request) => {
     await requireAdmin(request);
+    const rows = await all<any>(
+      `SELECT a.*, u.username FROM announcements a LEFT JOIN users u ON u.id = a.author_id
+        ORDER BY a.is_pinned DESC, a.id DESC LIMIT 200`,
+    );
     return {
-      items: await all<any>(
-        `SELECT a.*, u.username FROM announcements a LEFT JOIN users u ON u.id = a.author_id
-          ORDER BY a.is_pinned DESC, a.id DESC LIMIT 200`,
-      ),
+      items: rows.map((row) => ({
+        ...row,
+        is_pinned: Boolean(row.is_pinned),
+        is_public: Boolean(row.is_public),
+      })),
     };
   });
 
@@ -502,7 +509,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       [...params, page.size, page.offset],
     );
     return {
-      items,
+      items: items.map((row) => ({
+        ...row,
+        is_pinned: Boolean(row.is_pinned),
+        is_locked: Boolean(row.is_locked),
+        is_deleted: Boolean(row.is_deleted),
+      })),
       total: await count(`SELECT COUNT(*) AS c FROM discussions d WHERE ${conditions.join(' AND ')}`, params),
       page: page.page,
       size: page.size,

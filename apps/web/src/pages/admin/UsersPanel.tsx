@@ -174,7 +174,7 @@ export default function UsersPanel() {
                           <Link to={`/user/${user.username}`} className="hover:text-primary">
                             {user.display_name || user.username}
                           </Link>
-                          {user.is_banned && (
+                          {Boolean(user.is_banned) && (
                             <span className="ml-2 rounded bg-rose-100 px-1 text-[10px] text-rose-600 dark:bg-rose-500/20">
                               已封禁
                             </span>
@@ -239,7 +239,7 @@ export default function UsersPanel() {
       >
         <div className="space-y-3">
           {isSuperAdmin && (
-            <Field label="用户名" hint="登录名与个人主页地址，全站唯一且不区分大小写">
+            <Field label="用户名" hint="登录名与个人主页地址，全站唯一（区分大小写）">
               <input
                 className="input"
                 value={form.username ?? ''}
