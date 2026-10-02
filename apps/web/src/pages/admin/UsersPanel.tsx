@@ -46,6 +46,7 @@ export default function UsersPanel() {
       banReason: user.ban_reason ?? '',
       points: 0,
       password: '',
+      username: user.username ?? '',
       display_name: user.display_name ?? '',
       email: user.email ?? '',
     });
@@ -57,7 +58,11 @@ export default function UsersPanel() {
       const payload: any = {
         isBanned: form.isBanned,
         banReason: form.banReason,
-        profile: { display_name: form.display_name, email: form.email },
+        profile: {
+          display_name: form.display_name,
+          email: form.email,
+          ...(isSuperAdmin ? { username: form.username } : {}),
+        },
       };
       if (isSuperAdmin) {
         payload.role = form.role;
@@ -174,6 +179,7 @@ export default function UsersPanel() {
                               已封禁
                             </span>
                           )}
+                          <div className="font-mono text-[11px] text-slate-400">@{user.username}</div>
                           <div className="text-[11px] text-slate-400">{user.email || '未填写邮箱'}</div>
                         </div>
                       </div>
@@ -232,7 +238,16 @@ export default function UsersPanel() {
         }
       >
         <div className="space-y-3">
-          <Field label="昵称">
+          {isSuperAdmin && (
+            <Field label="用户名" hint="登录名与个人主页地址，全站唯一且不区分大小写">
+              <input
+                className="input"
+                value={form.username ?? ''}
+                onChange={(event) => setForm({ ...form, username: event.target.value })}
+              />
+            </Field>
+          )}
+          <Field label="昵称" hint="显示用，可以和其他人重复">
             <input
               className="input"
               value={form.display_name ?? ''}

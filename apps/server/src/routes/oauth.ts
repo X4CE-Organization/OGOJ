@@ -18,6 +18,7 @@ import { bool, num, str } from '../settings/index.js';
 import { audit } from '../lib/audit.js';
 import { evaluateAchievements } from '../lib/achievements.js';
 import { isMirroredAvatar, mirrorAvatar, removeMirroredAvatar } from '../lib/avatar.js';
+import { usernameTaken } from '../lib/username.js';
 
 interface OAuthState {
   p: string;
@@ -162,7 +163,7 @@ export async function registerOAuthRoutes(app: FastifyInstance): Promise<void> {
       const role = str('oauth_default_role', 'user') === 'admin' ? 'admin' : 'user';
       const candidate = await safeUsername(
         profile.username,
-        async (candidate) => Boolean(await get('SELECT id FROM users WHERE username = ?', [candidate])),
+        async (candidate) => usernameTaken(candidate),
       );
       // 双保险：safeUsername 之外再校验一次，异常用户名一律换成兜底名，绝不让脏数据落库
       const username = /^[A-Za-z0-9_\u4e00-\u9fa5-]{3,16}$/.test(candidate)

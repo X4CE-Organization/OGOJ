@@ -10,6 +10,7 @@ import { levelOf, userBrief } from './helpers.js';
 import { evaluateAchievements } from '../lib/achievements.js';
 import { consumeMailCode } from '../lib/mail.js';
 import { counterGet, counterIncr, counterReset } from '../lib/redis.js';
+import { normalizeUsername, usernameTaken, validateUsername } from '../lib/username.js';
 
 interface RegisterBody {
   username?: string;
@@ -17,21 +18,6 @@ interface RegisterBody {
   password2?: string;
   email?: string;
   invite_code?: string;
-}
-
-function validateUsername(username: string): void {
-  const min = num('username_min_length', 3);
-  const max = num('username_max_length', 16);
-  if (username.length < min) throw badRequest(`用户名至少 ${min} 个字符`);
-  if (username.length > max) throw badRequest(`用户名最多 ${max} 个字符`);
-  const pattern = str('username_regex', '^[A-Za-z0-9_]+$');
-  try {
-    if (!new RegExp(pattern).test(username)) throw badRequest('用户名包含不允许的字符');
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('不允许')) throw error;
-  }
-  const banned = settingJson<string[]>('banned_usernames', []).map((s) => s.toLowerCase());
-  if (banned.includes(username.toLowerCase())) throw badRequest('该用户名已被保留，请更换');
 }
 
 function validatePassword(password: string): void {
@@ -119,8 +105,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      if (await get('SELECT id FROM users WHERE username = ?', [username])) {
-        throw conflict('该用户名已被注册');
+      if (await usernameTaken(username)) {
+        throw conflict('该用户名已被注册（用户名不区分大小写）');
       }
       if (email && await get('SELECT id FROM users WHERE email = ?', [email])) {
         throw conflict('该邮箱已被注册');
@@ -267,6 +253,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (typeof body.display_name === 'string' && body.display_name.trim()) {
       assign('display_name', body.display_name.trim().slice(0, 32));
     }
+    if (body.username !== undefined) {
+      if (!bool('allow_change_username', false)) throw forbidden('本站未开放修改用户名');
+      const next = normalizeUsername(body.username);
+      if (next && next !== user.username) {
+        validateUsername(next);
+        if (await usernameTaken(next, user.id)) throw conflict('该用户名已被占用（用户名不区分大小写）');
+        assign('username', next);
+      }
+    }
     if (typeof body.avatar === 'string') assign('avatar', body.avatar.slice(0, 500));
     if (typeof body.banner === 'string') assign('banner', body.banner.slice(0, 500));
     if (typeof body.email === 'string') {
@@ -315,7 +310,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       return { available: false, reason: error instanceof Error ? error.message : '用户名不可用' };
     }
-    const exists = Boolean(await get('SELECT id FROM users WHERE username = ?', [username]));
+    const exists = await usernameTaken(username);
     return { available: !exists, reason: exists ? '该用户名已被注册' : '' };
   });
 

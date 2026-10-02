@@ -15,6 +15,7 @@ import { workerState } from '../judge/worker.js';
 import { config } from '../config.js';
 import { cacheInvalidate, redisInfo } from '../lib/redis.js';
 import { resetMailTransport } from '../lib/mail.js';
+import { normalizeUsername, usernameTaken, validateUsername } from '../lib/username.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   /** Total size of the SQLite database file in bytes. */
@@ -223,6 +224,17 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (body.profile && typeof body.profile === 'object') {
       const fields: string[] = [];
       const values: unknown[] = [];
+      // 用户名是唯一标识，只有超管能改，且必须查重（不区分大小写）
+      if (body.profile.username !== undefined) {
+        await requireSuperAdmin(request);
+        const next = normalizeUsername(body.profile.username);
+        if (next && next !== target.username) {
+          validateUsername(next);
+          if (await usernameTaken(next, id)) throw conflict('该用户名已被占用（用户名不区分大小写）');
+          await run('UPDATE users SET username = ? WHERE id = ?', [next, id]);
+          await audit(request, 'admin.user_rename', { targetType: 'user', targetId: id, detail: { from: target.username, to: next } });
+        }
+      }
       for (const key of ['display_name', 'bio', 'school', 'avatar', 'banner', 'email']) {
         if (body.profile[key] !== undefined) {
           fields.push(`${key} = ?`);
