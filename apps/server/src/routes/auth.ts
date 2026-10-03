@@ -37,6 +37,18 @@ interface RegisterBody {
   phone_code?: string;
 }
 
+/** 注册必填项：none | email | phone | both（兼容旧的 register_need_email / phone_required_register） */
+function registerRequirement(): 'none' | 'email' | 'phone' | 'both' {
+  const mode = str('register_require', '').trim();
+  if (['none', 'email', 'phone', 'both'].includes(mode)) return mode as 'none' | 'email' | 'phone' | 'both';
+  const email = bool('register_need_email', false);
+  const phone = bool('phone_required_register', false);
+  if (email && phone) return 'both';
+  if (email) return 'email';
+  if (phone) return 'phone';
+  return 'none';
+}
+
 function validatePassword(password: string): void {
   const min = num('password_min_length', 8);
   if (password.length < min) throw badRequest(`密码至少 ${min} 位`);
@@ -109,8 +121,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const email = (body.email ?? '').trim().toLowerCase();
+      const requirement = registerRequirement();
+      const emailRequired = requirement === 'email' || requirement === 'both';
       const needVerify = bool('mail_register_verify', false) && bool('smtp_enabled', false);
-      if ((bool('register_need_email', false) || needVerify) && !email) throw badRequest('请填写邮箱');
+      if ((emailRequired || needVerify) && !email) throw badRequest('请填写邮箱');
       if (email) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('邮箱格式不正确');
         const suffixes = settingJson<string[]>('register_email_suffix', []);
@@ -138,15 +152,20 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const role = str('default_role', 'user') === 'admin' ? 'admin' : 'user';
       const phone = normalizePhone(body.phone ?? '');
-      const phoneRequired = bool('phone_required_register', false);
+      const phoneRequired = requirement === 'phone' || requirement === 'both';
       if (phoneRequired && !phone) throw badRequest('请填写手机号');
       if (phone) {
         if (!validPhone(phone)) throw badRequest('手机号格式不正确');
         if (await userByPhone(phone)) throw conflict('该手机号已被注册');
-        const phoneCode = String((body as any).phone_code ?? '').trim();
-        if (!phoneCode) throw badRequest('请填写手机验证码');
-        if (!(await consumeSmsCode(phone, 'register', phoneCode))) {
-          throw badRequest('手机验证码不正确或已过期');
+        // 只有开启「注册时手机号需要验证码」才强制校验；关闭则只记录号码
+        if (bool('phone_register_verify', true)) {
+          const phoneCode = String((body as any).phone_code ?? '').trim();
+          if (!phoneCode) throw badRequest('请填写手机验证码');
+          if (!(await consumeSmsCode(phone, 'register', phoneCode))) {
+            throw badRequest('手机验证码不正确或已过期');
+          }
+        } else if (String((body as any).phone_code ?? '').trim()) {
+          await consumeSmsCode(phone, 'register', String((body as any).phone_code).trim());
         }
       }
 

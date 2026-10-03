@@ -26,7 +26,12 @@ export default function Register() {
   const [cooldown, setCooldown] = useState(0);
   const needEmailVerify = Boolean(settings.mail_register_verify);
   const [phoneCooldown, setPhoneCooldown] = useState(0);
-  const needPhone = Boolean(settings.phone_required_register);
+  // 注册必填项：none | email | phone | both（由后台「注册与登录」设置决定）
+  const requirement = String(settings.register_require ?? 'none');
+  const emailRequired = requirement === 'email' || requirement === 'both';
+  const phoneRequired = requirement === 'phone' || requirement === 'both';
+  // 手机号是否必须走验证码（关闭后只记录号码）
+  const phoneNeedVerify = Boolean(settings.phone_register_verify);
 
   useEffect(() => {
     if (phoneCooldown <= 0) return undefined;
@@ -150,7 +155,14 @@ export default function Register() {
         </Field>
         <Field
           label="邮箱"
-          hint={needEmailVerify ? '注册需要邮箱验证，也用于找回密码' : '用于找回密码与接收通知（可留空）'}
+          required={emailRequired}
+          hint={
+            needEmailVerify
+              ? '注册需要邮箱验证，也用于找回密码'
+              : emailRequired
+                ? '本站要求注册时填写邮箱，用于找回密码与接收通知'
+                : '用于找回密码与接收通知（可留空，之后也能在个人设置里绑定）'
+          }
         >
           <input className="input" value={form.email} onChange={set('email')} placeholder="you@example.com" />
         </Field>
@@ -180,11 +192,19 @@ export default function Register() {
         <Field label="确认密码" required>
           <input className="input" type="password" value={form.password2} onChange={set('password2')} />
         </Field>
-        <Field label="手机号" hint={needPhone ? '注册必须填写手机号' : '用于手机号登录与找回账号（可选）'}>
+        <Field
+          label="手机号"
+          required={phoneRequired}
+          hint={
+            phoneRequired
+              ? '本站要求注册时填写手机号，用于登录与找回账号'
+              : '用于手机号登录与找回账号（可留空，之后也能在个人设置里绑定）'
+          }
+        >
           <input className="input" value={form.phone} onChange={set('phone')} placeholder="11 位手机号" />
         </Field>
-        {(needPhone || form.phone.trim()) && (
-          <Field label="手机验证码" required={needPhone}>
+        {(phoneRequired || form.phone.trim()) && (
+          <Field label="手机验证码" required={phoneNeedVerify}>
             <div className="flex gap-2">
               <input
                 className="input flex-1"
