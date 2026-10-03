@@ -29,8 +29,57 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [bindings, setBindings] = useState<{ bindings: any[]; providers: any[] } | null>(null);
   const [mailPref, setMailPref] = useState<{ email: string; enabled: boolean; serviceEnabled: boolean } | null>(null);
+  const [phoneInfo, setPhoneInfo] = useState<{ phone: string; bound: boolean; verified: boolean } | null>(null);
+  const [phoneForm, setPhoneForm] = useState({ phone: '', code: '' });
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+
+  const loadPhone = () => {
+    api
+      .get<{ phone: string; bound: boolean; verified: boolean }>('/api/auth/phone')
+      .then(setPhoneInfo)
+      .catch(() => undefined);
+  };
+
+  const sendPhoneCode = async () => {
+    if (!phoneForm.phone.trim()) {
+      toast.error('请先填写手机号');
+      return;
+    }
+    try {
+      await api.post('/api/auth/sms-code', { phone: phoneForm.phone.trim(), purpose: 'bind' });
+      toast.success('验证码已发送');
+      setPhoneCooldown(60);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '发送失败');
+    }
+  };
+
+  const bindPhone = async () => {
+    try {
+      await api.put('/api/auth/phone', { phone: phoneForm.phone.trim(), code: phoneForm.code.trim() });
+      toast.success('手机号已绑定');
+      setPhoneForm({ phone: '', code: '' });
+      loadPhone();
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '绑定失败');
+    }
+  };
+
+  const unbindPhone = async () => {
+    if (!window.confirm('确定解绑手机号吗？')) return;
+    try {
+      await api.del('/api/auth/phone');
+      toast.success('已解绑');
+      loadPhone();
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '解绑失败');
+    }
+  };
 
   useEffect(() => {
+    loadPhone();
     api
       .get<{ email: string; enabled: boolean; serviceEnabled: boolean }>('/api/mail/preferences')
       .then(setMailPref)
@@ -286,6 +335,52 @@ export default function SettingsPage() {
           </div>
         </Section>
       )}
+
+      <Section title="手机号">
+        <div className="space-y-3 p-4 text-sm">
+          {phoneInfo?.bound ? (
+            <div className="flex items-center gap-3">
+              <span className="font-medium">{phoneInfo.phone}</span>
+              {phoneInfo.verified && (
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                  已验证
+                </span>
+              )}
+              <button type="button" className="ml-auto text-xs text-rose-500 hover:underline" onClick={unbindPhone}>
+                解绑
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500">
+                绑定后可以用手机号 + 验证码登录，未配置短信服务时验证码会写进站内信（开发模式）。
+              </p>
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <input
+                  className="input"
+                  value={phoneForm.phone}
+                  onChange={(event) => setPhoneForm({ ...phoneForm, phone: event.target.value })}
+                  placeholder="11 位手机号"
+                />
+                <input
+                  className="input"
+                  value={phoneForm.code}
+                  onChange={(event) => setPhoneForm({ ...phoneForm, code: event.target.value })}
+                  placeholder="验证码"
+                />
+                <button type="button" className="btn-ghost" disabled={phoneCooldown > 0} onClick={sendPhoneCode}>
+                  {phoneCooldown > 0 ? `${phoneCooldown} 秒后重发` : '发送验证码'}
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button type="button" className="btn-primary" onClick={bindPhone}>
+                  绑定手机号
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Section>
 
       <Section title="账号信息">
         <dl className="space-y-2 p-4 text-sm">

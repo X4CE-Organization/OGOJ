@@ -9,6 +9,20 @@ import { addPoints } from '../lib/points.js';
 import { levelOf, userBrief } from './helpers.js';
 import { evaluateAchievements } from '../lib/achievements.js';
 import { consumeMailCode } from '../lib/mail.js';
+import { sendMessage } from '../lib/notify.js';
+import {
+  consumeSmsCode,
+  issueSmsCode,
+  maskPhone,
+  normalizePhone,
+  recentSmsCodes,
+  sendSms,
+  smsEnabled,
+  todaySmsCount,
+  userByPhone,
+  validPhone,
+  type SmsPurpose,
+} from '../lib/sms.js';
 import { counterGet, counterIncr, counterReset } from '../lib/redis.js';
 import { normalizeUsername, usernameTaken, validateUsername } from '../lib/username.js';
 
@@ -18,6 +32,8 @@ interface RegisterBody {
   password2?: string;
   email?: string;
   invite_code?: string;
+  phone?: string;
+  phone_code?: string;
 }
 
 function validatePassword(password: string): void {
@@ -120,9 +136,22 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const role = str('default_role', 'user') === 'admin' ? 'admin' : 'user';
+      const phone = normalizePhone(body.phone ?? '');
+      const phoneRequired = bool('phone_required_register', false);
+      if (phoneRequired && !phone) throw badRequest('请填写手机号');
+      if (phone) {
+        if (!validPhone(phone)) throw badRequest('手机号格式不正确');
+        if (await userByPhone(phone)) throw conflict('该手机号已被注册');
+        const phoneCode = String((body as any).phone_code ?? '').trim();
+        if (!phoneCode) throw badRequest('请填写手机验证码');
+        if (!(await consumeSmsCode(phone, 'register', phoneCode))) {
+          throw badRequest('手机验证码不正确或已过期');
+        }
+      }
+
       const info = await run(
-        `INSERT INTO users (username, email, password_hash, role, display_name, is_private, invite_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (username, email, password_hash, role, display_name, is_private, invite_code, phone, phone_verified)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           username,
           email || null,
@@ -131,6 +160,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           username,
           bool('hide_private_by_default', false) ? 1 : 0,
           null,
+          phone || null,
+          phone ? 1 : 0,
         ],
       );
       const userId = Number(info.lastInsertRowid);
@@ -314,6 +345,129 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     return { available: !exists, reason: exists ? '该用户名已被注册' : '' };
   });
 
+  /* ------------------------------------------------------- 手机号 / 短信 */
+
+  /** 发送验证码：注册 / 登录 / 找回密码 / 绑定 */
+  app.post(
+    '/api/auth/sms-code',
+    { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } },
+    async (request) => {
+      const body = (request.body ?? {}) as any;
+      const purpose: SmsPurpose = ['register', 'login', 'reset', 'bind'].includes(String(body.purpose))
+        ? (String(body.purpose) as SmsPurpose)
+        : 'bind';
+      const phone = normalizePhone(String(body.phone ?? ''));
+      if (!validPhone(phone)) throw badRequest('手机号格式不正确');
+
+      const existing = await userByPhone(phone);
+      if (purpose === 'register' && existing) throw conflict('该手机号已被注册');
+      if (purpose === 'login' && !existing) return { ok: true, hidden: true };
+      if (purpose === 'bind' && existing) throw conflict('该手机号已被其他账号绑定');
+
+      const interval = num('sms_code_interval', 60);
+      if ((await recentSmsCodes(phone, purpose, interval)) > 0) {
+        throw tooMany(`验证码发送过于频繁，请 ${interval} 秒后再试`);
+      }
+      const daily = num('sms_daily_limit', 10);
+      if (daily > 0 && (await todaySmsCount(phone)) >= daily) {
+        throw tooMany('该手机号今日验证码次数已达上限');
+      }
+
+      const code = await issueSmsCode(phone, purpose, existing?.id ?? null);
+      const result = await sendSms(phone, code);
+      if (result.ok) return { ok: true, dev: false };
+      if (!smsEnabled()) {
+        // 开发模式：验证码写进站内信与日志
+        if (existing) {
+          await sendMessage({
+            to: existing.id,
+            title: '手机验证码（开发模式）',
+            content: `手机号 ${phone} 的验证码是 ${code}，${num('sms_code_ttl_minutes', 10)} 分钟内有效。`,
+            type: 'system',
+          });
+        }
+        console.info(`[ogoj] 短信开发模式：${phone} 的验证码是 ${code}`);
+        return { ok: true, dev: true, code };
+      }
+      throw badRequest(`短信发送失败：${result.error ?? '未知错误'}`);
+    },
+  );
+
+  /** 手机号 + 验证码登录 */
+  app.post(
+    '/api/auth/phone-login',
+    { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } },
+    async (request, reply) => {
+      if (!bool('phone_login_enabled', true)) throw forbidden('本站已关闭手机号登录');
+      const body = (request.body ?? {}) as any;
+      const phone = normalizePhone(String(body.phone ?? ''));
+      const code = String(body.code ?? '').trim();
+      if (!validPhone(phone) || !code) throw badRequest('请填写手机号与验证码');
+      if (!(await consumeSmsCode(phone, 'login', code))) throw badRequest('验证码不正确或已过期');
+
+      const found = await userByPhone(phone);
+      if (!found) throw badRequest('该手机号还没有绑定账号，请先用用户名登录后在设置里绑定');
+      const row = await get<any>('SELECT * FROM users WHERE id = ?', [found.id]);
+      if (!row) throw unauthorized();
+      if (row.is_banned) throw forbidden(`账号已被封禁：${row.ban_reason || '违反社区规范'}`);
+
+      await run(
+        `UPDATE users SET last_login_at = datetime('now'), last_login_ip = ?, phone_verified = 1 WHERE id = ?`,
+        [request.ip, row.id],
+      );
+      await run('INSERT INTO login_logs (user_id, username, ip, user_agent, success) VALUES (?, ?, ?, ?, 1)', [
+        row.id,
+        row.username,
+        request.ip,
+        'phone',
+      ]);
+      const days = num('session_days', 14);
+      const token = signToken({ sub: row.id, username: row.username, role: row.role }, days * 86400);
+      setAuthCookie(reply, token, days);
+      await audit(request, 'user.phone_login', { targetType: 'user', targetId: row.id });
+      return { token, user: publicUser(await get<any>('SELECT * FROM users WHERE id = ?', [row.id])) };
+    },
+  );
+
+  /** 当前绑定的手机号 */
+  app.get('/api/auth/phone', async (request) => {
+    const user = await requireUser(request);
+    const row = await get<{ phone: string | null; phone_verified: number }>(
+      'SELECT phone, phone_verified FROM users WHERE id = ?',
+      [user.id],
+    );
+    return {
+      phone: maskPhone(row?.phone ?? ''),
+      bound: Boolean(row?.phone),
+      verified: Boolean(row?.phone_verified),
+      smsEnabled: smsEnabled(),
+    };
+  });
+
+  /** 绑定手机号 */
+  app.put('/api/auth/phone', async (request) => {
+    const user = await requireUser(request);
+    const body = (request.body ?? {}) as any;
+    const phone = normalizePhone(String(body.phone ?? ''));
+    const code = String(body.code ?? '').trim();
+    if (!validPhone(phone)) throw badRequest('手机号格式不正确');
+    const taken = await userByPhone(phone);
+    if (taken && taken.id !== user.id) throw conflict('该手机号已被其他账号绑定');
+    if (!(await consumeSmsCode(phone, 'bind', code))) throw badRequest('验证码不正确或已过期');
+    await run('UPDATE users SET phone = ?, phone_verified = 1 WHERE id = ?', [phone, user.id]);
+    await audit(request, 'user.bind_phone', { targetType: 'user', targetId: user.id });
+    return { ok: true, phone: maskPhone(phone) };
+  });
+
+  /** 解绑手机号 */
+  app.delete('/api/auth/phone', async (request) => {
+    const user = await requireUser(request);
+    if (bool('phone_required_bind', false)) throw badRequest('本站要求必须绑定手机号，无法解绑');
+    await run('UPDATE users SET phone = NULL, phone_verified = 0 WHERE id = ?', [user.id]);
+    await audit(request, 'user.unbind_phone', { targetType: 'user', targetId: user.id });
+    return { ok: true };
+  });
+
   app.post('/api/auth/renew', async (request, reply) => {
     const user = await requireUser(request);
     const row = await get<any>('SELECT * FROM users WHERE id = ?', [user.id]);
@@ -344,5 +498,8 @@ export function publicUser(row: any) {
     school: row.school ?? '',
     ccfLevel: row.ccf_level ?? '',
     gender: row.gender ?? 0,
+    phone: maskPhone(row.phone),
+    phoneBound: Boolean(row.phone),
+    phoneVerified: Boolean(row.phone_verified),
   };
 }

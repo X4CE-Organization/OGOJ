@@ -288,6 +288,33 @@ export async function tx<T>(fn: () => Promise<T>): Promise<T> {
 
 /* ------------------------------------------------------------------ 迁移与工具 */
 
+/** 老库补列（幂等）：列已存在会报错并跳过，不影响启动。 */
+const COLUMN_MIGRATIONS: string[] = [
+  `ALTER TABLE users ADD COLUMN phone TEXT`,
+  `ALTER TABLE users ADD COLUMN phone_verified INTEGER NOT NULL DEFAULT 0`,
+];
+
+const INDEX_MIGRATIONS: string[] = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`,
+];
+
+async function ensureColumns(): Promise<void> {
+  for (const statement of COLUMN_MIGRATIONS) {
+    try {
+      await pool.query(statement);
+    } catch {
+      /* 列已存在 */
+    }
+  }
+  for (const statement of INDEX_MIGRATIONS) {
+    try {
+      await pool.query(statement);
+    } catch {
+      /* 索引已存在 */
+    }
+  }
+}
+
 export async function migrate(): Promise<void> {
   const { SCHEMA_SQL } = await import('./schema.js');
   await pool.query(translateSql(SCHEMA_SQL));
@@ -297,6 +324,7 @@ export async function migrate(): Promise<void> {
   } catch (error) {
     console.warn('[ogoj] 清理用户名大小写唯一索引失败：', (error as Error).message);
   }
+  await ensureColumns();
   const existing = await count('SELECT COUNT(*) AS c FROM difficulties');
   if (!existing) {
     for (const item of DEFAULT_DIFFICULTIES) {

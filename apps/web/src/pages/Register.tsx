@@ -16,6 +16,8 @@ export default function Register() {
     password2: '',
     invite_code: '',
     email_code: '',
+    phone: '',
+    phone_code: '',
   });
   const [check, setCheck] = useState<{ available: boolean; reason: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,6 +25,29 @@ export default function Register() {
   const [sendingCode, setSendingCode] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const needEmailVerify = Boolean(settings.mail_register_verify);
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+  const needPhone = Boolean(settings.phone_required_register);
+
+  useEffect(() => {
+    if (phoneCooldown <= 0) return undefined;
+    const timer = setTimeout(() => setPhoneCooldown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phoneCooldown]);
+
+  const sendPhoneCode = async () => {
+    setError('');
+    if (!form.phone.trim()) {
+      setError('请先填写手机号');
+      return;
+    }
+    try {
+      await api.post('/api/auth/sms-code', { phone: form.phone.trim(), purpose: 'register' });
+      toast.success('验证码已发送');
+      setPhoneCooldown(60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '验证码发送失败');
+    }
+  };
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -155,6 +180,29 @@ export default function Register() {
         <Field label="确认密码" required>
           <input className="input" type="password" value={form.password2} onChange={set('password2')} />
         </Field>
+        <Field label="手机号" hint={needPhone ? '注册必须填写手机号' : '用于手机号登录与找回账号（可选）'}>
+          <input className="input" value={form.phone} onChange={set('phone')} placeholder="11 位手机号" />
+        </Field>
+        {(needPhone || form.phone.trim()) && (
+          <Field label="手机验证码" required={needPhone}>
+            <div className="flex gap-2">
+              <input
+                className="input flex-1"
+                value={form.phone_code}
+                onChange={set('phone_code')}
+                placeholder="6 位数字验证码"
+              />
+              <button
+                type="button"
+                className="btn-ghost shrink-0"
+                disabled={phoneCooldown > 0}
+                onClick={sendPhoneCode}
+              >
+                {phoneCooldown > 0 ? `${phoneCooldown} 秒后重发` : '发送验证码'}
+              </button>
+            </div>
+          </Field>
+        )}
         {Boolean(settings.register_need_invite) && (
           <Field label="邀请码" required>
             <input className="input" value={form.invite_code} onChange={set('invite_code')} />

@@ -6,6 +6,23 @@ import { EmptyState, Field, Loading, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function MaintenancePanel() {
+  const [sms, setSms] = useState<any>(null);
+  const [smsPhone, setSmsPhone] = useState('');
+  const [smsResult, setSmsResult] = useState('');
+
+  useEffect(() => {
+    api.get<any>('/api/admin/sms/status').then(setSms).catch(() => undefined);
+  }, []);
+
+  const sendTestSms = async () => {
+    try {
+      const result = await api.post<any>('/api/admin/sms/test', { phone: smsPhone.trim() });
+      setSmsResult(result.dev ? `开发模式验证码：${result.code}` : result.message);
+      toast.success(result.dev ? '短信服务未启用，已生成验证码' : '测试短信已发送');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '发送失败');
+    }
+  };
   const toast = useToast();
   const [info, setInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +183,39 @@ export default function MaintenancePanel() {
           </Section>
         </div>
       </div>
+
+      <Section title="短信服务">
+        <div className="space-y-3 p-4 text-sm">
+          <dl className="space-y-2">
+            <div className="flex justify-between">
+              <dt className="text-slate-500">服务商</dt>
+              <dd>{sms?.provider ?? '—'}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">状态</dt>
+              <dd className={sms?.enabled ? 'text-emerald-600' : 'text-amber-600'}>
+                {sms?.enabled ? '已启用' : '未启用（开发模式）'}
+              </dd>
+            </div>
+          </dl>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="input !w-48"
+              value={smsPhone}
+              onChange={(event) => setSmsPhone(event.target.value)}
+              placeholder="手机号，发测试短信"
+            />
+            <button type="button" className="btn-ghost text-xs" onClick={sendTestSms}>
+              发送测试短信
+            </button>
+          </div>
+          {smsResult && <p className="font-mono text-xs text-primary">{smsResult}</p>}
+          <p className="text-xs text-slate-500">
+            在 系统设置 → 短信 / 手机号 里可以选择阿里云、腾讯云或自定义 HTTP 网关；
+            不配置时验证码会写进日志与站内信，方便本地调试。
+          </p>
+        </div>
+      </Section>
 
       <Section title="全站广播">
         <div className="grid gap-3 p-4 md:grid-cols-2">

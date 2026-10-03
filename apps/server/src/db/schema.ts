@@ -908,6 +908,22 @@ CREATE TABLE IF NOT EXISTS mail_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_mail_logs_time ON mail_logs(id DESC);
+
+-- ---------------------------------------------------------------------------
+-- 手机号验证码
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sms_codes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone      TEXT NOT NULL,
+  code       TEXT NOT NULL,
+  purpose    TEXT NOT NULL DEFAULT 'bind',   -- register | login | reset | bind
+  user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  used       INTEGER NOT NULL DEFAULT 0,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sms_codes_lookup ON sms_codes(phone, purpose, used, id DESC);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */

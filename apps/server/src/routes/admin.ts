@@ -15,6 +15,15 @@ import { workerState } from '../judge/worker.js';
 import { config } from '../config.js';
 import { cacheInvalidate, redisInfo } from '../lib/redis.js';
 import { resetMailTransport } from '../lib/mail.js';
+import {
+  issueSmsCode,
+  maskPhone,
+  normalizePhone,
+  sendSms,
+  smsEnabled,
+  smsProvider,
+  validPhone,
+} from '../lib/sms.js';
 import { normalizeUsername, usernameTaken, validateUsername } from '../lib/username.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
@@ -713,6 +722,40 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         solutions: await count(`SELECT COUNT(*) AS c FROM solutions WHERE is_public = 0 AND is_deleted = 0`),
         orders: await count(`SELECT COUNT(*) AS c FROM shop_orders WHERE status = 'pending'`),
       },
+    };
+  });
+
+  /* ------------------------------------------------------------ 短信服务 */
+
+  app.get('/api/admin/sms/status', async (request) => {
+    await requireAdmin(request);
+    const provider = smsProvider();
+    return {
+      enabled: smsEnabled(),
+      provider,
+      configured: Boolean(
+        (provider === 'aliyun' && str('sms_aliyun_key_id', '')) ||
+          (provider === 'tencent' && str('sms_tencent_secret_id', '')) ||
+          (provider === 'custom' && str('sms_custom_url', '')),
+      ),
+    };
+  });
+
+  app.post('/api/admin/sms/test', async (request) => {
+    const admin = await requireAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const phone = normalizePhone(String(body.phone ?? ''));
+    if (!validPhone(phone)) throw badRequest('手机号格式不正确');
+    const code = await issueSmsCode(phone, 'bind', admin.id);
+    const result = await sendSms(phone, code);
+    if (!result.ok && smsEnabled()) throw badRequest(result.error ?? '发送失败');
+    await audit(request, 'admin.sms_test', { detail: `${maskPhone(phone)}` });
+    return {
+      ok: true,
+      provider: smsProvider(),
+      dev: Boolean(result.dev),
+      code: result.dev ? code : '',
+      message: result.dev ? '短信服务未启用，验证码如下（开发模式）' : '已发送',
     };
   });
 

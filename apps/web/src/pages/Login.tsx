@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 import OAuthButtons from '../components/OAuthButtons';
 
 export default function Login() {
-  const { login, settings } = useAuth();
+  const { login, settings, refresh } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
@@ -22,6 +22,53 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+
+  const [mode, setMode] = useState<'password' | 'phone'>('password');
+  const [phoneForm, setPhoneForm] = useState({ phone: '', code: '' });
+  const [phoneCooldown, setPhoneCooldown] = useState(0);
+  const [phoneError, setPhoneError] = useState('');
+
+  const phoneLoginEnabled = settings.phone_login_enabled !== false;
+
+  useEffect(() => {
+    if (phoneCooldown <= 0) return undefined;
+    const timer = setTimeout(() => setPhoneCooldown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [phoneCooldown]);
+
+  const sendPhoneCode = async () => {
+    setPhoneError('');
+    if (!phoneForm.phone.trim()) {
+      setPhoneError('请填写手机号');
+      return;
+    }
+    try {
+      await api.post('/api/auth/sms-code', { phone: phoneForm.phone.trim(), purpose: 'login' });
+      toast.success('验证码已发送');
+      setPhoneCooldown(60);
+    } catch (err) {
+      setPhoneError(err instanceof Error ? err.message : '发送失败');
+    }
+  };
+
+  const phoneLogin = async () => {
+    setPhoneError('');
+    setLoading(true);
+    try {
+      const data = await api.post<{ token: string; user: any }>('/api/auth/phone-login', {
+        phone: phoneForm.phone.trim(),
+        code: phoneForm.code.trim(),
+      });
+      localStorage.setItem('ogoj-token', data.token);
+      await refresh?.();
+      toast.success(`欢迎回来，${data.user?.display_name || data.user?.username || ''}`);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setPhoneError(err instanceof Error ? err.message : '登录失败');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const mailReady = Boolean(settings.smtp_enabled);
   const resetEnabled = settings.mail_reset_enabled !== false;
@@ -106,7 +153,62 @@ export default function Login() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">登录以提交代码、参加比赛</p>
       </div>
-      <form onSubmit={submit} className="card space-y-4 p-6">
+      <div className="card space-y-4 p-6">
+        {phoneLoginEnabled && (
+          <div className="flex rounded-lg bg-slate-100 p-0.5 text-xs dark:bg-slate-800">
+            <button
+              type="button"
+              className={`flex-1 rounded-md px-3 py-1.5 ${mode === 'password' ? 'bg-white font-medium shadow-sm dark:bg-slate-900' : 'text-slate-500'}`}
+              onClick={() => setMode('password')}
+            >
+              密码登录
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded-md px-3 py-1.5 ${mode === 'phone' ? 'bg-white font-medium shadow-sm dark:bg-slate-900' : 'text-slate-500'}`}
+              onClick={() => setMode('phone')}
+            >
+              手机号登录
+            </button>
+          </div>
+        )}
+
+        {mode === 'phone' ? (
+          <>
+            <Field label="手机号" required>
+              <input
+                className="input"
+                value={phoneForm.phone}
+                onChange={(event) => setPhoneForm({ ...phoneForm, phone: event.target.value })}
+                placeholder="11 位手机号"
+              />
+            </Field>
+            <Field label="验证码" required>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  value={phoneForm.code}
+                  onChange={(event) => setPhoneForm({ ...phoneForm, code: event.target.value })}
+                  placeholder="6 位数字验证码"
+                />
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0"
+                  disabled={phoneCooldown > 0}
+                  onClick={sendPhoneCode}
+                >
+                  {phoneCooldown > 0 ? `${phoneCooldown} 秒后重发` : '发送验证码'}
+                </button>
+              </div>
+            </Field>
+            {phoneError && <p className="text-sm text-rose-500">{phoneError}</p>}
+            <button type="button" className="btn-primary w-full" disabled={loading} onClick={phoneLogin}>
+              {loading ? '登录中…' : '手机号登录'}
+            </button>
+            <p className="text-center text-xs text-slate-400">手机号需要先在「个人设置」里绑定</p>
+          </>
+        ) : (
+        <form onSubmit={submit} className="space-y-4">
         <Field label="用户名 / 邮箱" required>
           <input
             className="input"
@@ -159,7 +261,9 @@ export default function Login() {
             </Link>
           </p>
         )}
-      </form>
+        </form>
+        )}
+      </div>
       <p className="text-center text-xs text-slate-400">
         登录后即可提交代码、参加比赛、兑换商店特权；遇到问题可以提交工单。
       </p>

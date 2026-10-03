@@ -150,6 +150,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
     description: '动态广场开关、发布频率、图片数量与互动策略',
     icon: 'radio',
   },
+  {
+    key: 'sms',
+    name: '短信 / 手机号',
+    description: '短信服务商、验证码策略与手机号登录',
+    icon: 'smartphone',
+  },
 ];
 
 const langOptions = [
@@ -2101,7 +2107,98 @@ const momentFields: SettingField[] = [
   },
 ];
 
-SETTINGS.push(...oauthFields, ...achievementFields, ...ticketFields, ...momentFields);
+const smsFields: SettingField[] = [
+  {
+    key: 'sms_enabled',
+    label: '启用短信服务',
+    type: 'boolean',
+    default: false,
+    group: 'sms',
+    description: '关闭时验证码会写入站内信与服务器日志（开发模式），不会真的发短信',
+    public: true,
+  },
+  {
+    key: 'sms_provider',
+    label: '短信服务商',
+    type: 'select',
+    default: 'dev',
+    group: 'sms',
+    options: [
+      { value: 'dev', label: '开发模式（不真发短信）' },
+      { value: 'aliyun', label: '阿里云短信' },
+      { value: 'tencent', label: '腾讯云短信' },
+      { value: 'custom', label: '自定义 HTTP 网关' },
+    ],
+  },
+  { key: 'sms_sign_name', label: '短信签名', type: 'string', default: '', group: 'sms', placeholder: '例如：OGOJ' },
+  {
+    key: 'sms_template_code',
+    label: '短信模板（阿里云 TemplateCode / 腾讯云 TemplateId）',
+    type: 'string',
+    default: '',
+    group: 'sms',
+  },
+  { key: 'sms_aliyun_key_id', label: '阿里云 AccessKeyId', type: 'string', default: '', group: 'sms' },
+  { key: 'sms_aliyun_key_secret', label: '阿里云 AccessKeySecret', type: 'password', default: '', group: 'sms', secret: true },
+  { key: 'sms_tencent_secret_id', label: '腾讯云 SecretId', type: 'string', default: '', group: 'sms' },
+  { key: 'sms_tencent_secret_key', label: '腾讯云 SecretKey', type: 'password', default: '', group: 'sms', secret: true },
+  { key: 'sms_tencent_sdk_app_id', label: '腾讯云 SmsSdkAppId', type: 'string', default: '', group: 'sms' },
+  {
+    key: 'sms_custom_url',
+    label: '自定义网关地址',
+    type: 'string',
+    default: '',
+    group: 'sms',
+    placeholder: 'https://sms.example.com/send',
+  },
+  {
+    key: 'sms_custom_body',
+    label: '自定义请求体模板',
+    type: 'text',
+    default: '{"phone":"{phone}","code":"{code}","sign":"{sign}"}',
+    group: 'sms',
+    description: '可用占位符：{phone} {code} {sign} {template}',
+  },
+  {
+    key: 'sms_custom_success_key',
+    label: '自定义网关成功标识',
+    type: 'string',
+    default: '"ok":true',
+    group: 'sms',
+    description: '响应里包含该字符串即视为发送成功',
+  },
+  { key: 'sms_code_length', label: '验证码位数', type: 'number', default: 6, min: 4, max: 8, group: 'sms' },
+  { key: 'sms_code_ttl_minutes', label: '验证码有效期（分钟）', type: 'number', default: 10, min: 1, max: 60, group: 'sms' },
+  { key: 'sms_code_interval', label: '验证码发送间隔（秒）', type: 'number', default: 60, min: 10, max: 3600, group: 'sms' },
+  { key: 'sms_daily_limit', label: '每个手机号每日发送上限', type: 'number', default: 10, min: 1, max: 100, group: 'sms' },
+  {
+    key: 'phone_login_enabled',
+    label: '允许手机号 + 验证码登录',
+    type: 'boolean',
+    default: true,
+    group: 'sms',
+    public: true,
+  },
+  {
+    key: 'phone_required_register',
+    label: '注册必须填写手机号',
+    type: 'boolean',
+    default: false,
+    group: 'sms',
+    public: true,
+  },
+  {
+    key: 'phone_required_bind',
+    label: '必须绑定手机号才能提交代码 / 发帖',
+    type: 'boolean',
+    default: false,
+    group: 'sms',
+    public: true,
+  },
+  { key: 'phone_mask', label: '前台隐藏手机号中间四位', type: 'boolean', default: true, group: 'sms', public: true },
+];
+
+SETTINGS.push(...oauthFields, ...achievementFields, ...ticketFields, ...momentFields, ...smsFields);
 
 export const SETTING_MAP: Record<string, SettingField> = Object.fromEntries(
   SETTINGS.map((s) => [s.key, s]),
