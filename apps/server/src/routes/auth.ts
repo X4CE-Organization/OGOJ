@@ -10,6 +10,7 @@ import { levelOf, userBrief } from './helpers.js';
 import { evaluateAchievements } from '../lib/achievements.js';
 import { consumeMailCode } from '../lib/mail.js';
 import { sendMessage } from '../lib/notify.js';
+import { config } from '../config.js';
 import {
   consumeSmsCode,
   issueSmsCode,
@@ -387,7 +388,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           });
         }
         console.info(`[ogoj] 短信开发模式：${phone} 的验证码是 ${code}`);
-        return { ok: true, dev: true, code };
+        // 只有本地调试（非生产）或显式打开开关时才把验证码返回给前端
+        return config.isProd && !bool('sms_dev_expose_code', false)
+          ? { ok: true, dev: true }
+          : { ok: true, dev: true, code };
       }
       throw badRequest(`短信发送失败：${result.error ?? '未知错误'}`);
     },

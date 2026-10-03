@@ -2172,6 +2172,14 @@ const smsFields: SettingField[] = [
   { key: 'sms_code_interval', label: '验证码发送间隔（秒）', type: 'number', default: 60, min: 10, max: 3600, group: 'sms' },
   { key: 'sms_daily_limit', label: '每个手机号每日发送上限', type: 'number', default: 10, min: 1, max: 100, group: 'sms' },
   {
+    key: 'sms_dev_expose_code',
+    label: '开发模式下把验证码返回给前端',
+    type: 'boolean',
+    default: false,
+    group: 'sms',
+    description: '仅本地调试时打开；生产环境请保持关闭，验证码只会写进日志与站内信',
+  },
+  {
     key: 'phone_login_enabled',
     label: '允许手机号 + 验证码登录',
     type: 'boolean',

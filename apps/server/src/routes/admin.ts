@@ -754,7 +754,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       ok: true,
       provider: smsProvider(),
       dev: Boolean(result.dev),
-      code: result.dev ? code : '',
+      code: result.dev && (!config.isProd || bool('sms_dev_expose_code', false)) ? code : '',
       message: result.dev ? '短信服务未启用，验证码如下（开发模式）' : '已发送',
     };
   });
