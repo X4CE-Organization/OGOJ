@@ -37,16 +37,12 @@ interface RegisterBody {
   phone_code?: string;
 }
 
-/** 注册必填项：none | email | phone | both（兼容旧的 register_need_email / phone_required_register） */
-function registerRequirement(): 'none' | 'email' | 'phone' | 'both' {
-  const mode = str('register_require', '').trim();
-  if (['none', 'email', 'phone', 'both'].includes(mode)) return mode as 'none' | 'email' | 'phone' | 'both';
-  const email = bool('register_need_email', false);
-  const phone = bool('phone_required_register', false);
-  if (email && phone) return 'both';
-  if (email) return 'email';
-  if (phone) return 'phone';
-  return 'none';
+/** 注册必填项：后台两个独立开关，都不勾选时邮箱与手机号都是选填 */
+function registerRequirement(): { email: boolean; phone: boolean } {
+  return {
+    email: bool('register_need_email', false),
+    phone: bool('phone_required_register', false),
+  };
 }
 
 function validatePassword(password: string): void {
@@ -122,7 +118,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const email = (body.email ?? '').trim().toLowerCase();
       const requirement = registerRequirement();
-      const emailRequired = requirement === 'email' || requirement === 'both';
+      const emailRequired = requirement.email;
       const needVerify = bool('mail_register_verify', false) && bool('smtp_enabled', false);
       if ((emailRequired || needVerify) && !email) throw badRequest('请填写邮箱');
       if (email) {
@@ -152,7 +148,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const role = str('default_role', 'user') === 'admin' ? 'admin' : 'user';
       const phone = normalizePhone(body.phone ?? '');
-      const phoneRequired = requirement === 'phone' || requirement === 'both';
+      const phoneRequired = requirement.phone;
       if (phoneRequired && !phone) throw badRequest('请填写手机号');
       if (phone) {
         if (!validPhone(phone)) throw badRequest('手机号格式不正确');

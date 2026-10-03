@@ -26,10 +26,9 @@ export default function Register() {
   const [cooldown, setCooldown] = useState(0);
   const needEmailVerify = Boolean(settings.mail_register_verify);
   const [phoneCooldown, setPhoneCooldown] = useState(0);
-  // 注册必填项：none | email | phone | both（由后台「注册与登录」设置决定）
-  const requirement = String(settings.register_require ?? 'none');
-  const emailRequired = requirement === 'email' || requirement === 'both';
-  const phoneRequired = requirement === 'phone' || requirement === 'both';
+  // 后台两个独立开关：注册需要邮箱 / 注册需要手机号
+  const emailRequired = Boolean(settings.register_need_email);
+  const phoneRequired = Boolean(settings.phone_required_register);
   // 手机号是否必须走验证码（关闭后只记录号码）
   const phoneNeedVerify = Boolean(settings.phone_register_verify);
 
