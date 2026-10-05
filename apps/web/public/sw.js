@@ -3,7 +3,7 @@
  * 页面导航网络优先、断网回退缓存首页；/assets/ 缓存优先；
  * 接口（/api/）与评测相关请求一律不缓存。
  */
-const CACHE = 'ogoj-shell-v1';
+const CACHE = 'ogoj-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put('/', copy)).catch(() => {});
