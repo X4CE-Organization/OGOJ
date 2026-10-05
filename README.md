@@ -489,16 +489,19 @@ OGOJ/
 │   │       ├── db/              # 数据库连接、表结构、初始化数据
 │   │       ├── judge/           # 评测引擎（沙箱、比对、SPJ、交互、队列 worker）
 │   │       ├── lib/             # 鉴权、积分、通知、审计、工具函数
-│   │       ├── routes/          # API 路由（用户/题目/提交/比赛/社区/商店/管理）
+│   │       ├── routes/          # API 路由（用户/题目/提交/比赛/社区/商店/Scratch/管理）
 │   │       ├── settings/        # 系统设置注册表（全部可配置项）
 │   │       ├── app.ts           # Fastify 应用装配
 │   │       └── index.ts         # 服务入口
 │   └── web/                     # 前端（React + Vite + Tailwind）
+│       ├── scratch-host/        # Scratch 编辑器宿主页（构建时复制到 public/）
+│       ├── scripts/             # 构建脚本（fetch-scratch.mjs 拉取编辑器）
+│       ├── public/scratch-editor/  # 构建时生成，不进版本库（约 85MB）
 │       └── src/
 │           ├── components/      # 通用组件（布局、编辑器、Markdown、分页、弹窗…）
 │           ├── lib/             # API 客户端、鉴权上下文、格式化、Markdown 渲染
 │           └── pages/           # 页面（含 pages/admin 控制面板）
-├── data/                        # 运行时数据（数据库 / 测试数据 / 上传 / 备份）
+├── data/                        # 运行时数据（数据库 / 测试数据 / 上传 / 备份 / Scratch 作品）
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
@@ -545,7 +548,7 @@ OGOJ/
 
 ## 系统设置
 
-超级管理员可以在 **控制面板 → 系统设置** 中修改约 150 项配置，分为 14 个分组：
+超级管理员可以在 **控制面板 → 系统设置** 中修改 260 余项配置，分为 20 个分组：
 
 | 分组 | 可配置内容（节选） |
 | --- | --- |
@@ -571,6 +574,34 @@ OGOJ/
 | **短信 / 手机号** | 短信服务商（开发模式 / 阿里云 / 腾讯云 / 自定义 HTTP 网关）、AccessKey 与短信模板、验证码位数与有效期、发送间隔与每日上限、手机号登录开关、注册必填、必须绑定、前台脱敏 |
 
 目前共有 **20 个分组、250+ 项设置**。所有设置都带类型校验（字符串 / 数字范围 / 开关 / 下拉 / JSON / 颜色 / 密码），并且可以一键导出为 JSON。
+
+---
+
+## Scratch 作品中心
+
+站内自托管了 MIT 的 Scratch 编辑器（`scratch-gui`），**不需要访问 scratch.mit.edu**，
+作品与封面全部存在自己的服务器上：
+
+- **创作**：`/scratch/new` 打开积木编辑器，保存时把 `.sb3` 与舞台封面一起上传
+- **作品中心**：`/scratch` 浏览已发布作品，支持最新 / 最多点赞 / 最多试玩排序与标题搜索
+- **试玩**：`/scratch/:id` 以播放模式打开作品，附玩法说明、点赞与试玩次数
+- **我的作品**：草稿 / 审核中 / 已发布分别标记，可继续编辑、发布、撤回、删除
+- **管理**：`/admin/scratch` 审核通过或打回、设为精选、删除（连带清理 `.sb3` 与封面）
+- **关闭功能**：系统设置 → Scratch 作品 → 关掉「启用 Scratch 作品」，
+  导航入口、作品中心、创作页与全部接口会一起停用；只想停创作就关「允许用户创作」
+
+### 编辑器是怎么来的
+
+编辑器文件约 85MB，**不进版本库**。构建时由 `apps/web/scripts/fetch-scratch.mjs`
+从 npm 拉取 `scratch-gui` 与 React 16 UMD，解压到 `apps/web/public/scratch-editor/`：
+
+```bash
+npm run fetch:scratch -w @ogoj/web   # 本地开发先跑一次，之后 npm run build 会自动跑
+```
+
+编辑器跑在 iframe 里，和主站前端隔离（scratch-gui 只兼容 React 16，主站是 React 18），
+两边通过 `postMessage` 交换数据。宿主页在 `apps/web/scratch-host/editor.html`，
+修改后重新构建即可生效。
 
 ---
 
