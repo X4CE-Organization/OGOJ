@@ -924,6 +924,39 @@ CREATE TABLE IF NOT EXISTS sms_codes (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sms_codes_lookup ON sms_codes(phone, purpose, used, id DESC);
+
+-- ---------------------------------------------------------------------------
+-- Scratch 作品（基于 MIT Scratch 的自托管编辑器）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS scratch_projects (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title         TEXT NOT NULL DEFAULT '未命名作品',
+  instructions  TEXT NOT NULL DEFAULT '',   -- 玩法说明（读者可见）
+  notes         TEXT NOT NULL DEFAULT '',   -- 作者备注（只有自己和管理员可见）
+  file_path     TEXT NOT NULL DEFAULT '',   -- 相对 data/scratch 的 .sb3 文件名
+  file_size     INTEGER NOT NULL DEFAULT 0,
+  thumbnail     TEXT NOT NULL DEFAULT '',   -- 相对 data/scratch 的封面文件名
+  -- draft 草稿 | published 已发布 | pending 待审核 | rejected 未通过 | removed 已下架
+  state         TEXT NOT NULL DEFAULT 'draft',
+  is_featured   INTEGER NOT NULL DEFAULT 0,
+  is_deleted    INTEGER NOT NULL DEFAULT 0,
+  views         INTEGER NOT NULL DEFAULT 0,
+  like_count    INTEGER NOT NULL DEFAULT 0,
+  remix_of      INTEGER REFERENCES scratch_projects(id) ON DELETE SET NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  published_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_scratch_projects_feed ON scratch_projects(is_deleted, state, id DESC);
+CREATE INDEX IF NOT EXISTS idx_scratch_projects_user ON scratch_projects(user_id, is_deleted, id DESC);
+
+CREATE TABLE IF NOT EXISTS scratch_likes (
+  project_id INTEGER NOT NULL REFERENCES scratch_projects(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (project_id, user_id)
+);
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */

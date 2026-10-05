@@ -2,6 +2,9 @@ node_modules
 **/node_modules
 dist
 **/dist
+# Scratch 编辑器在构建镜像时由 apps/web/scripts/fetch-scratch.mjs 现拉，
+# 不进构建上下文，避免本地那份近百 MB 的副本被打进镜像层
+apps/web/public/scratch-editor
 data
 *.log
 .git

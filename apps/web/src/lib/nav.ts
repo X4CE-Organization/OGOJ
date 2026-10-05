@@ -3,6 +3,7 @@
  * 详情页的「返回」按钮就能回到原来那一屏，而不是被重置。
  */
 export type ListKey =
+  | 'scratch'
   | 'problems'
   | 'records'
   | 'contests'

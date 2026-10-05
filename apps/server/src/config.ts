@@ -67,6 +67,10 @@ export const config = {
     get backups() {
       return path.join(config.dataDir, 'backups');
     },
+    /** Scratch 作品的 .sb3 与封面 */
+    get scratch() {
+      return path.join(config.dataDir, 'scratch');
+    },
     get webDist() {
       return path.join(ROOT_DIR, 'apps/web/dist');
     },
@@ -80,6 +84,7 @@ export function ensureDataDirs(): void {
     config.paths.uploads,
     config.paths.judge,
     config.paths.backups,
+    config.paths.scratch,
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }

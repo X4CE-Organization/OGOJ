@@ -40,3 +40,6 @@ coverage/
 **/.DS_Store
 .DS_Store
 Thumbs.db
+
+# Scratch 编辑器（构建时用 npm run fetch:scratch 拉取，不进版本库）
+apps/web/public/scratch-editor/

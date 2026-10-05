@@ -43,6 +43,12 @@ export interface SettingGroup {
 
 export const SETTING_GROUPS: SettingGroup[] = [
   {
+    key: 'scratch',
+    name: 'Scratch 作品',
+    description: '自托管的 Scratch 编辑器与作品中心：开关、审核、容量限制',
+    icon: 'sparkles',
+  },
+  {
     key: 'site',
     name: '站点信息',
     description: '站点名称、Logo、描述等基础信息',
@@ -173,6 +179,79 @@ const langOptions = [
 ];
 
 export const SETTINGS: SettingField[] = [
+  // ------------------------------------------------------------- scratch
+  {
+    key: 'scratch_enabled',
+    label: '启用 Scratch 作品',
+    type: 'boolean',
+    default: true,
+    group: 'scratch',
+    description: '总开关。关闭后作品中心、创作入口全部隐藏，编辑器也不可访问',
+    public: true,
+  },
+  {
+    key: 'scratch_allow_create',
+    label: '允许用户创作',
+    type: 'boolean',
+    default: true,
+    group: 'scratch',
+    description: '关闭后仍然可以浏览别人的作品，但不能再新建或编辑',
+    public: true,
+  },
+  {
+    key: 'scratch_need_review',
+    label: '发布需要审核',
+    type: 'boolean',
+    default: false,
+    group: 'scratch',
+    description: '开启后用户提交的作品要等管理员审核通过才会出现在作品中心',
+    public: true,
+  },
+  {
+    key: 'scratch_allow_guest_view',
+    label: '游客可浏览作品',
+    type: 'boolean',
+    default: true,
+    group: 'scratch',
+    public: true,
+  },
+  {
+    key: 'scratch_max_mb',
+    label: '单个作品大小上限 (MB)',
+    type: 'number',
+    default: 32,
+    group: 'scratch',
+    min: 1,
+    max: 256,
+  },
+  {
+    key: 'scratch_max_per_user',
+    label: '每人作品数量上限',
+    type: 'number',
+    default: 50,
+    group: 'scratch',
+    description: '0 表示不限制',
+    min: 0,
+    max: 1000,
+  },
+  {
+    key: 'scratch_page_size',
+    label: '作品中心每页数量',
+    type: 'number',
+    default: 24,
+    group: 'scratch',
+    min: 6,
+    max: 60,
+  },
+  {
+    key: 'scratch_editor_notice',
+    label: '创作页提示',
+    type: 'text',
+    default: '',
+    group: 'scratch',
+    description: '显示在编辑器上方的说明，例如作品规范',
+  },
+
   // ---------------------------------------------------------------- site
   {
     key: 'site_name',

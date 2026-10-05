@@ -70,8 +70,12 @@ import Stickers from './pages/Stickers';
 import AdminDifficulties from './pages/admin/DifficultiesPanel';
 import AdminTickets from './pages/admin/TicketsPanel';
 import Moments from './pages/Moments';
+import ScratchGallery from './pages/ScratchGallery';
+import ScratchEditor from './pages/ScratchEditor';
+import ScratchProject from './pages/ScratchProject';
 import MomentDetail from './pages/MomentDetail';
 import AdminMoments from './pages/admin/MomentsPanel';
+import AdminScratch from './pages/admin/ScratchPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -116,6 +120,9 @@ export default function App() {
         <Route path="/discussions" element={<Discussions />} />
         <Route path="/discussion/:id" element={<DiscussionDetail />} />
         <Route path="/moments" element={<Moments />} />
+        <Route path="/scratch" element={<ScratchGallery />} />
+        <Route path="/scratch/new" element={<ScratchEditor />} />
+        <Route path="/scratch/:id" element={<ScratchProject />} />
         <Route path="/moment/:id" element={<MomentDetail />} />
         <Route path="/articles" element={<Articles />} />
         <Route path="/article/new" element={<RequireAuth><ArticleEditor /></RequireAuth>} />
@@ -167,6 +174,7 @@ export default function App() {
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="discussions" element={<AdminDiscussions />} />
           <Route path="moments" element={<AdminMoments />} />
+          <Route path="scratch" element={<AdminScratch />} />
           <Route path="solutions" element={<AdminSolutions />} />
           <Route path="judge" element={<AdminJudge />} />
           <Route path="achievements" element={<AdminAchievements />} />

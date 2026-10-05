@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scratch 编辑器</title>
+    <style>
+      html,
+      body,
+      #app {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #ffffff;
+      }
+      #boot {
+        display: grid;
+        place-items: center;
+        height: 100%;
+        font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"><div id="boot">正在加载 Scratch 编辑器…</div></div>
+    <script src="/scratch-editor/vendor/react.production.min.js"></script>
+    <script src="/scratch-editor/vendor/react-dom.production.min.js"></script>
+    <script>
+      // scratch-gui 的 UMD 从这两个小写全局取 React 依赖
+      window.react = window.React;
+      window['react-dom'] = window.ReactDOM;
+    </script>
+    <script src="/scratch-editor/scratch-gui.js"></script>
+    <script>
+      /*
+       * OGOJ 的 Scratch 编辑器宿主。
+       *
+       * 编辑器由 MIT Scratch（scratch-gui）构建，跑在 iframe 里，和 OGOJ 前端
+       * 完全隔离。宿主与编辑器之间用 postMessage 通信：
+       *
+       *   编辑器 -> 宿主：scratch:ready / scratch:loaded / scratch:changed
+       *                   scratch:save-data（导出 sb3 的字节 + 封面）
+       *                   scratch:error
+       *   宿主 -> 编辑器：scratch:load {url}      打开某个作品
+       *                   scratch:request-save   请求导出当前项目
+       */
+      (function () {
+        var GUI = window.GUI;
+        var params = new URLSearchParams(location.search);
+        var playerOnly = params.get('mode') === 'player';
+        var projectUrl = params.get('project');
+
+        var WrappedGui = GUI.AppStateHOC(GUI.default);
+        var appEl = document.getElementById('app');
+        var boot = document.getElementById('boot');
+        if (boot) boot.remove();
+        GUI.setAppElement(appEl);
+
+        var vm = null;
+
+        function post(message, transfer) {
+          try {
+            parent.postMessage(message, '*', transfer || []);
+          } catch (e) {
+            /* 父页面可能已经关闭 */
+          }
+        }
+
+        function grabThumbnail() {
+          // 舞台是第一块 canvas，导出成 PNG data URL 当封面
+          var canvas = document.querySelector('canvas');
+          if (!canvas) return '';
+          try {
+            var out = document.createElement('canvas');
+            out.width = 240;
+            out.height = 180;
+            out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
+            return out.toDataURL('image/png');
+          } catch (e) {
+            return '';
+          }
+        }
+
+        async function loadFromUrl(url) {
+          if (!vm) throw new Error('编辑器还没准备好');
+          var response = await fetch(url, { credentials: 'include' });
+          if (!response.ok) throw new Error('作品加载失败（' + response.status + '）');
+          var buffer = await response.arrayBuffer();
+          await vm.loadProject(buffer);
+        }
+
+        window.addEventListener('message', async function (event) {
+          var data = event.data || {};
+          if (!data.type || String(data.type).indexOf('scratch:') !== 0) return;
+          try {
+            if (data.type === 'scratch:load') {
+              await loadFromUrl(data.url);
+              post({ type: 'scratch:loaded' });
+            } else if (data.type === 'scratch:request-save') {
+              if (!vm) throw new Error('编辑器还没准备好');
+              var blob = await vm.saveProjectSb3();
+              var bytes = await blob.arrayBuffer();
+              var thumbnail = grabThumbnail();
+              var projectTitle = '';
+              try {
+                projectTitle = vm.runtime && vm.runtime.getProjectTitle ? vm.runtime.getProjectTitle() : '';
+              } catch (e) {
+                projectTitle = '';
+              }
+              post(
+                { type: 'scratch:save-data', requestId: data.requestId, bytes: bytes, thumbnail: thumbnail, title: projectTitle },
+                [bytes],
+              );
+            }
+          } catch (error) {
+            post({ type: 'scratch:error', requestId: data.requestId, message: String((error && error.message) || error) });
+          }
+        });
+
+        ReactDOM.render(
+          React.createElement(WrappedGui, {
+            canEditTitle: !playerOnly,
+            canSave: !playerOnly,
+            canLoad: !playerOnly,
+            canCreateNew: !playerOnly,
+            canShare: false,
+            enableCommunity: false,
+            showComingSoon: false,
+            showTutorials: false,
+            showGuide: false,
+            isPlayerOnly: playerOnly,
+            isFullScreen: false,
+            onVmInit: function (instance) {
+              vm = instance;
+              post({ type: 'scratch:ready', playerOnly: playerOnly });
+              if (projectUrl) {
+                loadFromUrl(projectUrl)
+                  .then(function () {
+                    post({ type: 'scratch:loaded' });
+                  })
+                  .catch(function (error) {
+                    post({ type: 'scratch:error', message: String(error.message || error) });
+                  });
+              }
+            },
+            onProjectLoaded: function () {
+              post({ type: 'scratch:loaded' });
+            },
+            onProjectChanged: function () {
+              post({ type: 'scratch:changed' });
+            },
+          }),
+          appEl,
+        );
+      })();
+    </script>
+  </body>
+</html>

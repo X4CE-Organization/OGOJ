@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  Blocks,
   Award,
   BookOpen,
   ChevronDown,
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { to: '/moments', label: '动态', icon: Radio },
   { to: '/discussions', label: '讨论', icon: Users },
   { to: '/articles', label: '文章广场', icon: BookOpen },
+  { to: '/scratch', label: 'Scratch 作品', icon: Blocks },
   { to: '/rank', label: '排行榜', icon: Trophy },
   { to: '/achievements', label: '成就', icon: Award },
   { to: '/shop', label: '商店', icon: ShoppingBag },
@@ -56,10 +58,12 @@ function Header() {
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   /** 后台关掉动态功能 / 动态入口时，导航里也要跟着消失 */
-  const navItems =
-    settings.enable_moment === false || settings.moment_show_entry === false
-      ? NAV_ITEMS.filter((item) => item.to !== '/moments')
-      : NAV_ITEMS;
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (item.to === '/moments') return !(settings.enable_moment === false || settings.moment_show_entry === false);
+    // 后台关掉 Scratch 功能时，入口也一起隐藏
+    if (item.to === '/scratch') return settings.scratch_enabled !== false;
+    return true;
+  });
   const [avatarDraft, setAvatarDraft] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
