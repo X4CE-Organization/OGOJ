@@ -164,12 +164,25 @@ export default function ScratchEditor() {
   }
 
   if (!status.canCreate) {
+    const needLogin = !user;
     return (
-      <div className="card p-8 text-center text-sm text-slate-500">
-        当前不能创作作品。
-        <div className="mt-3">
+      <div className="card space-y-3 p-8 text-center text-sm text-slate-500">
+        <p className="text-base font-medium text-slate-700 dark:text-slate-200">
+          {needLogin ? '登录后就可以创作作品' : '管理员暂时关闭了作品创作'}
+        </p>
+        <p className="text-xs">
+          {needLogin
+            ? 'Scratch 编辑器需要登录才能保存和发布作品，先去登录再回来就好。'
+            : '现在仍然可以浏览作品中心里的作品，等管理员开放后再来创作。'}
+        </p>
+        <div className="flex justify-center gap-2">
+          {needLogin ? (
+            <Link to={`/login?redirect=${encodeURIComponent('/scratch/new')}`} className="btn-primary text-xs">
+              去登录
+            </Link>
+          ) : null}
           <Link to="/scratch" className="btn-ghost text-xs">
-            去作品中心看看
+            去作品中心
           </Link>
         </div>
       </div>

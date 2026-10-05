@@ -57,7 +57,8 @@ export default function ScratchProject() {
   const canPlay = data.state === 'published' || data.isMine;
 
   return (
-    <div className="space-y-3">
+    // 和创作页一样占满剩余视口：试玩框铺满它所在的这一块，而不是固定高度的窄条
+    <div className="flex h-[calc(100vh-5.5rem)] min-h-[520px] flex-col gap-2">
       <div className="card flex flex-wrap items-center gap-3 p-3">
         <Link to="/scratch" className="btn-ghost text-xs">
           <ArrowLeft className="h-4 w-4" />
@@ -92,10 +93,10 @@ export default function ScratchProject() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
-        <div className="card overflow-hidden p-0">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
+        <div className="card min-h-0 overflow-hidden p-0">
           {!playing ? (
-            <div className="grid h-[62vh] min-h-[420px] place-items-center bg-slate-100 dark:bg-slate-800">
+            <div className="grid h-full min-h-[320px] place-items-center bg-slate-100 dark:bg-slate-800">
               <div className="space-y-3 text-center">
                 {data.thumbnail ? (
                   <img src={data.thumbnail} alt={data.title} className="mx-auto max-h-64 rounded-lg border border-slate-200 dark:border-slate-700" />
@@ -116,13 +117,13 @@ export default function ScratchProject() {
               ref={frameRef}
               src={`/scratch-editor/index.html?mode=player&project=/api/scratch/projects/${data.id}/file`}
               title={data.title}
-              className="h-[62vh] min-h-[420px] w-full border-0"
+              className="h-full min-h-[320px] w-full border-0"
               allow="microphone; camera; fullscreen"
             />
           )}
         </div>
 
-        <aside className="space-y-3">
+        <aside className="min-h-0 space-y-3 overflow-y-auto">
           <div className="card space-y-2 p-4">
             <h2 className="text-sm font-semibold">玩法说明</h2>
             <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-600 dark:text-slate-300">

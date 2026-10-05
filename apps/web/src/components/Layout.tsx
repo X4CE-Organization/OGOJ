@@ -417,7 +417,7 @@ export default function Layout() {
   const { settings } = useAuth();
   const location = useLocation();
   // Scratch 编辑器页面占满整屏，不显示页脚
-  const isEditorRoute = location.pathname === '/scratch/new';
+  const isEditorRoute = location.pathname === '/scratch/new' || /^\/scratch\/\d+$/.test(location.pathname);
   const widthClass =
     settings.layout_width === 'full'
       ? 'max-w-none'

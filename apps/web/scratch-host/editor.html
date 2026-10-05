@@ -13,27 +13,31 @@
         background: #ffffff;
       }
       /*
-       * 不要给编辑器设最小高度：scratch-gui 自己会按可用高度压缩舞台与角色面板。
-       * 之前加了 min-height 反而把面板顶到可视区外面，看起来就是「下面被切掉」。
+       * scratch-gui 的布局有内部最小尺寸（约 1200×740）：比这更窄时舞台和角色面板
+       * 会被挤到可视区外面，甚至完全看不到。这里不加硬性最小尺寸，
+       * 改由下面的 JS 给整个编辑器做等比缩放，容器多小都能看到完整界面。
        */
       body {
-        overflow: auto;
+        overflow: hidden;
+      }
+      #viewport {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #app {
+        width: 100%;
+        height: 100%;
+        transform-origin: top left;
       }
       /*
-       * scratch-gui 这一版把菜单栏涂成了紫色（#855CD6），这里换回 Scratch 经典的蓝色。
-       * 类名带构建哈希，所以用属性前缀匹配。
+       * 菜单栏的悬停/展开态：scratch-gui 叠的是 15% 黑，压在蓝底上看着发暗。
+       * 换成提亮，符合 Scratch 经典观感。
        */
-      [class*='menu-bar_menu-bar'] {
-        background-color: #4c97ff !important;
-      }
-      [class*='menu-bar_menu-bar'] [class*='menu-bar_']:hover {
-        background-color: rgba(0, 0, 0, 0.12) !important;
-      }
-      [class*='menu-bar_hoverable']:hover {
-        background-color: rgba(0, 0, 0, 0.12) !important;
-      }
-      [class*='menu-bar_menu-bar-item'] {
-        color: #ffffff !important;
+      [class*='menu-bar_menu-bar-item'][class*='menu-bar_hoverable']:hover,
+      [class*='menu-bar_menu-bar-item'][class*='menu-bar_active'] {
+        background-color: rgba(255, 255, 255, 0.18) !important;
       }
       #boot {
         display: grid;
@@ -45,7 +49,7 @@
     </style>
   </head>
   <body>
-    <div id="app"><div id="boot">正在加载 Scratch 编辑器…</div></div>
+    <div id="viewport"><div id="app"><div id="boot">正在加载 Scratch 编辑器…</div></div></div>
     <script src="/scratch-editor/vendor/react.production.min.js"></script>
     <script src="/scratch-editor/vendor/react-dom.production.min.js"></script>
     <script>
@@ -54,6 +58,105 @@
       window['react-dom'] = window.ReactDOM;
     </script>
     <script src="/scratch-editor/scratch-gui.js"></script>
+    <script>
+      /**
+       * scratch-gui 这一版把强调色做成了紫色 hsla(260, 60%, 60%)（菜单栏、添加扩展
+       * 按钮、角色面板按钮、选中态…一共三百多处）。逐个用 CSS 覆盖既漏又脆，
+       * 这里在样式表注入后统一把该色值改写成 Scratch 经典的蓝 hsla(217, 100%, 65%)。
+       */
+      function recolorAccent() {
+        /*
+         * CSSOM 会把 hsla(260, 60%, 60%) 规范化成 rgb(133, 92, 214)，
+         * 所以三种写法都要覆盖；三档紫色分别映射到 Scratch 运动积木的三档蓝。
+         */
+        var MAP = [
+          [/rgba\(133,\s*92,\s*214,/g, 'rgba(76, 151, 255,'],
+          [/rgb\(133,\s*92,\s*214\)/g, 'rgb(76, 151, 255)'],
+          [/rgba\(119,\s*77,\s*203,/g, 'rgba(66, 128, 215,'],
+          [/rgb\(119,\s*77,\s*203\)/g, 'rgb(66, 128, 215)'],
+          [/rgba\(113,\s*78,\s*183,/g, 'rgba(51, 115, 204,'],
+          [/rgb\(113,\s*78,\s*183\)/g, 'rgb(51, 115, 204)'],
+          [/hsla\(\s*260\s*,\s*60%\s*,\s*60%/g, 'hsla(217, 100%, 65%'],
+          [/hsla\(\s*260\s*,\s*60%\s*,\s*55%/g, 'hsla(217, 100%, 55%'],
+          [/hsla\(\s*260\s*,\s*60%\s*,\s*51%/g, 'hsla(217, 100%, 50%'],
+        ];
+        var changed = 0;
+        for (var s = 0; s < document.styleSheets.length; s += 1) {
+          var rules;
+          try {
+            rules = document.styleSheets[s].cssRules;
+          } catch (e) {
+            continue;
+          }
+          for (var r = 0; r < rules.length; r += 1) {
+            var style = rules[r].style;
+            if (!style) continue;
+            for (var i = 0; i < style.length; i += 1) {
+              var prop = style[i];
+              var value = style.getPropertyValue(prop);
+              if (!value || value.indexOf('214') === -1 && value.indexOf('203') === -1 && value.indexOf('183') === -1 && value.indexOf('260') === -1) continue;
+              var next = value;
+              for (var m = 0; m < MAP.length; m += 1) next = next.replace(MAP[m][0], MAP[m][1]);
+              if (next !== value) {
+                style.setProperty(prop, next, style.getPropertyPriority(prop));
+                changed += 1;
+              }
+            }
+          }
+        }
+        return changed;
+      }
+
+      /**
+       * 让编辑器在任意容器尺寸下都完整可见：
+       * scratch-gui 的内部布局有最小尺寸，容器更小时舞台/角色面板会被挤出去，
+       * 所以按需整体等比缩小（放大不做，大屏保持原生自适应）。
+       */
+      var DESIGN_W = 1200;
+      var DESIGN_H = 740;
+
+      function fitToContainer() {
+        var app = document.getElementById('app');
+        if (!app) return;
+        var scale = Math.min(1, window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H);
+        if (scale >= 1) {
+          app.style.position = '';
+          app.style.left = '';
+          app.style.top = '';
+          app.style.width = '100%';
+          app.style.height = '100%';
+          app.style.transform = '';
+          return;
+        }
+        app.style.position = 'absolute';
+        app.style.width = DESIGN_W + 'px';
+        app.style.height = DESIGN_H + 'px';
+        app.style.transform = 'scale(' + scale + ')';
+        // 缩放后居中，剩下留白居中比贴左边好看
+        app.style.left = Math.max(0, Math.round((window.innerWidth - DESIGN_W * scale) / 2)) + 'px';
+        app.style.top = Math.max(0, Math.round((window.innerHeight - DESIGN_H * scale) / 2)) + 'px';
+      }
+
+      window.addEventListener('resize', function () {
+        fitToContainer();
+      });
+
+      // 样式表分批注入，启动阶段反复跑几次，之后监听新增 <style> 再补一次
+      function recolorNow() {
+        try {
+          recolorAccent();
+        } catch (e) {}
+      }
+      var tries = 0;
+      var timer = setInterval(function () {
+        recolorNow();
+        tries += 1;
+        if (tries > 20) clearInterval(timer);
+      }, 400);
+      window.addEventListener('load', function () {
+        new MutationObserver(recolorNow).observe(document.head, { childList: true, subtree: true });
+      });
+    </script>
     <script>
       /*
        * OGOJ 的 Scratch 编辑器宿主。
@@ -158,6 +261,10 @@
             isFullScreen: false,
             onVmInit: function (instance) {
               vm = instance;
+              // 样式表这时已经注入，改色 + 适配
+              recolorAccent();
+              fitToContainer();
+              setTimeout(function () { recolorAccent(); fitToContainer(); }, 1200);
               post({ type: 'scratch:ready', playerOnly: playerOnly });
               if (projectUrl) {
                 loadFromUrl(projectUrl)
