@@ -92,7 +92,7 @@ export default function ListDetail() {
   const { list, problems, progress, favorited, canEdit } = data;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
       <div className="lg:col-span-2">
         <BackButton label="返回题单" listKey="training" fallback="/training" />
       </div>

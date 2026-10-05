@@ -80,7 +80,7 @@ export default function AdminLayout() {
   }, []);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
       <aside className="space-y-4">
         <div className="card p-3">
           <div className="px-1 pb-2 text-xs text-slate-400">

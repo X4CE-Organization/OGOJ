@@ -85,7 +85,7 @@ export default function TicketsPanel() {
       </div>
 
       {data?.stats && (
-        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {[
             { label: '待处理', value: data.stats.open, tone: 'text-amber-500' },
             { label: '处理中', value: data.stats.processing, tone: 'text-sky-500' },

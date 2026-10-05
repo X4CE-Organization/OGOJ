@@ -77,7 +77,7 @@ export default function Users() {
           <EmptyState title="没有找到用户" />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {items.map((item) => (
             <Link key={item.id} to={`/user/${item.username}`} className="card flex items-center gap-3 p-3 hover:shadow-md">
               <Avatar user={item} size={44} />

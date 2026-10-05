@@ -98,7 +98,7 @@ function AssignmentList({ ctx }: { ctx: TeamContextValue }) {
           <EmptyState title="还没有作业" description="发布一份作业，把题目打包给队友练习" />
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {data.items.map((assignment: any) => {
             const total = assignment.problemIds.length || 1;
             const percent = Math.round((assignment.mySolved / total) * 100);
@@ -182,7 +182,7 @@ function AssignmentList({ ctx }: { ctx: TeamContextValue }) {
               onChange={(event) => setForm({ ...form, description: event.target.value })}
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="开始时间">
               <input
                 className="input"

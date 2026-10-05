@@ -71,7 +71,7 @@ export default function MomentsPanel() {
         <span className="text-sm text-slate-500">共 {data?.total ?? 0} 条</span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         {[
           ['正常动态', data?.stats?.total ?? 0],
           ['今日发布', data?.stats?.today ?? 0],

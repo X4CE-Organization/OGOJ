@@ -96,7 +96,7 @@ export default function MaintenancePanel() {
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">备份与维护</h1>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Section title="数据库信息">
           <dl className="space-y-2 p-4 text-sm">
             <div className="flex justify-between">
@@ -218,7 +218,7 @@ export default function MaintenancePanel() {
       </Section>
 
       <Section title="全站广播">
-        <div className="grid gap-3 p-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2">
           <Field label="标题" required>
             <input
               className="input"

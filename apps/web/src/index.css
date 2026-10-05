@@ -174,3 +174,56 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   @apply rounded-full bg-slate-300 dark:bg-slate-700;
 }
+
+/* --------------------------------------------------------------- 手机端 */
+
+@media (max-width: 720px) {
+  /* 刘海屏：给顶栏和页脚留安全区 */
+  header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  footer {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* iOS 上输入框字号小于 16px 会在聚焦时把页面放大 */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* 触摸目标别做太小（正文里的行内链接除外） */
+  button:not(.link-inline),
+  .btn,
+  .btn-primary,
+  .btn-ghost {
+    min-height: 34px;
+  }
+
+  /* 长链接 / 用户名之类的连续字符不要顶破容器 */
+  .card,
+  .surface {
+    min-width: 0;
+  }
+  a,
+  p,
+  span,
+  td,
+  th {
+    overflow-wrap: anywhere;
+  }
+
+  /* 代码块和表格横滑，而不是把整页撑破 */
+  pre,
+  table {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .card,
+  .surface {
+    @apply p-3;
+  }
+}

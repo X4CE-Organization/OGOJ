@@ -109,7 +109,7 @@ export default function Problems() {
   }, [tags]);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr]">
       <aside className="space-y-4">
         <Section title="筛选题目">
           <div className="space-y-4 p-4">

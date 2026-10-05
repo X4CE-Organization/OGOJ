@@ -130,7 +130,7 @@ export default function Training() {
           <EmptyState title="还没有题单" description="创建一个题单，把同类型的题目整理在一起" />
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {items.map((list) => (
             <Link key={list.id} to={`/list/${list.id}`} className="card block p-4 transition hover:shadow-md">
               <div className="flex items-center justify-between">

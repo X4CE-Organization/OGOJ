@@ -89,7 +89,7 @@ export default function UserProfile() {
   const maxDifficulty = Math.max(1, ...profile.solvedByDifficulty.map((item: any) => item.c));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
       <div className="lg:col-span-2">
         <BackButton label="返回上一页" fallback="/rank" useHistory />
       </div>

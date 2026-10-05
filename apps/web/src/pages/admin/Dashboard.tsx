@@ -47,7 +47,7 @@ export default function Dashboard() {
     <div className="space-y-5">
       <h1 className="text-lg font-semibold">控制面板</h1>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
           <Link key={card.label} to={card.to} className="card p-4 transition hover:shadow-md">
             <div className="text-xs text-slate-400">{card.label}</div>
@@ -57,7 +57,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
         <Section title="近 14 天评测趋势">
           <div className="p-3">
             <ResponsiveContainer width="100%" height={240}>
@@ -141,7 +141,7 @@ export default function Dashboard() {
         </Section>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Section title="提交最多的题目">
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {data.topProblems.map((problem: any) => (

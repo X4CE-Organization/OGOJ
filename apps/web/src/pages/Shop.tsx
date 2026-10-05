@@ -105,7 +105,7 @@ export default function Shop() {
           <EmptyState title="商店暂未上架商品" description="管理员可以在控制面板中添加商品" />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data?.items.map((item: any) => {
             const Icon = ICONS[item.icon] ?? Package;
             return (

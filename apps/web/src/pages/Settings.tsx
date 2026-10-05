@@ -202,7 +202,7 @@ export default function SettingsPage() {
               onChange={(event) => setForm({ ...form, bio: event.target.value })}
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="学校 / 单位">
               <input
                 className="input"
@@ -219,7 +219,7 @@ export default function SettingsPage() {
               />
             </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="性别">
               <select
                 className="input"
@@ -355,7 +355,7 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-500">
                 绑定后可以用手机号 + 验证码登录，未配置短信服务时验证码会写进站内信（开发模式）。
               </p>
-              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <input
                   className="input"
                   value={phoneForm.phone}

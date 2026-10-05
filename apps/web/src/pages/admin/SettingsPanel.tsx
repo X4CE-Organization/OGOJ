@@ -194,7 +194,7 @@ export default function SettingsPanel() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
         <nav className="card h-fit space-y-0.5 p-2">
           {groups.map((group) => {
             const count = fields.filter((field) => field.group === group.key).length;
@@ -285,7 +285,7 @@ export default function SettingsPanel() {
               ) : null}
             </div>
           )}
-          <div className="grid gap-4 p-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
             {visibleFields.map((field) => {
               const value = current(field);
               return (

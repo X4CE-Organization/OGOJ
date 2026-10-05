@@ -90,7 +90,7 @@ export default function Articles() {
           <EmptyState title="还没有文章" />
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {items.map((article) => (
             <Link key={article.id} to={`/article/${article.id}`} className="card flex gap-3 p-4 hover:shadow-md">
               {article.cover ? (

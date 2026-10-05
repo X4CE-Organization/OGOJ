@@ -1,0 +1,23 @@
+{
+  "name": "OGOJ · Oganesson Online Judge",
+  "short_name": "OGOJ",
+  "description": "开源的在线评测系统：题库、比赛、训练、动态、讨论、文章、商店",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "题库", "url": "/problems" },
+    { "name": "比赛", "url": "/contests" },
+    { "name": "排行榜", "url": "/rank" },
+    { "name": "动态", "url": "/moments" }
+  ]
+}

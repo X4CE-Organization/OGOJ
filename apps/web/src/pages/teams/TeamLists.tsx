@@ -73,7 +73,7 @@ function ListIndex({ ctx }: { ctx: TeamContextValue }) {
           <EmptyState title="还没有题单" description="把相关题目整理成题单，方便系统训练" />
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {data.items.map((list: any) => (
             <Link key={list.id} to={`/team/${ctx.team.slug}/lists/${list.id}`} className="card p-4 hover:shadow-md">
               <div className="flex items-start justify-between gap-2">

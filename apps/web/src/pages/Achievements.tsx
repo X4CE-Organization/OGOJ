@@ -145,7 +145,7 @@ export default function Achievements() {
                 : items.filter((item) => item.category === category).length,
           }))}
         />
-        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {visible.map((badge) => {
             const rarity = RARITY[badge.rarity] ?? RARITY.common!;
             const locked = !badge.unlocked && data.showLocked !== false;

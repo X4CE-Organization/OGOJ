@@ -165,7 +165,7 @@ export default function TeamList() {
         {topTeams.length === 0 ? (
           <EmptyState title="暂无团队" />
         ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {topTeams.map((team, index) => (
               <Link
                 key={team.id}
@@ -251,7 +251,7 @@ export default function TeamList() {
             }
           />
         ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {myTeams.map((team) => (
               <Link
                 key={team.id}
@@ -329,7 +329,7 @@ export default function TeamList() {
           <EmptyState title="没有找到团队" description="换个关键词试试，或者直接输入团队名称加入" />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.items.map((team: any) => (
             <Link key={team.id} to={`/team/${team.slug}`} className="card overflow-hidden hover:shadow-md">
               <div
@@ -413,7 +413,7 @@ export default function TeamList() {
               placeholder="介绍一下团队的定位、主要活动、加入要求…"
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="团队分类">
               <input
                 className="input"

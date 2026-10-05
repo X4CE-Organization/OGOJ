@@ -284,7 +284,7 @@ export default function Messages() {
         !privateEnabled ? (
           <div className="card p-4 text-sm text-slate-500">本站未开放私信功能。</div>
         ) : (
-          <div className="card grid overflow-hidden lg:grid-cols-[300px_1fr]">
+          <div className="card grid grid-cols-1 overflow-hidden lg:grid-cols-[300px_1fr]">
             <aside className="border-b border-slate-200 lg:border-b-0 lg:border-r dark:border-slate-800">
               <div className="relative border-b border-slate-100 p-2 dark:border-slate-800">
                 <Search className="pointer-events-none absolute left-4 top-4 h-3.5 w-3.5 text-slate-400" />

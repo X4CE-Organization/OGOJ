@@ -174,7 +174,7 @@ export default function RecordDetail() {
               .filter((item: any) => item.input || item.output)
               .slice(0, 5)
               .map((item: any) => (
-                <div key={item.idx} className="grid gap-3 sm:grid-cols-3">
+                <div key={item.idx} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {[
                     ['输入', item.input],
                     ['你的输出', item.output],

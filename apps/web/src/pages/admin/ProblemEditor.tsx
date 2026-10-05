@@ -257,7 +257,7 @@ export default function ProblemEditor() {
 
         <div className="space-y-4 p-4">
           {tab === 'basic' && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="题目编号" hint="留空自动生成">
                 <input className="input" value={form.pid} onChange={(e) => setForm({ ...form, pid: e.target.value })} />
               </Field>
@@ -408,7 +408,7 @@ export default function ProblemEditor() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <Field label="输入">
                       <textarea
                         className="input min-h-[100px] font-mono text-xs"
@@ -464,7 +464,7 @@ export default function ProblemEditor() {
                 子任务用于捆绑测试：默认「全部通过才得分」，也可以选择「按测试点累加」。deps 表示依赖的子任务编号。
               </p>
               {form.subtasks.map((subtask: Subtask, index: number) => (
-                <div key={index} className="grid gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-5 dark:border-slate-700">
+                <div key={index} className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-5 dark:border-slate-700">
                   <Field label="编号">
                     <input
                       className="input"
@@ -673,7 +673,7 @@ export default function ProblemEditor() {
 
           {tab === 'judge' && (
             <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="评测方式">
                   <select
                     className="input"
@@ -768,7 +768,7 @@ export default function ProblemEditor() {
       >
         {caseModal && (
           <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <Field label="编号">
                 <input
                   className="input"
@@ -805,7 +805,7 @@ export default function ProblemEditor() {
                 </label>
               </Field>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="输入数据">
                 <textarea
                   className={classNames('input min-h-[240px] font-mono text-xs')}

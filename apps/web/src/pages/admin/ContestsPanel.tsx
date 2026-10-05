@@ -289,7 +289,7 @@ export default function ContestsPanel() {
           <Field label="副标题">
             <input className="input" value={form.subtitle ?? ''} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
           </Field>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="赛制">
               <select className="input" value={form.rules ?? 'acm'} onChange={(e) => setForm({ ...form, rules: e.target.value })}>
                 <option value="acm">ACM</option>

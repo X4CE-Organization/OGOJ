@@ -171,7 +171,7 @@ export default function TeamContests() {
           <Field label="副标题">
             <input className="input" value={form.subtitle} onChange={(event) => setForm({ ...form, subtitle: event.target.value })} />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="赛制">
               <select className="input" value={form.rules} onChange={(event) => setForm({ ...form, rules: event.target.value })}>
                 <option value="acm">ACM</option>

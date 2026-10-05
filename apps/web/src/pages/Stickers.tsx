@@ -122,7 +122,7 @@ export default function Stickers() {
           </span>
         }
       >
-        <div className="grid gap-3 p-4 md:grid-cols-[1fr_160px_120px_1fr]">
+        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[1fr_160px_120px_1fr]">
           <Field label="表情名称" required>
             <input
               className="input"

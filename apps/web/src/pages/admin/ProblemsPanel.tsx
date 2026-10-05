@@ -346,7 +346,7 @@ export default function ProblemsPanel() {
       >
         <div className="space-y-3">
           <Field label="导入格式" required>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
                 { value: 'zip' as const, label: 'ZIP 题目包', hint: '本站批量导出生成的 ZIP', icon: FileArchive },
                 { value: 'fps' as const, label: 'FPS 文件', hint: 'FPS XML 题目文件', icon: FileCode2 },

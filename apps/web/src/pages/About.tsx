@@ -80,7 +80,7 @@ export default function About() {
         )}
       </Section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Section title="用户协议">
           <div className="p-4">
             <Markdown>{String(settings.terms_page ?? '')}</Markdown>

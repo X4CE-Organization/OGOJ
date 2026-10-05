@@ -347,7 +347,7 @@ export default function ProblemDetail() {
   const canSubmit = settings.allow_submit !== false;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_400px]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_400px]">
       <div className="lg:col-span-2">
         <BackButton label="返回题库" listKey="problems" fallback="/problems" />
       </div>
@@ -584,7 +584,7 @@ export default function ProblemDetail() {
             )}
 
             {tab === 'statistics' && statistics && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <h3 className="mb-2 text-sm font-semibold">评测结果分布</h3>
                   <ul className="space-y-1 text-sm">
@@ -648,7 +648,7 @@ export default function ProblemDetail() {
                 height="300px"
               />
               {/* -------------------------------------------- 自测：左输入 右输出 */}
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 [&>*]:min-w-0">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 [&>*]:min-w-0">
                 {/* 左：自定义输入 */}
                 <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40">
                   <div className="flex h-8 items-center justify-between gap-1 border-b border-slate-200 bg-slate-100/70 px-2 dark:border-slate-700 dark:bg-slate-800/60">

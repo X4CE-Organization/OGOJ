@@ -169,7 +169,7 @@ export default function TeamSettings() {
                 placeholder="例如：本周训练安排、比赛提醒…"
               />
             </Field>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Field label="团队头像">
                 <ImageUploadField
                   value={form.avatar}
@@ -188,7 +188,7 @@ export default function TeamSettings() {
                 />
               </Field>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field label="公开程度" hint="公开团队任何人可直接加入；保护团队需要审核；私有团队凭邀请码">
                 <div className="space-y-2">
                   {TEAM_POLICIES.map((item, index) => {
@@ -407,7 +407,7 @@ export default function TeamSettings() {
       >
         {groupModal && (
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="组别名称" required>
                 <input
                   className="input"
@@ -428,7 +428,7 @@ export default function TeamSettings() {
             </Field>
             <div>
               <span className="label">管理权限</span>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {PERMISSIONS.map((permission) => (
                   <label key={permission.key} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                     <input

@@ -25,7 +25,7 @@ export default function TeamOverview() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
           <Link key={card.label} to={card.to} className="card flex items-center gap-3 p-4 hover:shadow-md">
             <span className="rounded-lg bg-primary/10 p-2 text-primary">
@@ -39,7 +39,7 @@ export default function TeamOverview() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Section
           title="团队题目"
           action={
@@ -145,7 +145,7 @@ export default function TeamOverview() {
       </div>
 
       {statistics && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Section title="题目难度分布">
             {!statistics.difficultyDistribution?.length ? (
               <EmptyState title="暂无数据" />

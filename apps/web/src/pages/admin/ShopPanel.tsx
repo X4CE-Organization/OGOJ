@@ -191,7 +191,7 @@ export default function ShopPanel() {
           <Field label="商品名称" required>
             <input className="input" value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field label="类型">
               <select className="input" value={form.kind ?? 'contest'} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
                 <option value="contest">创建比赛资格</option>

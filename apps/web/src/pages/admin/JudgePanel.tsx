@@ -67,7 +67,7 @@ export default function JudgePanel() {
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         {[
           { label: '等待评测', value: data?.waiting ?? 0 },
           { label: '正在评测', value: data?.judging ?? 0 },
@@ -81,7 +81,7 @@ export default function JudgePanel() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_2fr]">
         <Section title="批量重测">
           <div className="space-y-3 p-4">
             <Field label="题目 ID">
