@@ -258,7 +258,7 @@ export default function TagGroupsPanel() {
                   <span className="text-xs text-slate-400">{tag.problem_count ?? 0} 道题</span>
                   <div className="ml-auto flex items-center gap-2">
                     <select
-                      className="input !w-32 !py-1 text-xs"
+                      className="input !w-full sm:!w-32 !py-1 text-xs"
                       value={group}
                       onChange={(event) => void moveTag(tag, event.target.value)}
                     >

@@ -50,7 +50,7 @@ export default function LogsPanel() {
         <div className="p-3">
           {tab === 'audit' && (
             <input
-              className="input !w-64"
+              className="input !w-full sm:!w-64"
               placeholder="按操作类型筛选，例如 settings / problem"
               value={action}
               onChange={(event) => {

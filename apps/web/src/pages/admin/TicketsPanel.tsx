@@ -107,7 +107,7 @@ export default function TicketsPanel() {
       )}
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
-        <select className="input !w-32" value={filters.status} onChange={(e) => setFilter({ status: e.target.value })}>
+        <select className="input !w-full sm:!w-32" value={filters.status} onChange={(e) => setFilter({ status: e.target.value })}>
           <option value="unfinished">未完成</option>
           <option value="all">全部</option>
           <option value="open">待处理</option>
@@ -116,7 +116,7 @@ export default function TicketsPanel() {
           <option value="resolved">已解决</option>
           <option value="closed">已关闭</option>
         </select>
-        <select className="input !w-40" value={filters.category} onChange={(e) => setFilter({ category: e.target.value })}>
+        <select className="input !w-full sm:!w-40" value={filters.category} onChange={(e) => setFilter({ category: e.target.value })}>
           <option value="">全部分类</option>
           {(meta?.categories ?? []).map((item: any) => (
             <option key={item.value} value={item.value}>
@@ -124,20 +124,20 @@ export default function TicketsPanel() {
             </option>
           ))}
         </select>
-        <select className="input !w-28" value={filters.priority} onChange={(e) => setFilter({ priority: e.target.value })}>
+        <select className="input !w-full sm:!w-28" value={filters.priority} onChange={(e) => setFilter({ priority: e.target.value })}>
           <option value="">全部优先级</option>
           <option value="urgent">紧急</option>
           <option value="high">高</option>
           <option value="normal">普通</option>
           <option value="low">低</option>
         </select>
-        <select className="input !w-32" value={filters.assignee} onChange={(e) => setFilter({ assignee: e.target.value })}>
+        <select className="input !w-full sm:!w-32" value={filters.assignee} onChange={(e) => setFilter({ assignee: e.target.value })}>
           <option value="">全部处理人</option>
           <option value="me">我处理的</option>
           <option value="none">未分配</option>
         </select>
         <input
-          className="input !w-56"
+          className="input !w-full sm:!w-56"
           placeholder="搜索编号 / 标题 / 用户"
           value={filters.q}
           onChange={(e) => setFilter({ q: e.target.value })}

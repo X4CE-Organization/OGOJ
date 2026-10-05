@@ -118,7 +118,7 @@ export default function Discussions() {
           <option value="hot">最热</option>
         </select>
         <input
-          className="input !w-48"
+          className="input !w-full sm:!w-48"
           placeholder="搜索帖子"
           defaultValue={keyword}
           onKeyDown={(event) => {

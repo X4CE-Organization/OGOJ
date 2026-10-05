@@ -191,7 +191,7 @@ export default function Stickers() {
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           <input
-            className="input !w-56 !py-1.5 pl-8 text-xs"
+            className="input !w-full sm:!w-56 !py-1.5 pl-8 text-xs"
             placeholder="搜索名称 / 分组"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}

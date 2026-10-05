@@ -163,13 +163,13 @@ export default function TeamMembers() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           <input
-            className="input !w-56 !pl-8"
+            className="input !w-full sm:!w-56 !pl-8"
             placeholder="搜索成员"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
         </div>
-        <select className="input !w-40" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+        <select className="input !w-full sm:!w-40" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
           <option value="">全部组别</option>
           {(data?.groups ?? []).map((group: any) => (
             <option key={group.id} value={group.id}>

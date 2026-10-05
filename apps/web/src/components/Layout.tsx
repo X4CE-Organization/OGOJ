@@ -129,7 +129,7 @@ function Header() {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="搜索题目 / 用户 / 讨论"
-            className="input !w-56 !pl-8"
+            className="input !w-full sm:!w-56 !pl-8"
           />
         </form>
 

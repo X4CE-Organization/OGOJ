@@ -52,7 +52,7 @@ export default function DiscussionsPanel() {
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <input
-          className="input !w-64"
+          className="input !w-full sm:!w-64"
           placeholder="搜索标题 / 内容"
           value={search}
           onChange={(event) => {

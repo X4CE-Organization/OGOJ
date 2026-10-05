@@ -190,7 +190,7 @@ export default function TicketDetail() {
                   {ticket.isEscalated ? '取消升级' : '升级工单'}
                 </button>
                 <select
-                  className="input !w-28 !py-1 text-xs"
+                  className="input !w-full sm:!w-28 !py-1 text-xs"
                   value={ticket.status}
                   onChange={(event) => setStatus(event.target.value)}
                 >
@@ -201,7 +201,7 @@ export default function TicketDetail() {
                   ))}
                 </select>
                 <select
-                  className="input !w-24 !py-1 text-xs"
+                  className="input !w-full sm:!w-24 !py-1 text-xs"
                   value={ticket.priority}
                   onChange={(event) => setPriority(event.target.value)}
                 >

@@ -87,7 +87,7 @@ export default function MomentsPanel() {
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <input
-          className="input !w-64"
+          className="input !w-full sm:!w-64"
           placeholder="搜索动态内容"
           value={search}
           onChange={(event) => {
@@ -96,7 +96,7 @@ export default function MomentsPanel() {
           }}
         />
         <select
-          className="input !w-40"
+          className="input !w-full sm:!w-40"
           value={deleted}
           onChange={(event) => {
             setDeleted(event.target.value);

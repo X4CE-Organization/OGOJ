@@ -115,7 +115,7 @@ export default function Tickets() {
           </button>
         ))}
         <select
-          className="input !w-44"
+          className="input !w-full sm:!w-44"
           value={category}
           onChange={(event) => update({ category: event.target.value })}
         >

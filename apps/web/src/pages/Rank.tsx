@@ -43,15 +43,15 @@ export default function Rank() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">排行榜</h1>
-        <div className="flex items-center gap-2">
-          <select className="input !w-40" value={sort} onChange={(event) => update({ sort: event.target.value })}>
+        <div className="flex flex-wrap items-center gap-2">
+          <select className="input !w-full sm:!w-40" value={sort} onChange={(event) => update({ sort: event.target.value })}>
             <option value="solved">按通过题数</option>
             <option value="points">按积分</option>
             {settings.show_rating !== false && <option value="rating">按等级分</option>}
             <option value="submissions">按提交数</option>
           </select>
           <input
-            className="input !w-44"
+            className="input !w-full sm:!w-44"
             placeholder="搜索用户"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}

@@ -80,7 +80,7 @@ export default function Records() {
       </div>
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
-        <select className="input !w-36" value={status} onChange={(event) => update({ status: event.target.value })}>
+        <select className="input !w-full sm:!w-36" value={status} onChange={(event) => update({ status: event.target.value })}>
           <option value="">全部结果</option>
           {['AC', 'WA', 'TLE', 'MLE', 'RE', 'CE', 'OLE', 'PE', 'Waiting', 'Judging'].map((item) => (
             <option key={item} value={item}>
@@ -88,7 +88,7 @@ export default function Records() {
             </option>
           ))}
         </select>
-        <select className="input !w-44" value={language} onChange={(event) => update({ language: event.target.value })}>
+        <select className="input !w-full sm:!w-44" value={language} onChange={(event) => update({ language: event.target.value })}>
           <option value="">全部语言</option>
           {Object.entries(LANGUAGE_NAMES).map(([id, name]) => (
             <option key={id} value={id}>
@@ -97,7 +97,7 @@ export default function Records() {
           ))}
         </select>
         <input
-          className="input !w-56"
+          className="input !w-full sm:!w-56"
           placeholder="题目名称 / 编号"
           defaultValue={keyword}
           onKeyDown={(event) => {

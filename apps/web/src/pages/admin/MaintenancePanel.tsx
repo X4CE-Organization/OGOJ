@@ -163,7 +163,7 @@ export default function MaintenancePanel() {
               <div className="flex items-end gap-2">
                 <Field label="清理早于（天）的评测详情">
                   <input
-                    className="input !w-32"
+                    className="input !w-full sm:!w-32"
                     type="number"
                     value={days}
                     onChange={(event) => setDays(Number(event.target.value))}
@@ -200,7 +200,7 @@ export default function MaintenancePanel() {
           </dl>
           <div className="flex flex-wrap items-center gap-2">
             <input
-              className="input !w-48"
+              className="input !w-full sm:!w-48"
               value={smsPhone}
               onChange={(event) => setSmsPhone(event.target.value)}
               placeholder="手机号，发测试短信"

@@ -44,22 +44,22 @@ export default function Users() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">用户</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
-            <select className="input !w-32" value={role} onChange={(event) => update({ role: event.target.value })}>
+            <select className="input !w-full sm:!w-32" value={role} onChange={(event) => update({ role: event.target.value })}>
               <option value="">全部角色</option>
               <option value="user">普通用户</option>
               <option value="admin">管理员</option>
               <option value="superadmin">超级管理员</option>
             </select>
           )}
-          <select className="input !w-32" value={sort} onChange={(event) => update({ sort: event.target.value })}>
+          <select className="input !w-full sm:!w-32" value={sort} onChange={(event) => update({ sort: event.target.value })}>
             <option value="solved">按通过题数</option>
             <option value="points">按积分</option>
             <option value="newest">按注册时间</option>
           </select>
           <input
-            className="input !w-44"
+            className="input !w-full sm:!w-44"
             placeholder="搜索用户名"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}

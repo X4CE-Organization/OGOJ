@@ -144,7 +144,7 @@ export default function Moments() {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="搜索动态内容"
-            className="input !w-56 !pl-8"
+            className="input !w-full sm:!w-56 !pl-8"
           />
         </form>
       </div>

@@ -109,7 +109,7 @@ export default function UsersPanel() {
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <input
-          className="input !w-56"
+          className="input !w-full sm:!w-56"
           placeholder="搜索用户名 / 昵称 / 邮箱"
           value={search}
           onChange={(event) => {
@@ -118,7 +118,7 @@ export default function UsersPanel() {
           }}
         />
         <select
-          className="input !w-36"
+          className="input !w-full sm:!w-36"
           value={role}
           onChange={(event) => {
             setRole(event.target.value);
@@ -131,7 +131,7 @@ export default function UsersPanel() {
           <option value="superadmin">超级管理员</option>
         </select>
         <select
-          className="input !w-36"
+          className="input !w-full sm:!w-36"
           value={banned}
           onChange={(event) => {
             setBanned(event.target.value);

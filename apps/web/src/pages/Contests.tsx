@@ -85,7 +85,7 @@ export default function Contests() {
             {item.label}
           </button>
         ))}
-        <select className="input !w-32" value={rules} onChange={(event) => update({ rules: event.target.value })}>
+        <select className="input !w-full sm:!w-32" value={rules} onChange={(event) => update({ rules: event.target.value })}>
           <option value="">全部赛制</option>
           <option value="acm">ACM</option>
           <option value="oi">OI</option>

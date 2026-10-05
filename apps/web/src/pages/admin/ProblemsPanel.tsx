@@ -212,7 +212,7 @@ export default function ProblemsPanel() {
           </button>
         ))}
         <input
-          className="input !w-56"
+          className="input !w-full sm:!w-56"
           placeholder="搜索题目编号 / 标题"
           value={search}
           onChange={(event) => {

@@ -90,7 +90,7 @@ export default function TeamProblems() {
     <div className="space-y-3">
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <input
-          className="input !w-56"
+          className="input !w-full sm:!w-56"
           placeholder="搜索题目名称 / 编号"
           value={keyword}
           onChange={(event) => {
@@ -99,7 +99,7 @@ export default function TeamProblems() {
           }}
         />
         <select
-          className="input !w-32"
+          className="input !w-full sm:!w-32"
           value={difficulty}
           onChange={(event) => {
             setDifficulty(event.target.value);

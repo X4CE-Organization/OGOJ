@@ -498,7 +498,7 @@ export default function ProblemDetail() {
             {tab === 'records' && (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <select className="input !w-40" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <select className="input !w-full sm:!w-40" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                     <option value="">全部结果</option>
                     {['AC', 'WA', 'TLE', 'MLE', 'RE', 'CE'].map((status) => (
                       <option key={status} value={status}>

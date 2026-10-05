@@ -175,9 +175,9 @@ export default function SettingsPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">系统设置</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
-            className="input !w-56"
+            className="input !w-full sm:!w-56"
             placeholder="搜索设置项…"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
@@ -237,7 +237,7 @@ export default function SettingsPanel() {
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
-                  className="input !w-72"
+                  className="input !w-full sm:!w-72"
                   placeholder="接收测试邮件的邮箱"
                   value={testMailTo}
                   onChange={(event) => setTestMailTo(event.target.value)}

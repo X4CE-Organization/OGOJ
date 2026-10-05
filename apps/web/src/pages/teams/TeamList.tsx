@@ -287,7 +287,7 @@ export default function TeamList() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
           <input
-            className="input !w-56 !pl-8"
+            className="input !w-full sm:!w-56 !pl-8"
             placeholder="搜索团队名称或简介"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
@@ -296,13 +296,13 @@ export default function TeamList() {
             }}
           />
         </div>
-        <select className="input !w-36" value={sort} onChange={(event) => update({ sort: event.target.value })}>
+        <select className="input !w-full sm:!w-36" value={sort} onChange={(event) => update({ sort: event.target.value })}>
           <option value="members">按成员数</option>
           <option value="top">按团队经验</option>
           <option value="problems">按题目数</option>
           <option value="newest">最新创建</option>
         </select>
-        <select className="input !w-48" value={policy} onChange={(event) => update({ policy: event.target.value })}>
+        <select className="input !w-full sm:!w-48" value={policy} onChange={(event) => update({ policy: event.target.value })}>
           <option value="">全部公开程度</option>
           {TEAM_POLICIES.map((item, index) => (
             <option key={item.short} value={POLICY_VALUES[index]}>
@@ -311,7 +311,7 @@ export default function TeamList() {
           ))}
         </select>
         {(data?.categories ?? []).length > 0 && (
-          <select className="input !w-36" value={category} onChange={(event) => update({ category: event.target.value })}>
+          <select className="input !w-full sm:!w-36" value={category} onChange={(event) => update({ category: event.target.value })}>
             <option value="">全部分类</option>
             {(data?.categories ?? []).map((item: any) => (
               <option key={item.category} value={item.category}>

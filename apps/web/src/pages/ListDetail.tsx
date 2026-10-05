@@ -169,7 +169,7 @@ export default function ListDetail() {
                           <StatusText status="AC" />
                         ) : user ? (
                           <select
-                            className="input !w-24 !py-1 text-xs"
+                            className="input !w-full sm:!w-24 !py-1 text-xs"
                             value={problem.myStatus}
                             onChange={(event) => setProgress(problem.id, event.target.value)}
                           >
