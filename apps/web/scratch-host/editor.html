@@ -12,13 +12,12 @@
         height: 100%;
         background: #ffffff;
       }
-      /* 编辑器本身需要一定高度，窗口太矮时允许滚动，别把下面的面板切掉 */
+      /*
+       * 不要给编辑器设最小高度：scratch-gui 自己会按可用高度压缩舞台与角色面板。
+       * 之前加了 min-height 反而把面板顶到可视区外面，看起来就是「下面被切掉」。
+       */
       body {
         overflow: auto;
-      }
-      #app {
-        min-height: 660px;
-        min-width: 900px;
       }
       /*
        * scratch-gui 这一版把菜单栏涂成了紫色（#855CD6），这里换回 Scratch 经典的蓝色。

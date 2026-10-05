@@ -178,8 +178,9 @@ export default function ScratchEditor() {
 
   return (
     // 让编辑器占满剩余视口高度：低于这个高度时编辑器内部自己滚动，不会被切掉
-    <div className="flex h-[calc(100vh-8rem)] min-h-[560px] flex-col gap-3">
-      <div className="card flex flex-wrap items-center gap-2 p-3">
+    // 高度按「视口 - 顶栏 - 主体上下内边距」算，让编辑器一直铺到窗口底部
+    <div className="flex h-[calc(100vh-5.5rem)] min-h-[520px] flex-col gap-2">
+      <div className="card flex flex-wrap items-center gap-2 px-3 py-2">
         <Link to="/scratch" className="btn-ghost text-xs">
           <ArrowLeft className="h-4 w-4" />
           作品中心

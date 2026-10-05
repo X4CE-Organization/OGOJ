@@ -415,6 +415,9 @@ function Footer() {
 
 export default function Layout() {
   const { settings } = useAuth();
+  const location = useLocation();
+  // Scratch 编辑器页面占满整屏，不显示页脚
+  const isEditorRoute = location.pathname === '/scratch/new';
   const widthClass =
     settings.layout_width === 'full'
       ? 'max-w-none'
@@ -424,10 +427,11 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className={classNames('mx-auto w-full flex-1 px-4 py-5', widthClass)}>
+      <main className={classNames('mx-auto w-full flex-1 px-4', isEditorRoute ? 'py-3' : 'py-5', widthClass)}>
         <Outlet />
       </main>
-      <Footer />
+      {/* Scratch 编辑器是全屏工作区，留页脚会把编辑器挤出屏幕 */}
+      {isEditorRoute ? null : <Footer />}
     </div>
   );
 }

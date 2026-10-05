@@ -6,6 +6,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import fastifyCompress from '@fastify/compress';
 import { config, ensureDataDirs } from './config.js';
 import { migrate } from './db/index.js';
 import { HttpError } from './lib/errors.js';
@@ -161,6 +162,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   fs.mkdirSync(config.paths.uploads, { recursive: true });
+
+  /**
+   * 压缩响应。
+   * Scratch 编辑器的 scratch-gui.js 有 18MB，不压缩的话首次打开要等很久；
+   * 开了 br / gzip 之后能压到 4~5MB。阈值调到 1KB，小的 JSON 也一起压。
+   */
+  await app.register(fastifyCompress, {
+    global: true,
+    threshold: 1024,
+    encodings: ['br', 'gzip', 'deflate'],
+  });
+
   await app.register(fastifyStatic, {
     root: config.paths.uploads,
     prefix: '/uploads/',
