@@ -43,12 +43,6 @@ export interface SettingGroup {
 
 export const SETTING_GROUPS: SettingGroup[] = [
   {
-    key: 'scratch',
-    name: 'Scratch 作品',
-    description: '自托管的 Scratch 编辑器与作品中心：开关、审核、容量限制',
-    icon: 'sparkles',
-  },
-  {
     key: 'site',
     name: '站点信息',
     description: '站点名称、Logo、描述等基础信息',
@@ -155,6 +149,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
     name: '动态',
     description: '动态广场开关、发布频率、图片数量与互动策略',
     icon: 'radio',
+  },
+  {
+    key: 'scratch',
+    name: 'Scratch 作品',
+    description: '自托管的 Scratch 编辑器与作品中心：开关、审核、容量限制',
+    icon: 'sparkles',
   },
   {
     key: 'sms',

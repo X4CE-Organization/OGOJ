@@ -177,7 +177,8 @@ export default function ScratchEditor() {
   }
 
   return (
-    <div className="space-y-3">
+    // 让编辑器占满剩余视口高度：低于这个高度时编辑器内部自己滚动，不会被切掉
+    <div className="flex h-[calc(100vh-8rem)] min-h-[560px] flex-col gap-3">
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <Link to="/scratch" className="btn-ghost text-xs">
           <ArrowLeft className="h-4 w-4" />
@@ -216,7 +217,7 @@ export default function ScratchEditor() {
 
       {status.notice ? <p className="text-xs text-slate-500 dark:text-slate-400">{status.notice}</p> : null}
 
-      <div className="card relative overflow-hidden p-0">
+      <div className="card relative min-h-0 flex-1 overflow-hidden p-0">
         {!ready ? (
           <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 text-sm text-slate-500 dark:bg-slate-900/70">
             <span className="flex items-center gap-2">
@@ -229,7 +230,7 @@ export default function ScratchEditor() {
           ref={frameRef}
           src={frameSrc}
           title="Scratch 编辑器"
-          className="h-[78vh] min-h-[560px] w-full border-0"
+          className="h-full min-h-[520px] w-full flex-1 border-0"
           allow="microphone; camera; clipboard-write; fullscreen"
         />
       </div>

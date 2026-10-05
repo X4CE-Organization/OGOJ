@@ -10,8 +10,31 @@
       #app {
         margin: 0;
         height: 100%;
-        overflow: hidden;
         background: #ffffff;
+      }
+      /* 编辑器本身需要一定高度，窗口太矮时允许滚动，别把下面的面板切掉 */
+      body {
+        overflow: auto;
+      }
+      #app {
+        min-height: 660px;
+        min-width: 900px;
+      }
+      /*
+       * scratch-gui 这一版把菜单栏涂成了紫色（#855CD6），这里换回 Scratch 经典的蓝色。
+       * 类名带构建哈希，所以用属性前缀匹配。
+       */
+      [class*='menu-bar_menu-bar'] {
+        background-color: #4c97ff !important;
+      }
+      [class*='menu-bar_menu-bar'] [class*='menu-bar_']:hover {
+        background-color: rgba(0, 0, 0, 0.12) !important;
+      }
+      [class*='menu-bar_hoverable']:hover {
+        background-color: rgba(0, 0, 0, 0.12) !important;
+      }
+      [class*='menu-bar_menu-bar-item'] {
+        color: #ffffff !important;
       }
       #boot {
         display: grid;
@@ -120,6 +143,9 @@
 
         ReactDOM.render(
           React.createElement(WrappedGui, {
+            // projectId 传 '0' 让编辑器载入自带的基础作品（默认角色 + 造型），
+            // 否则新建时是一个连角色都没有的空项目，运动类积木自然用不了
+            projectId: playerOnly ? undefined : '0',
             canEditTitle: !playerOnly,
             canSave: !playerOnly,
             canLoad: !playerOnly,

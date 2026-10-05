@@ -15,7 +15,6 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { num, bool, str } from '../settings/index.js';
 import { config } from '../config.js';
 import { audit } from '../lib/audit.js';
-import { addPoints } from '../lib/points.js';
 import { sendMessage } from '../lib/notify.js';
 
 const MAX_TITLE = 80;
@@ -276,9 +275,6 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
         [user.id, title, instructions, notes, filePath, data.length, thumbPath],
       );
       id = created.id;
-      if (bool('points_enabled', true) && num('points_per_scratch', 0) > 0) {
-        await addPoints(user.id, num('points_per_scratch', 0), '发布 Scratch 作品', { refType: 'scratch', refId: id }).catch(() => undefined);
-      }
     }
     await audit(request, existing ? 'scratch.update' : 'scratch.create', {
       targetType: 'scratch_project',

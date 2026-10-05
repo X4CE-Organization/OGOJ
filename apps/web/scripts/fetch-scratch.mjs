@@ -23,7 +23,10 @@ const SCRATCH_GUI_VERSION = process.env.SCRATCH_GUI_VERSION ?? '5.3.0';
 const REACT_VERSION = '16.14.0';
 
 if (fs.existsSync(path.join(outDir, 'scratch-gui.js'))) {
-  console.log('[scratch] 已存在，跳过下载（删除 public/scratch-editor 可强制重拉）');
+  // 依赖已经拉过了，但宿主页是本仓库的文件，每次构建都要覆盖成最新的
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.copyFileSync(hostPage, path.join(outDir, 'index.html'));
+  console.log('[scratch] 依赖已存在，仅同步宿主页（删除 public/scratch-editor 可强制重拉）');
   process.exit(0);
 }
 
