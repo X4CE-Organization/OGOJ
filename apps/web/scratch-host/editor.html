@@ -122,10 +122,24 @@
       function fitToContainer() {
         var app = document.getElementById('app');
         if (!app) return;
-        // 触屏/窄屏不缩放：缩到能看全就没法操作了，改成给足尺寸让用户自己滑
-        var isSmallScreen = window.innerWidth < 900 || window.matchMedia('(pointer: coarse)').matches;
-        var scale = isSmallScreen ? 1 : Math.min(1, window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H);
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        // 触屏/窄屏：不缩放，把编辑器撑到设计尺寸，让用户自己滑动
+        var isSmallScreen = vw < 900 || window.matchMedia('(pointer: coarse)').matches;
+
+        if (isSmallScreen) {
+          app.style.position = 'absolute';
+          app.style.left = '0';
+          app.style.top = '0';
+          app.style.width = DESIGN_W + 'px';
+          app.style.height = DESIGN_H + 'px';
+          app.style.transform = '';
+          return;
+        }
+
+        var scale = Math.min(1, vw / DESIGN_W, vh / DESIGN_H);
         if (scale >= 1) {
+          // 桌面大屏：交给 scratch-gui 原生自适应
           app.style.position = '';
           app.style.left = '';
           app.style.top = '';
@@ -134,13 +148,13 @@
           app.style.transform = '';
           return;
         }
+        // 桌面但窗口偏小：等比缩放保证完整可见并居中
         app.style.position = 'absolute';
         app.style.width = DESIGN_W + 'px';
         app.style.height = DESIGN_H + 'px';
         app.style.transform = 'scale(' + scale + ')';
-        // 缩放后居中，剩下留白居中比贴左边好看
-        app.style.left = Math.max(0, Math.round((window.innerWidth - DESIGN_W * scale) / 2)) + 'px';
-        app.style.top = Math.max(0, Math.round((window.innerHeight - DESIGN_H * scale) / 2)) + 'px';
+        app.style.left = Math.max(0, Math.round((vw - DESIGN_W * scale) / 2)) + 'px';
+        app.style.top = Math.max(0, Math.round((vh - DESIGN_H * scale) / 2)) + 'px';
       }
 
       window.addEventListener('resize', function () {
