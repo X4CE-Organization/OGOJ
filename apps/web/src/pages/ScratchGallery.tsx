@@ -132,18 +132,21 @@ export default function ScratchGallery() {
   return (
     <div className="space-y-4">
       <Section
-        title="Scratch 作品中心 · 用积木做作品，发布后所有人都能玩"
+        title="Scratch 作品中心"
         action={
-          status.canCreate ? (
-            <Link to="/scratch/new" className="btn-primary text-xs">
-              <Plus className="h-4 w-4" />
-              开始创作
-            </Link>
-          ) : null
+          // 入口一直显示：没登录时点进去会引导登录（手机上也看得到）
+          <Link
+            to={status.canCreate ? '/scratch/new' : '/login?redirect=%2Fscratch%2Fnew'}
+            className="btn-primary text-xs"
+          >
+            <Plus className="h-4 w-4" />
+            开始创作
+          </Link>
         }
       >
         <p className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
           用自托管的 Scratch 编辑器做作品，发布后所有人都能试玩。
+          {status.canCreate ? '' : ' 未登录时可以浏览作品，创作需要先登录。'}
         </p>
       </Section>
 

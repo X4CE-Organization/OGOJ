@@ -35,8 +35,11 @@
        * 菜单栏的悬停/展开态：scratch-gui 叠的是 15% 黑，压在蓝底上看着发暗。
        * 换成提亮，符合 Scratch 经典观感。
        */
-      [class*='menu-bar_menu-bar-item'][class*='menu-bar_hoverable']:hover,
-      [class*='menu-bar_menu-bar-item'][class*='menu-bar_active'] {
+      /* 顶栏上每一个可交互元素（含左上角 logo 方块）悬停/展开都提亮，不再压黑 */
+      [class*='menu-bar_menu-bar'] [class*='menu-bar_hoverable']:hover,
+      [class*='menu-bar_menu-bar'] [class*='menu-bar_active'],
+      [class*='menu-bar_hoverable']:hover,
+      [class*='menu-bar_active'] {
         background-color: rgba(255, 255, 255, 0.18) !important;
       }
       #boot {
