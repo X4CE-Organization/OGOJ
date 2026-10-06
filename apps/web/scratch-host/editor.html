@@ -24,7 +24,8 @@
         position: relative;
         width: 100vw;
         height: 100vh;
-        overflow: hidden;
+        /* 小屏不缩放时要能滑动查看整个编辑器 */
+        overflow: auto;
       }
       #app {
         width: 100%;
@@ -121,7 +122,9 @@
       function fitToContainer() {
         var app = document.getElementById('app');
         if (!app) return;
-        var scale = Math.min(1, window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H);
+        // 触屏/窄屏不缩放：缩到能看全就没法操作了，改成给足尺寸让用户自己滑
+        var isSmallScreen = window.innerWidth < 900 || window.matchMedia('(pointer: coarse)').matches;
+        var scale = isSmallScreen ? 1 : Math.min(1, window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H);
         if (scale >= 1) {
           app.style.position = '';
           app.style.left = '';
@@ -252,7 +255,9 @@
             // 否则新建时是一个连角色都没有的空项目，运动类积木自然用不了
             projectId: playerOnly ? undefined : '0',
             canEditTitle: !playerOnly,
-            canSave: !playerOnly,
+            // scratch-gui 自带的保存会去调 scratch.mit.edu 的接口，必然失败并弹
+            // 「无法创建作品」，这里关掉，保存统一走本站自己的按钮
+            canSave: false,
             canLoad: !playerOnly,
             canCreateNew: !playerOnly,
             canShare: false,
