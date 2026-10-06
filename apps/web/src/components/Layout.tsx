@@ -127,13 +127,14 @@ function Header() {
           ))}
         </nav>
 
+        {/* 宽度统一由 form 决定（xl 窄、2xl 宽），输入框只负责填满，不再自己写死宽度 */}
         <form onSubmit={submitSearch} className="relative ml-auto hidden w-40 shrink-0 xl:block 2xl:w-56">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="搜索题目 / 用户 / 讨论"
-            className="input !w-full sm:!w-56 !pl-8"
+            className="input !w-full !pl-8"
           />
         </form>
 
