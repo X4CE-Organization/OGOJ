@@ -95,8 +95,8 @@ export default function Tickets() {
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
         {[
-          { value: 'unfinished', label: '未完成' },
           { value: 'all', label: '全部' },
+          { value: 'unfinished', label: '未完成' },
           { value: 'resolved', label: '已解决' },
           { value: 'closed', label: '已关闭' },
         ].map((item) => (
