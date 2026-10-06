@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/fetch-scratch.mjs && tsc -p tsconfig.json --noEmit && vite build",
+    "build": "node scripts/fetch-scratch.mjs && tsc -p tsconfig.json --noEmit && vite build && node scripts/precompress.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "fetch:scratch": "node scripts/fetch-scratch.mjs"
+    "fetch:scratch": "node scripts/fetch-scratch.mjs",
+    "precompress": "node scripts/precompress.mjs"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.2",

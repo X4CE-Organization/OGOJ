@@ -273,7 +273,14 @@
             // 「无法创建作品」，这里关掉，保存统一走本站自己的按钮
             canSave: false,
             canLoad: !playerOnly,
-            canCreateNew: !playerOnly,
+            /*
+             * canCreateNew 必须关掉：编辑器打开时是「有项目但没 id」的状态，
+             * scratch-gui 检测到 canCreateNew 就会自动调 createNewProjectToStorage()
+             * 把项目 POST 到 scratch.mit.edu。请求必然失败，失败前 editor 一直卡在
+             * 蓝色的加载页（Loader 的满屏背景），失败后才弹出「无法创建作品」。
+             * 新建作品走本站「作品中心 → 创作」，不需要编辑器自己联网建项目。
+             */
+            canCreateNew: false,
             canShare: false,
             enableCommunity: false,
             showComingSoon: false,

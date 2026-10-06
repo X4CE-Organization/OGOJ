@@ -199,15 +199,23 @@ export async function buildApp(): Promise<FastifyInstance> {
       // The plugin's own `Cache-Control: public, max-age=0` would override the
       // header rules below, so switch it off and set them ourselves.
       cacheControl: false,
+      // 构建期（apps/web/scripts/precompress.mjs）已经生成了 .br / .gz，
+      // 这里直接发预压缩文件：否则每次请求都要现场 brotli 压 18MB 的
+      // scratch-gui.js，2 核机器上 CPU 会被吃满。
+      preCompressed: true,
       setHeaders: (reply, filePath) => {
+        // 命中预压缩文件时 filePath 是 *.br / *.gz，先剥掉后缀再判断类型
+        const logical = filePath.replace(/\.(br|gz)$/, '');
         // Hashed assets never change, but the SPA shell must always be
         // revalidated: otherwise a redeploy (which deletes the old hashed
         // bundles) leaves cached HTML pointing at files that no longer exist.
-        if (/[.-][A-Za-z0-9_-]{8,}\.(js|css)$/.test(filePath) || /\.(woff2?|ttf|png|jpg|svg)$/.test(filePath)) {
+        if (/[.-][A-Za-z0-9_-]{8,}\.(js|css)$/.test(logical) || /\.(woff2?|ttf|png|jpg|svg)$/.test(logical)) {
           reply.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else {
           reply.setHeader('Cache-Control', 'no-cache, must-revalidate');
         }
+        // 同一份资源会按 Accept-Encoding 返回不同字节，缓存要按这个维度分开
+        reply.setHeader('Vary', 'Origin, Accept-Encoding');
       },
     });
   }

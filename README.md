@@ -599,6 +599,20 @@ OGOJ/
 npm run fetch:scratch -w @ogoj/web   # 本地开发先跑一次，之后 npm run build 会自动跑
 ```
 
+### 静态资源是预压缩的
+
+编辑器主包约 18MB（`scratch-gui.js`），构建时会由
+`apps/web/scripts/precompress.mjs` 预生成 `.br` / `.gz` 兄弟文件，
+服务端用 `@fastify/static` 的 `preCompressed` 直接发这些文件：
+
+- 不再对 18MB 的文件做「每次请求现场 brotli」，2 核机器上省下大量 CPU；
+- 传输体积从现场压缩的约 4.7MB 降到约 3.9MB；
+- 想跳过（比如本地嫌构建慢）：`OGOJ_SKIP_PRECOMPRESS=1 npm run build -w @ogoj/web`，
+  质量可用 `OGOJ_BROTLI_QUALITY` / `OGOJ_BROTLI_QUALITY_BIG` 调整。
+
+编辑器发请求给 `scratch.mit.edu` 的能力在宿主页里是关掉的（`canSave` /
+`canCreateNew` 均为 `false`），保存统一走本站 `/api/scratch/projects`。
+
 编辑器跑在 iframe 里，和主站前端隔离（scratch-gui 只兼容 React 16，主站是 React 18），
 两边通过 `postMessage` 交换数据。宿主页在 `apps/web/scratch-host/editor.html`，
 修改后重新构建即可生效。
