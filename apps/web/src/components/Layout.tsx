@@ -41,7 +41,7 @@ const NAV_ITEMS = [
   { to: '/moments', label: '动态', icon: Radio },
   { to: '/discussions', label: '讨论', icon: Users },
   { to: '/articles', label: '文章广场', icon: BookOpen },
-  { to: '/scratch', label: 'Scratch 作品', icon: Blocks },
+  { to: '/scratch', label: 'Scratch', icon: Blocks },
   { to: '/rank', label: '排行榜', icon: Trophy },
   { to: '/achievements', label: '成就', icon: Award },
   { to: '/shop', label: '商店', icon: ShoppingBag },
@@ -101,13 +101,13 @@ function Header() {
         <Link
           to="/"
           title={`${siteName} 首页`}
-          className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-primary"
+          className="flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-primary"
         >
           {logo ? <img src={logo} alt={siteName} className="h-7" /> : null}
           <span>{siteName}</span>
         </Link>
 
-        <nav className="hidden flex-1 items-center gap-0.5 lg:flex">
+        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -115,7 +115,7 @@ function Header() {
               end={item.to === '/'}
               className={({ isActive }) =>
                 classNames(
-                  'rounded-lg px-2.5 py-1.5 text-sm transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm transition-colors',
                   isActive
                     ? 'bg-primary/10 font-medium text-primary'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
@@ -127,7 +127,7 @@ function Header() {
           ))}
         </nav>
 
-        <form onSubmit={submitSearch} className="relative ml-auto hidden md:block">
+        <form onSubmit={submitSearch} className="relative ml-auto hidden w-40 shrink-0 md:block xl:w-56">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
             value={keyword}

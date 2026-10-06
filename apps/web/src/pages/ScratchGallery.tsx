@@ -123,7 +123,7 @@ export default function ScratchGallery() {
   if (!status.enabled) {
     return (
       <EmptyState
-        title="Scratch 作品功能已关闭"
+        title="Scratch 功能已关闭"
         description="管理员暂时关闭了这个功能，稍后再来看看吧。"
       />
     );
@@ -132,7 +132,7 @@ export default function ScratchGallery() {
   return (
     <div className="space-y-4">
       <Section
-        title="Scratch 作品中心"
+        title="作品中心"
         action={
           // 入口一直显示：没登录时点进去会引导登录（手机上也看得到）
           <Link

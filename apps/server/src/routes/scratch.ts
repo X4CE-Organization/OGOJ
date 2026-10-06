@@ -1,5 +1,5 @@
 /**
- * Scratch 作品中心。
+ * Scratch：作品中心与编辑器对接。
  *
  * 编辑器本身是自托管的 MIT Scratch（scratch-gui）静态站点，放在 /scratch/ 下，
  * 通过 postMessage 和宿主页面通信：宿主负责把 .sb3 传到后端保存、把作品读回编辑器。
@@ -107,7 +107,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 作品中心列表 */
   app.get('/api/scratch/projects', async (request) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const viewer = request.user;
     if (!bool('scratch_allow_guest_view', true) && !viewer) throw forbidden('请先登录');
     const query = request.query as any;
@@ -158,7 +158,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 我的作品（含草稿、审核中） */
   app.get('/api/scratch/mine', async (request) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const user = await requireUser(request);
     const rows = await all<any>(
       `SELECT p.*, u.username, u.display_name, u.avatar
@@ -171,7 +171,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 作品详情 */
   app.get('/api/scratch/projects/:id', async (request) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const viewer = request.user;
     const { id } = request.params as { id: string };
     const row = await get<any>(
@@ -196,7 +196,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 编辑器加载作品用：返回原始 .sb3 */
   app.get('/api/scratch/projects/:id/file', async (request, reply) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const { id } = request.params as { id: string };
     const row = await get<any>(`SELECT * FROM scratch_projects WHERE id = ?`, [Number(id)]);
     if (!canView(row, request.user)) throw notFound('作品不存在');
@@ -223,7 +223,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 保存作品（新建或覆盖）。body: { id?, title, instructions, notes, file(base64), thumbnail(base64 png) } */
   app.post('/api/scratch/projects', async (request, reply) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     if (!bool('scratch_allow_create', true)) throw forbidden('管理员已关闭作品创作');
     const user = await requireUser(request);
     const body = (request.body ?? {}) as any;
@@ -287,7 +287,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
 
   /** 提交发布 / 撤回成草稿 */
   app.post('/api/scratch/projects/:id/publish', async (request) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
     const row = await get<any>(`SELECT * FROM scratch_projects WHERE id = ?`, [Number(id)]);
@@ -328,7 +328,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.post('/api/scratch/projects/:id/like', async (request) => {
-    if (!featureOn()) throw notFound('Scratch 作品功能已关闭');
+    if (!featureOn()) throw notFound('Scratch 功能已关闭');
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
     const row = await get<any>(`SELECT * FROM scratch_projects WHERE id = ?`, [Number(id)]);
@@ -341,7 +341,7 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
     }
     await run(`INSERT INTO scratch_likes (project_id, user_id) VALUES (?, ?)`, [row.id, user.id]);
     await run(`UPDATE scratch_projects SET like_count = like_count + 1 WHERE id = ?`, [row.id]);
-    if (row.user_id !== user.id) await sendMessage({ to: row.user_id, title: '有人赞了你的 Scratch 作品', content: row.title });
+    if (row.user_id !== user.id) await sendMessage({ to: row.user_id, title: '有人赞了你的 Scratch 项目', content: row.title });
     return { liked: true, likeCount: row.like_count + 1 };
   });
 

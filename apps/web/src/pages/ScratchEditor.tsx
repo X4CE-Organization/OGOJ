@@ -153,7 +153,7 @@ export default function ScratchEditor() {
   if (!status.enabled) {
     return (
       <div className="card p-8 text-center text-sm text-slate-500">
-        管理员已关闭 Scratch 作品功能。
+        管理员已关闭 Scratch 功能。
         <div className="mt-3">
           <Link to="/scratch" className="btn-ghost text-xs">
             返回作品中心

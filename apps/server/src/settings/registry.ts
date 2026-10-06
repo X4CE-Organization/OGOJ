@@ -152,7 +152,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     key: 'scratch',
-    name: 'Scratch 作品',
+    name: 'Scratch',
     description: '自托管的 Scratch 编辑器与作品中心：开关、审核、容量限制',
     icon: 'sparkles',
   },
@@ -182,7 +182,7 @@ export const SETTINGS: SettingField[] = [
   // ------------------------------------------------------------- scratch
   {
     key: 'scratch_enabled',
-    label: '启用 Scratch 作品',
+    label: '启用 Scratch',
     type: 'boolean',
     default: true,
     group: 'scratch',

@@ -88,7 +88,7 @@ export default function AdminScratch() {
         title={
           <span className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
-            Scratch 作品管理
+            Scratch 管理
           </span>
         }
         action={
