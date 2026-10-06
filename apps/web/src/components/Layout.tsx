@@ -97,7 +97,7 @@ function Header() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 xl:gap-3">
         <Link
           to="/"
           title={`${siteName} 首页`}
@@ -115,7 +115,7 @@ function Header() {
               end={item.to === '/'}
               className={({ isActive }) =>
                 classNames(
-                  'shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-sm transition-colors 2xl:px-2',
                   isActive
                     ? 'bg-primary/10 font-medium text-primary'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white',
@@ -127,7 +127,7 @@ function Header() {
           ))}
         </nav>
 
-        <form onSubmit={submitSearch} className="relative ml-auto hidden w-40 shrink-0 md:block xl:w-56">
+        <form onSubmit={submitSearch} className="relative ml-auto hidden w-40 shrink-0 xl:block 2xl:w-56">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
             value={keyword}
@@ -143,7 +143,7 @@ function Header() {
               type="button"
               aria-label={dark ? '切换到浅色模式' : '切换到深色模式'}
               onClick={toggle}
-              className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+              className="hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 sm:block xl:p-2 dark:hover:bg-slate-800"
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
@@ -157,7 +157,7 @@ function Header() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub 仓库"
-              className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+              className="hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 xl:block xl:p-2 dark:hover:bg-slate-800"
             >
               <Github className="h-4 w-4" />
             </a>
@@ -171,7 +171,7 @@ function Header() {
                 <Link
                   to="/tickets"
                   aria-label="工单"
-                  className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+                  className="relative hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 sm:block xl:p-2 dark:hover:bg-slate-800"
                 >
                   <LifeBuoy className="h-4 w-4" />
                   {ticketUnread > 0 && (
@@ -186,7 +186,7 @@ function Header() {
               <Link
                 to="/messages"
                 aria-label="站内信"
-                className="relative hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 sm:block dark:hover:bg-slate-800"
+                className="relative hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 sm:block xl:p-2 dark:hover:bg-slate-800"
               >
                 <Mail className="h-4 w-4" />
                 {unread > 0 && (
@@ -203,7 +203,7 @@ function Header() {
                 className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <Avatar user={user} size={28} />
-                <span className="hidden max-w-[8rem] truncate text-sm sm:block">
+                <span className="hidden max-w-[6rem] truncate text-sm sm:block 2xl:max-w-[8rem]">
                   {user.display_name || user.username}
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
