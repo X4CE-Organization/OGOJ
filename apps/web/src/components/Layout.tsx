@@ -56,6 +56,12 @@ function Header() {
   const [navOpen, setNavOpen] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [avatarOpen, setAvatarOpen] = useState(false);
+  /**
+   * 搜索框宽度随屏幕变（xl 160px / 2xl 224px），提示语也跟着换：
+   * 14px 字号下中文每字 14px，「搜索题目 / 用户 / 讨论」要 136px，
+   * 塞进 160px 的框里（可用 114px）会被截断，所以窄屏用短的。
+   */
+  const [searchHint, setSearchHint] = useState('搜索题目 / 用户');
 
   /** 后台关掉动态功能 / 动态入口时，导航里也要跟着消失 */
   const navItems = NAV_ITEMS.filter((item) => {
@@ -78,6 +84,13 @@ function Header() {
     setMenuOpen(false);
     setNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const update = () => setSearchHint(window.innerWidth >= 1536 ? '搜索题目 / 用户 / 讨论' : '搜索题目 / 用户');
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -133,7 +146,7 @@ function Header() {
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="搜索题目 / 用户 / 讨论"
+            placeholder={searchHint}
             className="input !w-full !pl-8"
           />
         </form>
