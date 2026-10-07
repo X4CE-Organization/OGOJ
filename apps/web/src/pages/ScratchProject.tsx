@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Blocks, Eye, Heart, Loader2, Pencil, Play } from 'lucide-react';
+import { ArrowLeft, Blocks, Download, Eye, Heart, Loader2, Pencil, Play } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames } from '../lib/format';
@@ -55,6 +55,9 @@ export default function ScratchProject() {
   if (!data) return null;
 
   const canPlay = data.state === 'published' || data.isMine;
+  /** 下载文件名用作品标题，去掉文件系统不接受的字符 */
+  const downloadName = `${String(data.title ?? 'scratch-project').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'scratch-project'}.sb3`;
+  const downloadUrl = `/api/scratch/projects/${data.id}/file?download=1`;
 
   return (
     // 和创作页一样占满剩余视口：试玩框铺满它所在的这一块，而不是固定高度的窄条
@@ -76,6 +79,10 @@ export default function ScratchProject() {
           </span>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+          <a className="btn-ghost text-xs" href={downloadUrl} download={downloadName} title="下载作品文件（.sb3）">
+            <Download className="h-4 w-4" />
+            下载作品文件（.sb3）
+          </a>
           <button className={classNames('btn-ghost text-xs', data.liked && 'text-rose-600')} onClick={like}>
             <Heart className={classNames('h-4 w-4', data.liked && 'fill-current')} />
             {data.likeCount}
@@ -108,6 +115,12 @@ export default function ScratchProject() {
                     <Play className="h-4 w-4" />
                     开始试玩
                   </button>
+                </div>
+                <div>
+                  <a className="btn-ghost text-xs" href={downloadUrl} download={downloadName}>
+                    <Download className="h-4 w-4" />
+                    下载作品文件（.sb3）
+                  </a>
                 </div>
                 {!canPlay ? <p className="text-xs text-slate-500">作品还未公开，暂时不能试玩</p> : null}
               </div>

@@ -204,6 +204,20 @@ export async function registerScratchRoutes(app: FastifyInstance): Promise<void>
     if (!row.file_path || !fs.existsSync(file)) throw notFound('作品文件丢失');
     reply.header('Content-Type', 'application/octet-stream');
     reply.header('Cache-Control', 'no-store');
+    // ?download=1：当成附件下载，文件名用作品标题（去掉文件系统不接受的字符）
+    const query = (request.query ?? {}) as Record<string, string | undefined>;
+    if (query.download) {
+      const safe =
+        String(row.title ?? '')
+          .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
+          .replace(/^\.+/, '')
+          .trim()
+          .slice(0, 80) || 'scratch-project';
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${safe.replace(/[^\x20-\x7e]/g, '_')}.sb3"; filename*=UTF-8''${encodeURIComponent(safe)}.sb3`,
+      );
+    }
     return reply.send(fs.createReadStream(file));
   });
 
