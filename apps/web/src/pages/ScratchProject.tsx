@@ -116,12 +116,6 @@ export default function ScratchProject() {
                     开始试玩
                   </button>
                 </div>
-                <div>
-                  <a className="btn-ghost text-xs" href={downloadUrl} download={downloadName}>
-                    <Download className="h-4 w-4" />
-                    下载作品文件（.sb3）
-                  </a>
-                </div>
                 {!canPlay ? <p className="text-xs text-slate-500">作品还未公开，暂时不能试玩</p> : null}
               </div>
             </div>
