@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ListChecks,
   MessageSquare,
+  Newspaper,
   Radio,
   Receipt,
   Settings2,
@@ -42,6 +43,7 @@ const SECTIONS: { title: string; items: { to: string; label: string; icon: any; 
   {
     title: '内容',
     items: [
+      { to: '/admin/content', label: '内容管理', icon: Newspaper },
       { to: '/admin/problems', label: '题目管理', icon: BookOpen },
       { to: '/admin/contests', label: '比赛管理', icon: Trophy },
       { to: '/admin/solutions', label: '题解审核', icon: ListChecks },
