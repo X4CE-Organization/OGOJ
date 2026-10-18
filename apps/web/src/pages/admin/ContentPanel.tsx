@@ -67,6 +67,11 @@ function preview(value: unknown, length = 80): string {
   return text.length > length ? `${text.slice(0, length)}…` : text;
 }
 
+/** 表单字段名是 camelCase（isPublic），数据库行是 snake_case（is_public） */
+function rowKey(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
 export default function AdminContent() {
   const toast = useToast();
   const [tab, setTab] = useState<TabKey>('articles');
@@ -131,7 +136,8 @@ export default function AdminContent() {
     const fields = EDIT_FIELDS[tab];
     const draft: Record<string, any> = {};
     for (const field of fields) {
-      draft[field.key] = field.type === 'bool' ? Boolean(row[field.key]) : String(row[field.key] ?? '');
+      const value = row[rowKey(field.key)];
+      draft[field.key] = field.type === 'bool' ? Boolean(value) : String(value ?? '');
     }
     setEditing(row);
     setForm(draft);
@@ -261,7 +267,7 @@ export default function AdminContent() {
           <EmptyState title={deleted ? '没有已删除的内容' : '没有内容'} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="table min-w-[720px]">
+            <table className="table-base min-w-[720px]">
               <thead>
                 <tr>
                   {tab === 'articles' ? <><th>文章</th><th>作者</th><th>分类</th><th>状态</th><th>时间</th></> : null}
