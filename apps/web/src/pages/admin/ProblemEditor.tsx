@@ -23,6 +23,9 @@ interface Subtask {
   deps?: number[];
 }
 
+const AI_TEST_BATCH_SIZE = 5;
+const AI_TEST_CONCURRENCY = 2;
+
 export default function ProblemEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -63,6 +66,12 @@ export default function ProblemEditor() {
   const [aiCount, setAiCount] = useState(5);
   const [aiCountOpen, setAiCountOpen] = useState(false);
   const [aiTests, setAiTests] = useState<{ input: string; output: string }[] | null>(null);
+  const [aiProgress, setAiProgress] = useState<{
+    completedBatches: number;
+    totalBatches: number;
+    generated: number;
+    total: number;
+  } | null>(null);
 
   const loadTestcases = useCallback(async (problemId: string | number) => {
     try {
@@ -216,16 +225,65 @@ export default function ProblemEditor() {
   const generateTests = async () => {
     if (!id) return;
     setAiBusy('tests');
+    const batches = Array.from(
+      { length: Math.ceil(aiCount / AI_TEST_BATCH_SIZE) },
+      (_, index) => ({
+        index,
+        count: Math.min(AI_TEST_BATCH_SIZE, aiCount - index * AI_TEST_BATCH_SIZE),
+      }),
+    );
+    const results: { input: string; output: string }[][] = Array.from(
+      { length: batches.length },
+      () => [],
+    );
+    const errors: Error[] = [];
+    let cursor = 0;
+    setAiProgress({
+      completedBatches: 0,
+      totalBatches: batches.length,
+      generated: 0,
+      total: aiCount,
+    });
     try {
-      const result = await api.post<{ tests: { input: string; output: string }[] }>('/api/admin/ai/tests', {
-        problemId: Number(id),
-        count: aiCount,
-      });
-      setAiTests(result.tests);
+      const worker = async () => {
+        while (cursor < batches.length) {
+          const batch = batches[cursor];
+          cursor += 1;
+          try {
+            const result = await api.post<{ tests: { input: string; output: string }[] }>(
+              '/api/admin/ai/tests',
+              { problemId: Number(id), count: batch.count },
+            );
+            results[batch.index] = result.tests;
+            setAiProgress((previous) =>
+              previous
+                ? {
+                    ...previous,
+                    completedBatches: previous.completedBatches + 1,
+                    generated: previous.generated + result.tests.length,
+                  }
+                : previous,
+            );
+          } catch (error) {
+            errors.push(error instanceof Error ? error : new Error(String(error)));
+            setAiProgress((previous) =>
+              previous ? { ...previous, completedBatches: previous.completedBatches + 1 } : previous,
+            );
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(AI_TEST_CONCURRENCY, batches.length) }, () => worker()),
+      );
+      const tests = results.flat().slice(0, aiCount);
+      if (!tests.length) throw errors[0] ?? new Error('AI 生成失败');
+      if (errors.length) toast.error(`${errors.length} 个批次生成失败，已保留成功结果`);
+      setAiTests(tests);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'AI 生成失败');
     } finally {
       setAiBusy(null);
+      setAiProgress(null);
     }
   };
 
@@ -277,7 +335,12 @@ export default function ProblemEditor() {
                 onClick={() => setAiCountOpen(true)}
                 title="调用 DeepSeek 生成测试数据"
               >
-                <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'tests' ? '生成中…' : 'AI 生成测试数据'}
+                <Sparkles className="h-3.5 w-3.5" />{' '}
+                {aiBusy === 'tests'
+                  ? aiProgress
+                    ? `生成中 ${aiProgress.completedBatches}/${aiProgress.totalBatches} 批`
+                    : '生成中…'
+                  : 'AI 生成测试数据'}
               </button>
               <a href={`/api/problems/${id}/testdata.zip`} className="btn-ghost !py-1.5 text-xs">
                 下载数据

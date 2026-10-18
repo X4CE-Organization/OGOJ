@@ -13,6 +13,13 @@ import BackButton from '../components/BackButton';
 import StickerPicker from '../components/StickerPicker';
 import { insertAtCursor } from '../lib/insert';
 
+/** 流式生成过程中可能先收到 Markdown 围栏，实时去掉后再填入代码编辑器 */
+function stripAiCodeFence(value: string): string {
+  return value
+    .replace(/^\s*```(?:cpp|c\+\+|cxx|c)?[^\n]*\n?/i, '')
+    .replace(/\r?\n?```\s*$/i, '');
+}
+
 function SampleBlock({ index, sample }: { index: number; sample: { input: string; output: string; explanation?: string } }) {
   const [copied, setCopied] = useState<'in' | 'out' | null>(null);
   const copy = async (text: string, kind: 'in' | 'out') => {
@@ -233,13 +240,35 @@ export default function ProblemDetail() {
   const aiGenerateCode = async () => {
     if (!data?.problem?.id) return;
     setAiCodeBusy(true);
+    let generated = '';
+    let paintTimer: ReturnType<typeof setTimeout> | undefined;
+    let completed = false;
+    const paint = () => {
+      paintTimer = undefined;
+      setCode(stripAiCodeFence(generated));
+    };
     try {
-      const result = await api.post<{ code: string }>('/api/admin/ai/code', { problemId: data.problem.id });
-      setCode(result.code);
-      baseline.current = result.code;
+      await api.stream('/api/admin/ai/code/stream', { problemId: data.problem.id }, (event, payload) => {
+        if (event === 'delta') {
+          generated += String(payload?.content ?? '');
+          if (paintTimer === undefined) paintTimer = setTimeout(paint, 40);
+        } else if (event === 'done') {
+          completed = true;
+        } else if (event === 'error') {
+          throw new Error(payload?.message || 'AI 流式生成失败');
+        }
+      });
+      if (!completed) throw new Error('AI 代码流意外中断，请重试');
+      if (paintTimer !== undefined) clearTimeout(paintTimer);
+      const finalCode = stripAiCodeFence(generated).trim();
+      if (!finalCode) throw new Error('AI 没有返回可用代码');
+      setCode(finalCode);
+      baseline.current = finalCode;
       edited.current = false;
       toast.success('AI 代码已填入编辑器');
     } catch (err) {
+      if (paintTimer !== undefined) clearTimeout(paintTimer);
+      setCode(stripAiCodeFence(generated));
       toast.error(err instanceof Error ? err.message : 'AI 生成失败');
     } finally {
       setAiCodeBusy(false);
@@ -674,6 +703,7 @@ export default function ProblemDetail() {
                 value={code}
                 onChange={setCode}
                 language={languages.find((item) => item.id === language)?.editor ?? 'cpp'}
+                readOnly={aiCodeBusy}
                 height="300px"
               />
               {/* -------------------------------------------- 自测：左输入 右输出 */}

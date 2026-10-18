@@ -16,10 +16,18 @@ import { str } from '../settings/index.js';
 const DEFAULT_BASE = 'https://api.deepseek.com';
 const MAX_STATEMENT = 12000;
 const MAX_TEST_BYTES = 200_000;
+const CODE_MAX_TOKENS = 8192;
+const TEST_MAX_TOKENS = 8192;
+const TEST_BATCH_SIZE = 5;
+const AI_TIMEOUT_MS = 180_000;
 
 type ChatMessage = { role: 'system' | 'user'; content: string };
 
-async function callDeepSeek(messages: ChatMessage[], maxTokens: number): Promise<string> {
+async function requestDeepSeek(
+  messages: ChatMessage[],
+  maxTokens: number,
+  stream: boolean,
+): Promise<Response> {
   const key = str('deepseek_api_key', '').trim();
   if (!key) throw badRequest('还没有配置 DeepSeek API Key，请先到 系统设置 → AI 助手 填写并保存');
   const base = (str('deepseek_base_url', DEFAULT_BASE) || DEFAULT_BASE).replace(/\/+$/, '');
@@ -29,8 +37,8 @@ async function callDeepSeek(messages: ChatMessage[], maxTokens: number): Promise
     res = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens }),
-      signal: AbortSignal.timeout(180_000),
+      body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: maxTokens, stream }),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
     });
   } catch (error) {
     throw badRequest(`连接 DeepSeek 失败：${error instanceof Error ? error.message : String(error)}`);
@@ -39,10 +47,65 @@ async function callDeepSeek(messages: ChatMessage[], maxTokens: number): Promise
     const text = await res.text().catch(() => '');
     throw badRequest(`DeepSeek 返回 ${res.status}：${text.slice(0, 300) || res.statusText}`);
   }
+  return res;
+}
+
+async function callDeepSeek(messages: ChatMessage[], maxTokens: number): Promise<string> {
+  const res = await requestDeepSeek(messages, maxTokens, false);
   const data = (await res.json().catch(() => null)) as any;
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw badRequest('DeepSeek 没有返回内容');
   return String(content);
+}
+
+/** 读取 DeepSeek 的 OpenAI 兼容 SSE，实时转发正文增量 */
+async function consumeDeepSeekStream(
+  res: Response,
+  onDelta: (content: string) => void,
+): Promise<void> {
+  const reader = res.body?.getReader();
+  if (!reader) throw badRequest('DeepSeek 没有返回可读取的数据流');
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const consumeLine = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return false;
+    const data = trimmed.slice(5).trim();
+    if (!data || data === '[DONE]') return data === '[DONE]';
+    let parsed: any;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return false;
+    }
+    const content = parsed?.choices?.[0]?.delta?.content;
+    if (typeof content === 'string' && content) onDelta(content);
+    return false;
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf('\n');
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, '');
+        buffer = buffer.slice(newline + 1);
+        if (consumeLine(line)) return;
+        newline = buffer.indexOf('\n');
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) consumeLine(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function writeSse(raw: NodeJS.WritableStream, event: string, data: unknown): void {
+  raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
 /** 从回复里取出 ```cpp 代码块，没有代码块就当作纯代码 */
@@ -113,22 +176,71 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
           role: 'system',
           content:
             '你是信息学竞赛教练。只输出一份完整、可编译的 C++17 标准程序：从标准输入读取数据，向标准输出写答案。'
-            + '不要输出解释、测试用例或多余文字，用 ```cpp 代码块包住代码。',
+            + '不要输出解释、测试用例、Markdown 代码块标记或任何多余文字，直接从第一行代码开始。',
         },
         { role: 'user', content: `题目：${problem.title}\n\n${statementOf(problem)}\n\n请给出正确解法。` },
       ],
-      4096,
+      CODE_MAX_TOKENS,
     );
     const code = extractCode(reply);
     await audit(request, 'admin.ai_code', { targetType: 'problem', targetId: id, detail: { model: str('deepseek_model', 'deepseek-flash') } });
     return { code, model: str('deepseek_model', 'deepseek-flash') || 'deepseek-flash' };
   });
 
+  app.post('/api/admin/ai/code/stream', async (request, reply) => {
+    await requireAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const id = parseId(body.problemId);
+    const problem = await loadProblem(id);
+    const model = str('deepseek_model', 'deepseek-flash') || 'deepseek-flash';
+    const upstream = await requestDeepSeek(
+      [
+        {
+          role: 'system',
+          content:
+            '你是信息学竞赛教练。只输出一份完整、可编译的 C++17 标准程序：从标准输入读取数据，向标准输出写答案。'
+            + '不要输出解释、测试用例、Markdown 代码块标记或任何多余文字，直接从第一行代码开始。',
+        },
+        { role: 'user', content: `题目：${problem.title}\n\n${statementOf(problem)}\n\n请给出正确解法。` },
+      ],
+      CODE_MAX_TOKENS,
+      true,
+    );
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    writeSse(reply.raw, 'meta', { model });
+
+    try {
+      await consumeDeepSeekStream(upstream, (content) => {
+        if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+          writeSse(reply.raw, 'delta', { content });
+        }
+      });
+      await audit(request, 'admin.ai_code', { targetType: 'problem', targetId: id, detail: { model, stream: true } });
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) writeSse(reply.raw, 'done', { model });
+    } catch (error) {
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+        writeSse(reply.raw, 'error', {
+          message: error instanceof Error ? error.message : 'AI 流式生成失败',
+        });
+      }
+    } finally {
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
+    }
+    return reply;
+  });
+
   app.post('/api/admin/ai/tests', async (request) => {
     await requireAdmin(request);
     const body = (request.body ?? {}) as any;
     const id = parseId(body.problemId);
-    const count = Math.min(20, Math.max(1, Number(body.count) || 5));
+    const count = Math.min(TEST_BATCH_SIZE, Math.max(1, Number(body.count) || TEST_BATCH_SIZE));
     const problem = await loadProblem(id);
     const reply = await callDeepSeek(
       [
@@ -144,10 +256,14 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
           content: `题目：${problem.title}\n\n${statementOf(problem)}\n\n请生成 ${count} 组测试数据，包含样例、边界情况和随机数据。`,
         },
       ],
-      8192,
+      TEST_MAX_TOKENS,
     );
     const tests = parseTests(reply);
-    await audit(request, 'admin.ai_tests', { targetType: 'problem', targetId: id, detail: { count: tests.length } });
-    return { tests };
+    await audit(request, 'admin.ai_tests', {
+      targetType: 'problem',
+      targetId: id,
+      detail: { count: tests.length, batchSize: TEST_BATCH_SIZE },
+    });
+    return { tests, batchSize: TEST_BATCH_SIZE };
   });
 }

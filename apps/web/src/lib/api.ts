@@ -23,6 +23,26 @@ export function setToken(token: string | null): void {
   }
 }
 
+type StreamEventHandler = (event: string, data: any) => void;
+
+function dispatchSseBlock(block: string, onEvent: StreamEventHandler): void {
+  let event = 'message';
+  const dataLines: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+  }
+  if (!dataLines.length) return;
+  const raw = dataLines.join('\n');
+  let data: any = raw;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* 保留纯文本事件 */
+  }
+  onEvent(event, data);
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const headers = new Headers();
   const token = getToken();
@@ -63,6 +83,60 @@ export const api = {
   post: <T>(url: string, body?: unknown) => request<T>('POST', url, body),
   put: <T>(url: string, body?: unknown) => request<T>('PUT', url, body),
   del: <T>(url: string, body?: unknown) => request<T>('DELETE', url, body),
+  /** 读取服务端 SSE 流，用于 AI 代码等需要实时展示进度的接口 */
+  stream: async (url: string, body: unknown, onEvent: StreamEventHandler): Promise<void> => {
+    const headers = new Headers({ Accept: 'text/event-stream' });
+    const token = getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (body !== undefined) headers.set('Content-Type', 'application/json');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        /* 非 JSON 响应 */
+      }
+      const error = new Error(
+        data?.message || data?.error || text || `请求失败（${response.status}）`,
+      ) as ApiError;
+      error.status = response.status;
+      error.code = data?.error;
+      error.detail = data?.detail;
+      throw error;
+    }
+    if (!response.body) throw new Error('服务器没有返回可读取的数据流');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.search(/\r?\n\r?\n/);
+        while (boundary >= 0) {
+          const match = buffer.match(/\r?\n\r?\n/);
+          if (!match || match.index === undefined) break;
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + match[0].length);
+          if (block.trim()) dispatchSseBlock(block, onEvent);
+          boundary = buffer.search(/\r?\n\r?\n/);
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) dispatchSseBlock(buffer, onEvent);
+    } finally {
+      reader.releaseLock();
+    }
+  },
   upload: <T>(url: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
