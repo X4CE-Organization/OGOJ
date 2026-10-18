@@ -116,11 +116,12 @@ body {
 }
 
 .markdown pre {
-  @apply my-4 overflow-x-auto rounded-lg bg-slate-900 p-4 text-[13px] leading-6 text-slate-100;
+  @apply my-4 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-[13px] leading-6 text-slate-800
+    dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100;
 }
 
 .markdown pre code {
-  @apply bg-transparent p-0 text-slate-100;
+  @apply bg-transparent p-0 text-slate-800 dark:text-slate-100;
 }
 
 .markdown table {
