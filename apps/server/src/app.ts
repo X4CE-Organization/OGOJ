@@ -23,6 +23,7 @@ import { registerShopRoutes } from './routes/shop.js';
 import { registerListRoutes } from './routes/lists.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerAdminContentRoutes } from './routes/admin-content.js';
+import { registerAiRoutes } from './routes/ai.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerOAuthRoutes } from './routes/oauth.js';
 import { registerAchievementRoutes } from './routes/achievements.js';
@@ -245,6 +246,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerMailRoutes(app);
   await registerAdminRoutes(app);
   await registerAdminContentRoutes(app);
+  await registerAiRoutes(app);
   await registerUploadRoutes(app);
 
   return app;

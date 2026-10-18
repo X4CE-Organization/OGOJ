@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, RefreshCw, Save, Trash2, Upload } from 'lucide-react';
+import { Copy, Plus, RefreshCw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { classNames, difficultyList, formatBytes } from '../../lib/format';
@@ -59,6 +59,9 @@ export default function ProblemEditor() {
   const [testcases, setTestcases] = useState<any[]>([]);
   const [caseModal, setCaseModal] = useState<any>(null);
   const [preview, setPreview] = useState(false);
+  const [aiBusy, setAiBusy] = useState<'code' | 'tests' | null>(null);
+  const [aiCode, setAiCode] = useState<string | null>(null);
+  const [aiTests, setAiTests] = useState<{ input: string; output: string }[] | null>(null);
 
   const loadTestcases = useCallback(async (problemId: string | number) => {
     try {
@@ -209,6 +212,58 @@ export default function ProblemEditor() {
     }
   };
 
+  const generateCode = async () => {
+    if (!id) return;
+    setAiBusy('code');
+    try {
+      const result = await api.post<{ code: string }>('/api/admin/ai/code', { problemId: Number(id) });
+      setAiCode(result.code);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'AI 生成失败');
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const generateTests = async () => {
+    if (!id) return;
+    setAiBusy('tests');
+    try {
+      const result = await api.post<{ tests: { input: string; output: string }[] }>('/api/admin/ai/tests', {
+        problemId: Number(id),
+        count: 5,
+      });
+      setAiTests(result.tests);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'AI 生成失败');
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const addAiTests = async () => {
+    if (!id || !aiTests) return;
+    let next = testcases.at(-1)?.idx ?? 0;
+    try {
+      for (const item of aiTests) {
+        next += 1;
+        await api.post(`/api/problems/${id}/testcases`, {
+          idx: next,
+          input: item.input,
+          output: item.output,
+          subtask: 0,
+          score: 10,
+          isSample: false,
+        });
+      }
+      toast.success(`已添加 ${aiTests.length} 个测试点`);
+      setAiTests(null);
+      void loadTestcases(id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '添加测试点失败');
+    }
+  };
+
   if (loading) return <Loading />;
 
   const languages = meta?.languages ?? [];
@@ -227,6 +282,24 @@ export default function ProblemEditor() {
         <div className="flex items-center gap-2">
           {id && (
             <>
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 text-xs"
+                disabled={aiBusy !== null}
+                onClick={generateCode}
+                title="调用 DeepSeek 生成一份 C++17 参考代码"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'code' ? '生成中…' : 'AI 生成代码'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 text-xs"
+                disabled={aiBusy !== null}
+                onClick={generateTests}
+                title="调用 DeepSeek 生成 5 组测试数据"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'tests' ? '生成中…' : 'AI 生成测试数据'}
+              </button>
               <a href={`/api/problems/${id}/testdata.zip`} className="btn-ghost !py-1.5 text-xs">
                 下载数据
               </a>
@@ -823,6 +896,81 @@ export default function ProblemEditor() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={aiCode !== null}
+        title="AI 生成的参考代码"
+        onClose={() => setAiCode(null)}
+        width="max-w-4xl"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn-ghost text-sm"
+              onClick={() => {
+                void navigator.clipboard?.writeText(aiCode ?? '');
+                toast.success('已复制到剪贴板');
+              }}
+            >
+              <Copy className="h-4 w-4" /> 复制代码
+            </button>
+            {form.judgeMode === 'spj' && (
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={() => {
+                  setForm({ ...form, spjCode: aiCode ?? '' });
+                  setAiCode(null);
+                  toast.success('已填入 Special Judge 代码，记得保存');
+                }}
+              >
+                填入 SPJ
+              </button>
+            )}
+          </div>
+        }
+      >
+        <pre className="max-h-[60vh] overflow-auto rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-800 dark:bg-slate-900 dark:text-slate-100">
+          {aiCode}
+        </pre>
+      </Modal>
+
+      <Modal
+        open={aiTests !== null}
+        title="AI 生成的测试数据"
+        onClose={() => setAiTests(null)}
+        width="max-w-4xl"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" className="btn-ghost text-sm" onClick={() => setAiTests(null)}>
+              取消
+            </button>
+            <button type="button" className="btn-primary text-sm" onClick={addAiTests}>
+              全部添加到测试数据
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">共 {aiTests?.length ?? 0} 组，确认无误后一键写入题目测试点。</p>
+          {(aiTests ?? []).map((item, index) => (
+            <div key={index} className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs text-slate-400">#{index + 1} 输入</div>
+                <pre className="max-h-40 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900">
+                  {item.input}
+                </pre>
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-slate-400">#{index + 1} 输出</div>
+                <pre className="max-h-40 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-900">
+                  {item.output}
+                </pre>
+              </div>
+            </div>
+          ))}
+        </div>
       </Modal>
     </div>
   );

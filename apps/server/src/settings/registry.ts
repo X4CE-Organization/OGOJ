@@ -157,6 +157,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
     icon: 'sparkles',
   },
   {
+    key: 'ai',
+    name: 'AI 助手',
+    description: 'DeepSeek API：管理员在题目页一键生成参考代码与测试数据',
+    icon: 'sparkles',
+  },
+  {
     key: 'sms',
     name: '短信 / 手机号',
     description: '短信服务商、验证码策略与手机号登录',
@@ -179,6 +185,34 @@ const langOptions = [
 ];
 
 export const SETTINGS: SettingField[] = [
+  // ---------------------------------------------------------------- ai
+  {
+    key: 'deepseek_api_key',
+    label: 'DeepSeek API Key',
+    type: 'password',
+    default: '',
+    group: 'ai',
+    secret: true,
+    placeholder: 'sk-...',
+    description: '在 https://platform.deepseek.com 申请。留空则题目页的 AI 按钮不可用。',
+  },
+  {
+    key: 'deepseek_base_url',
+    label: 'API 地址',
+    type: 'string',
+    default: 'https://api.deepseek.com',
+    group: 'ai',
+    placeholder: 'https://api.deepseek.com',
+  },
+  {
+    key: 'deepseek_model',
+    label: '模型',
+    type: 'string',
+    default: 'deepseek-chat',
+    group: 'ai',
+    placeholder: 'deepseek-chat',
+  },
+
   // ------------------------------------------------------------- scratch
   {
     key: 'scratch_enabled',
