@@ -643,7 +643,7 @@ export default function ProblemDetail() {
             <>
               <div className="mb-2 flex gap-2">
                 <select
-                  className="input"
+                  className="input min-w-0 flex-1"
                   value={language}
                   onChange={(event) => {
                     setLanguage(event.target.value);
@@ -657,19 +657,19 @@ export default function ProblemDetail() {
                     </option>
                   ))}
                 </select>
+                {user && (user.role === 'admin' || user.role === 'superadmin') && (
+                  <button
+                    type="button"
+                    className="btn-ghost shrink-0 !py-1.5 text-xs"
+                    disabled={aiCodeBusy}
+                    onClick={aiGenerateCode}
+                    title="调用 DeepSeek 生成参考代码并填入编辑器"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {aiCodeBusy ? '生成中…' : 'AI 生成代码'}
+                  </button>
+                )}
               </div>
-              {user && (user.role === 'admin' || user.role === 'superadmin') && (
-                <button
-                  type="button"
-                  className="btn-ghost mb-2 w-full text-xs"
-                  disabled={aiCodeBusy}
-                  onClick={aiGenerateCode}
-                  title="调用 DeepSeek 生成参考代码并填入编辑器"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {aiCodeBusy ? 'AI 生成中…' : 'AI 生成代码'}
-                </button>
-              )}
               <CodeEditor
                 value={code}
                 onChange={setCode}

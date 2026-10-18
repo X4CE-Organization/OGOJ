@@ -61,6 +61,7 @@ export default function ProblemEditor() {
   const [preview, setPreview] = useState(false);
   const [aiBusy, setAiBusy] = useState<'tests' | null>(null);
   const [aiCount, setAiCount] = useState(5);
+  const [aiCountOpen, setAiCountOpen] = useState(false);
   const [aiTests, setAiTests] = useState<{ input: string; output: string }[] | null>(null);
 
   const loadTestcases = useCallback(async (problemId: string | number) => {
@@ -269,21 +270,12 @@ export default function ProblemEditor() {
         <div className="flex items-center gap-2">
           {id && (
             <>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                className="input !w-16 !py-1 text-center text-xs"
-                value={aiCount}
-                onChange={(event) => setAiCount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
-                title="要生成的测试数据组数"
-              />
               <button
                 type="button"
                 className="btn-ghost !py-1.5 text-xs"
                 disabled={aiBusy !== null}
-                onClick={generateTests}
-                title={`调用 DeepSeek 生成 ${aiCount} 组测试数据`}
+                onClick={() => setAiCountOpen(true)}
+                title="调用 DeepSeek 生成测试数据"
               >
                 <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'tests' ? '生成中…' : 'AI 生成测试数据'}
               </button>
@@ -883,6 +875,41 @@ export default function ProblemEditor() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={aiCountOpen}
+        title="AI 生成测试数据"
+        onClose={() => setAiCountOpen(false)}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" className="btn-ghost text-sm" onClick={() => setAiCountOpen(false)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              onClick={() => {
+                setAiCountOpen(false);
+                void generateTests();
+              }}
+            >
+              开始生成
+            </button>
+          </div>
+        }
+      >
+        <Field label="生成多少组测试数据（1–20）">
+          <input
+            type="number"
+            min={1}
+            max={20}
+            className="input !w-32"
+            value={aiCount}
+            onChange={(event) => setAiCount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
+            autoFocus
+          />
+        </Field>
       </Modal>
 
       <Modal
