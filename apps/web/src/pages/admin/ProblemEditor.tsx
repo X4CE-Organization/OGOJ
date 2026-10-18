@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, Plus, RefreshCw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Plus, RefreshCw, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { classNames, difficultyList, formatBytes } from '../../lib/format';
@@ -59,8 +59,8 @@ export default function ProblemEditor() {
   const [testcases, setTestcases] = useState<any[]>([]);
   const [caseModal, setCaseModal] = useState<any>(null);
   const [preview, setPreview] = useState(false);
-  const [aiBusy, setAiBusy] = useState<'code' | 'tests' | null>(null);
-  const [aiCode, setAiCode] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState<'tests' | null>(null);
+  const [aiCount, setAiCount] = useState(5);
   const [aiTests, setAiTests] = useState<{ input: string; output: string }[] | null>(null);
 
   const loadTestcases = useCallback(async (problemId: string | number) => {
@@ -212,26 +212,13 @@ export default function ProblemEditor() {
     }
   };
 
-  const generateCode = async () => {
-    if (!id) return;
-    setAiBusy('code');
-    try {
-      const result = await api.post<{ code: string }>('/api/admin/ai/code', { problemId: Number(id) });
-      setAiCode(result.code);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'AI 生成失败');
-    } finally {
-      setAiBusy(null);
-    }
-  };
-
   const generateTests = async () => {
     if (!id) return;
     setAiBusy('tests');
     try {
       const result = await api.post<{ tests: { input: string; output: string }[] }>('/api/admin/ai/tests', {
         problemId: Number(id),
-        count: 5,
+        count: aiCount,
       });
       setAiTests(result.tests);
     } catch (error) {
@@ -282,21 +269,21 @@ export default function ProblemEditor() {
         <div className="flex items-center gap-2">
           {id && (
             <>
-              <button
-                type="button"
-                className="btn-ghost !py-1.5 text-xs"
-                disabled={aiBusy !== null}
-                onClick={generateCode}
-                title="调用 DeepSeek 生成一份 C++17 参考代码"
-              >
-                <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'code' ? '生成中…' : 'AI 生成代码'}
-              </button>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                className="input !w-16 !py-1 text-center text-xs"
+                value={aiCount}
+                onChange={(event) => setAiCount(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
+                title="要生成的测试数据组数"
+              />
               <button
                 type="button"
                 className="btn-ghost !py-1.5 text-xs"
                 disabled={aiBusy !== null}
                 onClick={generateTests}
-                title="调用 DeepSeek 生成 5 组测试数据"
+                title={`调用 DeepSeek 生成 ${aiCount} 组测试数据`}
               >
                 <Sparkles className="h-3.5 w-3.5" /> {aiBusy === 'tests' ? '生成中…' : 'AI 生成测试数据'}
               </button>
@@ -896,44 +883,6 @@ export default function ProblemEditor() {
             </div>
           </div>
         )}
-      </Modal>
-
-      <Modal
-        open={aiCode !== null}
-        title="AI 生成的参考代码"
-        onClose={() => setAiCode(null)}
-        width="max-w-4xl"
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="btn-ghost text-sm"
-              onClick={() => {
-                void navigator.clipboard?.writeText(aiCode ?? '');
-                toast.success('已复制到剪贴板');
-              }}
-            >
-              <Copy className="h-4 w-4" /> 复制代码
-            </button>
-            {form.judgeMode === 'spj' && (
-              <button
-                type="button"
-                className="btn-primary text-sm"
-                onClick={() => {
-                  setForm({ ...form, spjCode: aiCode ?? '' });
-                  setAiCode(null);
-                  toast.success('已填入 Special Judge 代码，记得保存');
-                }}
-              >
-                填入 SPJ
-              </button>
-            )}
-          </div>
-        }
-      >
-        <pre className="max-h-[60vh] overflow-auto rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-800 dark:bg-slate-900 dark:text-slate-100">
-          {aiCode}
-        </pre>
       </Modal>
 
       <Modal

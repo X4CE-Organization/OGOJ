@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Check, Copy, Heart, Pencil, Play, Plus, RotateCcw, Send, ThumbsUp } from 'lucide-react';
+import { Check, Copy, Heart, Pencil, Play, Plus, RotateCcw, Send, Sparkles, ThumbsUp } from 'lucide-react';
 import { api, query } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { classNames, formatMs, formatMemory, fromNow, statusStyle } from '../lib/format';
@@ -74,6 +74,7 @@ export default function ProblemDetail() {
   const [tab, setTab] = useState(params.get('tab') ?? 'statement');
   const [language, setLanguage] = useState('');
   const [code, setCode] = useState('');
+  const [aiCodeBusy, setAiCodeBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   /** 自测面板：左边输入、右边输出 */
   const [testInput, setTestInput] = useState('');
@@ -227,6 +228,22 @@ export default function ProblemDetail() {
     const search = new URLSearchParams(params);
     search.set('tab', next);
     setParams(search, { replace: true });
+  };
+
+  const aiGenerateCode = async () => {
+    if (!data?.problem?.id) return;
+    setAiCodeBusy(true);
+    try {
+      const result = await api.post<{ code: string }>('/api/admin/ai/code', { problemId: data.problem.id });
+      setCode(result.code);
+      baseline.current = result.code;
+      edited.current = false;
+      toast.success('AI 代码已填入编辑器');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI 生成失败');
+    } finally {
+      setAiCodeBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -641,6 +658,18 @@ export default function ProblemDetail() {
                   ))}
                 </select>
               </div>
+              {user && (user.role === 'admin' || user.role === 'superadmin') && (
+                <button
+                  type="button"
+                  className="btn-ghost mb-2 w-full text-xs"
+                  disabled={aiCodeBusy}
+                  onClick={aiGenerateCode}
+                  title="调用 DeepSeek 生成参考代码并填入编辑器"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {aiCodeBusy ? 'AI 生成中…' : 'AI 生成代码'}
+                </button>
+              )}
               <CodeEditor
                 value={code}
                 onChange={setCode}

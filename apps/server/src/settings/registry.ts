@@ -208,9 +208,9 @@ export const SETTINGS: SettingField[] = [
     key: 'deepseek_model',
     label: '模型',
     type: 'string',
-    default: 'deepseek-chat',
+    default: 'deepseek-flash',
     group: 'ai',
-    placeholder: 'deepseek-chat',
+    placeholder: 'deepseek-flash',
   },
 
   // ------------------------------------------------------------- scratch

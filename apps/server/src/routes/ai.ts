@@ -23,7 +23,7 @@ async function callDeepSeek(messages: ChatMessage[], maxTokens: number): Promise
   const key = str('deepseek_api_key', '').trim();
   if (!key) throw badRequest('还没有配置 DeepSeek API Key，请先到 系统设置 → AI 助手 填写并保存');
   const base = (str('deepseek_base_url', DEFAULT_BASE) || DEFAULT_BASE).replace(/\/+$/, '');
-  const model = str('deepseek_model', 'deepseek-chat') || 'deepseek-chat';
+  const model = str('deepseek_model', 'deepseek-flash') || 'deepseek-flash';
   let res: Response;
   try {
     res = await fetch(`${base}/chat/completions`, {
@@ -98,7 +98,7 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
     await requireAdmin(request);
     return {
       configured: Boolean(str('deepseek_api_key', '').trim()),
-      model: str('deepseek_model', 'deepseek-chat') || 'deepseek-chat',
+      model: str('deepseek_model', 'deepseek-flash') || 'deepseek-flash',
     };
   });
 
@@ -120,8 +120,8 @@ export async function registerAiRoutes(app: FastifyInstance): Promise<void> {
       4096,
     );
     const code = extractCode(reply);
-    await audit(request, 'admin.ai_code', { targetType: 'problem', targetId: id, detail: { model: str('deepseek_model', 'deepseek-chat') } });
-    return { code, model: str('deepseek_model', 'deepseek-chat') || 'deepseek-chat' };
+    await audit(request, 'admin.ai_code', { targetType: 'problem', targetId: id, detail: { model: str('deepseek_model', 'deepseek-flash') } });
+    return { code, model: str('deepseek_model', 'deepseek-flash') || 'deepseek-flash' };
   });
 
   app.post('/api/admin/ai/tests', async (request) => {
