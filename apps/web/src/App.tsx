@@ -157,6 +157,8 @@ export default function App() {
         </Route>
         <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
+        <Route path="/submit/problem/new" element={<RequireAuth><AdminProblemEditor /></RequireAuth>} />
+        <Route path="/submit/problem/:id/edit" element={<RequireAuth><AdminProblemEditor /></RequireAuth>} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/about" element={<About />} />
         <Route path="/help" element={<Help />} />

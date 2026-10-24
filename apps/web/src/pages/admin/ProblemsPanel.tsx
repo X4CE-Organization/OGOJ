@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Download, FileArchive, FileCode2, Pencil, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, difficultyList, fromNow } from '../../lib/format';
-import { DifficultyBadge, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
+import { BulkBar, DifficultyBadge, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function ProblemsPanel() {
@@ -15,6 +16,7 @@ export default function ProblemsPanel() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<number[]>([]);
   const [busy, setBusy] = useState('');
+  const [bulkDifficulty, setBulkDifficulty] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
   const [importFormat, setImportFormat] = useState<'zip' | 'fps'>('zip');
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -81,6 +83,66 @@ export default function ProblemsPanel() {
   const toggleAll = () => {
     const ids = items.map((problem) => problem.id);
     setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const finishBulk = (label: string, result: Awaited<ReturnType<typeof runBulk>>) => {
+    if (result.succeeded) toast.success(`${label}：成功 ${result.succeeded} 道题目`);
+    if (result.failures.length) {
+      toast.error(
+        `${label}：失败 ${result.failures.length} 道，${result.failures[0].label}：${result.failures[0].message}`,
+      );
+    }
+    setSelected([]);
+    void load();
+  };
+
+  const bulkReview = async (approve: boolean) => {
+    const chosen = items.filter((problem) => selected.includes(problem.id));
+    if (!chosen.length) return;
+    const note = approve ? '' : window.prompt('批量驳回原因', '题目描述或数据需要修改') ?? '';
+    setBusy('bulk');
+    const result = await runBulk(
+      chosen,
+      (problem) => api.post(`/api/admin/problems/${problem.id}/review`, { approve, note }),
+      { id: (problem) => problem.id, label: (problem) => problem.pid },
+    );
+    setBusy('');
+    finishBulk(approve ? '批量通过' : '批量驳回', result);
+  };
+
+  const bulkSet = async (action: 'publish' | 'unpublish' | 'difficulty' | 'delete' | 'rejudge') => {
+    const chosen = items.filter((problem) => selected.includes(problem.id));
+    if (!chosen.length) return;
+    if (action === 'delete' && !window.confirm(`确定批量删除选中的 ${chosen.length} 道题目吗？`)) return;
+    if (action === 'rejudge' && !window.confirm(`确定重测选中 ${chosen.length} 道题目的全部提交吗？`)) return;
+    setBusy('bulk');
+    const result = await runBulk(
+      chosen,
+      (problem) => {
+        if (action === 'publish' || action === 'unpublish') {
+          return api.put(`/api/problems/${problem.id}`, { isPublic: action === 'publish' });
+        }
+        if (action === 'difficulty') {
+          return api.put(`/api/problems/${problem.id}`, { difficulty: bulkDifficulty });
+        }
+        if (action === 'delete') return api.del(`/api/problems/${problem.id}`);
+        return api.post('/api/submissions/rejudge', { problemId: problem.id });
+      },
+      { id: (problem) => problem.id, label: (problem) => problem.pid },
+    );
+    setBusy('');
+    finishBulk(
+      action === 'publish'
+        ? '批量公开'
+        : action === 'unpublish'
+          ? '批量隐藏'
+          : action === 'difficulty'
+            ? '批量设置难度'
+            : action === 'delete'
+              ? '批量删除'
+              : '批量重测',
+      result,
+    );
   };
 
   /** 勾选的题目导出成一个 ZIP 题目包 */
@@ -166,17 +228,43 @@ export default function ProblemsPanel() {
         </div>
       </div>
 
-      {selected.length > 0 && (
-        <div className="card flex flex-wrap items-center gap-3 p-3 text-sm">
-          <span className="text-slate-600 dark:text-slate-300">已勾选 <b>{selected.length}</b> 道题目</span>
+      <BulkBar count={selected.length} onClear={() => setSelected([])} busy={busy === 'bulk'}>
           <button type="button" className="btn-ghost !py-1 text-xs" onClick={() => void exportSelected()}>
             <FileArchive className="h-3.5 w-3.5" /> 导出为 ZIP
           </button>
-          <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setSelected([])}>
-            清除勾选
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkReview(true)}>
+            <Check className="h-3.5 w-3.5" /> 通过
           </button>
-        </div>
-      )}
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkReview(false)}>
+            <X className="h-3.5 w-3.5" /> 驳回
+          </button>
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkSet('publish')}>
+            公开
+          </button>
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkSet('unpublish')}>
+            隐藏
+          </button>
+          <select
+            className="input !w-28 !py-1 text-xs"
+            value={bulkDifficulty}
+            onChange={(event) => setBulkDifficulty(Number(event.target.value))}
+          >
+            {(difficultyList() ?? []).map((difficulty) => (
+              <option key={difficulty.level} value={difficulty.level}>
+                {difficulty.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkSet('difficulty')}>
+            应用难度
+          </button>
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={busy === 'bulk'} onClick={() => void bulkSet('rejudge')}>
+            <RefreshCw className="h-3.5 w-3.5" /> 重测
+          </button>
+          <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={busy === 'bulk'} onClick={() => void bulkSet('delete')}>
+            <Trash2 className="h-3.5 w-3.5" /> 删除
+          </button>
+      </BulkBar>
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
         <button

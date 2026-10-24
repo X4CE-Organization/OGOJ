@@ -222,10 +222,11 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     const user = await requireUser(request);
     const body = (request.body ?? {}) as any;
     const isAdmin = hasRole(user, 'admin');
+    let grant: any = null;
 
     if (!isAdmin) {
       if (!bool('allow_user_create_problem', true)) throw forbidden('本站未开放用户出题');
-      const grant = await get<any>(
+      grant = await get<any>(
         `SELECT * FROM grants WHERE user_id = ? AND kind = 'problem' AND used < total
            AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY id ASC LIMIT 1`,
         [user.id],
@@ -233,7 +234,6 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
       if (!grant) {
         throw forbidden('你需要先在商店兑换「出一道题」资格');
       }
-      await tx(async () => await run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
     }
 
     const title = String(body.title ?? '').trim();
@@ -257,41 +257,55 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
     if (judgeMode === 'interactive' && !bool('enable_interactive', true)) throw forbidden('本站未开启交互题');
 
     const needReview = !isAdmin && bool('user_problem_need_review', true);
-    const info = await run(
-      `INSERT INTO problems
-        (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
-         provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
-         subtasks, samples, allow_languages, source_type, review_status, is_public)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        pid,
-        title,
-        String(body.background ?? ''),
-        String(body.statement ?? ''),
-        String(body.inputFormat ?? ''),
-        String(body.outputFormat ?? ''),
-        String(body.hint ?? ''),
-        Math.min(await maxDifficultyLevel(), Math.max(1, Number(body.difficulty ?? 1) || 1)),
-        user.id,
-        user.id,
-        String(body.provider ?? ''),
-        timeLimit,
-        memoryLimit,
-        judgeMode,
-        String(body.compareMode ?? ''),
-        judgeMode === 'standard' ? '' : String(body.spjLanguage ?? 'cpp'),
-        judgeMode === 'standard' ? '' : String(body.spjCode ?? ''),
-        judgeMode === 'interactive' ? String(body.interCode ?? '') : '',
-        JSON.stringify(normalizeSubtask(body.subtasks)),
-        JSON.stringify(normalizeSamples(body.samples)),
-        JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
-        isAdmin ? 'official' : 'user',
-        needReview ? 'pending' : 'approved',
-        isAdmin ? 1 : needReview ? 0 : 1,
-      ],
+    const difficulty = Math.min(
+      await maxDifficultyLevel(),
+      Math.max(1, Number(body.difficulty ?? 1) || 1),
     );
+    const info = await tx(async () => {
+      if (grant) {
+        const consumed = await run(
+          'UPDATE grants SET used = used + 1 WHERE id = ? AND used < total',
+          [grant.id],
+        );
+        if (!consumed.changes) throw conflict('当前没有可用的出题资格');
+      }
+      const inserted = await run(
+        `INSERT INTO problems
+          (pid, title, background, statement, input_format, output_format, hint, difficulty, author_id, owner_id,
+           provider, time_limit, memory_limit, judge_mode, compare_mode, spj_language, spj_code, inter_code,
+           subtasks, samples, allow_languages, source_type, review_status, is_public)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          pid,
+          title,
+          String(body.background ?? ''),
+          String(body.statement ?? ''),
+          String(body.inputFormat ?? ''),
+          String(body.outputFormat ?? ''),
+          String(body.hint ?? ''),
+          difficulty,
+          user.id,
+          user.id,
+          String(body.provider ?? ''),
+          timeLimit,
+          memoryLimit,
+          judgeMode,
+          String(body.compareMode ?? ''),
+          judgeMode === 'standard' ? '' : String(body.spjLanguage ?? 'cpp'),
+          judgeMode === 'standard' ? '' : String(body.spjCode ?? ''),
+          judgeMode === 'interactive' ? String(body.interCode ?? '') : '',
+          JSON.stringify(normalizeSubtask(body.subtasks)),
+          JSON.stringify(normalizeSamples(body.samples)),
+          JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
+          isAdmin ? 'official' : 'user',
+          needReview ? 'pending' : 'approved',
+          isAdmin ? 1 : needReview ? 0 : 1,
+        ],
+      );
+      await applyTags(Number(inserted.lastInsertRowid), body.tags);
+      return inserted;
+    });
     const problemId = Number(info.lastInsertRowid);
-    await applyTags(problemId, body.tags);
     if (needReview) {
       await sendMessage({
         to: user.id,

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Pin, Trash2, Undo2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, fromNow } from '../../lib/format';
-import { EmptyState, Loading, Pagination } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function MomentsPanel() {
@@ -13,6 +14,8 @@ export default function MomentsPanel() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [deleted, setDeleted] = useState('');
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +35,10 @@ export default function MomentsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [page, search, deleted]);
 
   const pin = async (item: any) => {
     try {
@@ -62,6 +69,30 @@ export default function MomentsPanel() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '恢复失败');
     }
+  };
+
+  const moments: any[] = data?.items ?? [];
+  const chosen = moments.filter((item) => selected.includes(item.id));
+  const allSelected = moments.length > 0 && moments.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = moments.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkSet = async (patch: Record<string, unknown>, label: string) => {
+    if (!chosen.length) return;
+    if (patch.isDeleted === true && !window.confirm(`确定删除选中的 ${chosen.length} 条动态吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => api.put(`/api/admin/content/moments/${item.id}`, patch),
+      { id: (item) => item.id, label: (item) => item.content?.slice(0, 24) || `动态 ${item.id}` },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`${label}：成功 ${result.succeeded} 条`);
+    if (result.failures.length) toast.error(`${label}：失败 ${result.failures.length} 条`);
+    void load();
   };
 
   return (
@@ -109,6 +140,21 @@ export default function MomentsPanel() {
         </select>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSet({ isPinned: true }, '批量置顶')}>
+          <Pin className="h-3.5 w-3.5" /> 置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSet({ isPinned: false }, '批量取消置顶')}>
+          取消置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSet({ isDeleted: false }, '批量恢复')}>
+          <Undo2 className="h-3.5 w-3.5" /> 恢复
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkSet({ isDeleted: true }, '批量删除')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -119,6 +165,9 @@ export default function MomentsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页动态" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th>内容</th>
                   <th className="w-28">作者</th>
                   <th className="w-24">互动</th>
@@ -128,7 +177,24 @@ export default function MomentsPanel() {
               </thead>
               <tbody>
                 {data.items.map((item: any) => (
-                  <tr key={item.id} className={classNames(item.isDeleted && 'opacity-60')}>
+                  <tr
+                    key={item.id}
+                    className={classNames(item.isDeleted && 'opacity-60', selected.includes(item.id) && 'bg-primary/5')}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择动态 ${item.id}`}
+                        checked={selected.includes(item.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(item.id)
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         {item.isPinned && <Pin className="h-3 w-3 text-amber-500" />}

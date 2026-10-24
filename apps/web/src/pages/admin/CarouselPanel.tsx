@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { api } from '../../lib/api';
-import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import { runBulk } from '../../lib/bulk';
+import { classNames } from '../../lib/format';
+import { BulkBar, EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function CarouselPanel() {
@@ -11,6 +13,8 @@ export default function CarouselPanel() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [uploading, setUploading] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +69,32 @@ export default function CarouselPanel() {
     void load();
   };
 
+  const chosen = items.filter((item) => selected.includes(item.id));
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = items.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkAct = async (action: 'enable' | 'disable' | 'delete') => {
+    if (!chosen.length) return;
+    if (action === 'delete' && !window.confirm(`确定删除选中的 ${chosen.length} 张轮播图吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => {
+        if (action === 'delete') return api.del(`/api/admin/carousel/${item.id}`);
+        return api.put(`/api/admin/carousel/${item.id}`, { isActive: action === 'enable' });
+      },
+      { id: (item) => item.id, label: (item) => item.title || `轮播图 ${item.id}` },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 张`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 张操作失败`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -81,6 +111,18 @@ export default function CarouselPanel() {
         </button>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('enable')}>
+          批量启用
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('disable')}>
+          批量停用
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkAct('delete')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <Section title={`共 ${items.length} 张`}>
         {loading ? (
           <Loading />
@@ -89,7 +131,22 @@ export default function CarouselPanel() {
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center gap-4 p-4">
+              <li
+                key={item.id}
+                className={classNames('flex items-center gap-4 p-4', selected.includes(item.id) && 'bg-primary/5')}
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`选择轮播图 ${item.title || item.id}`}
+                  checked={selected.includes(item.id)}
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(item.id)
+                        ? current.filter((id) => id !== item.id)
+                        : [...current, item.id],
+                    )
+                  }
+                />
                 {item.image ? (
                   <img src={item.image} alt={item.title} className="h-16 w-28 rounded-lg object-cover" />
                 ) : (
@@ -125,6 +182,12 @@ export default function CarouselPanel() {
             ))}
           </ul>
         )}
+        {items.length > 0 ? (
+          <label className="flex items-center gap-2 border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-800">
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+            全选轮播图
+          </label>
+        ) : null}
       </Section>
 
       <Section title="说明">

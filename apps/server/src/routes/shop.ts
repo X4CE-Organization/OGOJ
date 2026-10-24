@@ -102,12 +102,6 @@ export async function registerShopRoutes(app: FastifyInstance): Promise<void> {
 
     let payload: Record<string, unknown> = {};
     if (body.payload && typeof body.payload === 'object') payload = body.payload as Record<string, unknown>;
-    if (item.kind === 'contest' && !String(payload.title ?? '').trim()) {
-      throw badRequest('请填写比赛名称');
-    }
-    if (item.kind === 'problem' && !String(payload.title ?? '').trim()) {
-      throw badRequest('请填写题目名称');
-    }
 
     const autoApprove = !bool('shop_order_need_review', true) || hasRole(user, 'admin');
     const orderId = await tx(async () => {

@@ -21,7 +21,7 @@ interface ProblemItem {
 }
 
 export default function Problems() {
-  const { user, settings } = useAuth();
+  const { user, settings, grants } = useAuth();
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<ProblemItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -36,6 +36,10 @@ export default function Problems() {
   const status = params.get('status') ?? '';
   const sort = params.get('sort') ?? 'pid';
   const showAll = params.get('all') === 'true';
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const canCreateProblem =
+    Boolean(user) &&
+    (isAdmin || (settings.allow_user_create_problem !== false && (grants.problem ?? 0) > 0));
 
   useEffect(() => {
     api.get<{ tags: any[] }>('/api/tags').then((data) => setTags(data.tags)).catch(() => undefined);
@@ -249,11 +253,18 @@ export default function Problems() {
           </h1>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>共 {total} 道题目</span>
-            {user?.role !== 'user' && (
-              <Link to="/admin/problems/new" className="btn-primary !px-2.5 !py-1 text-xs">
+            {canCreateProblem ? (
+              <Link
+                to={isAdmin ? '/admin/problems/new' : '/submit/problem/new'}
+                className="btn-primary !px-2.5 !py-1 text-xs"
+              >
                 新建题目
               </Link>
-            )}
+            ) : user && settings.allow_user_create_problem !== false ? (
+              <Link to="/shop" className="btn-ghost !px-2.5 !py-1 text-xs">
+                获取出题资格
+              </Link>
+            ) : null}
           </div>
         </div>
 

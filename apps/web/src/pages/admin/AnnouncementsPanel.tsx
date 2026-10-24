@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, formatTime } from '../../lib/format';
-import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import { BulkBar, EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function AnnouncementsPanel() {
@@ -11,6 +12,8 @@ export default function AnnouncementsPanel() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +67,32 @@ export default function AnnouncementsPanel() {
     void load();
   };
 
+  const chosen = items.filter((item) => selected.includes(item.id));
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = items.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkAct = async (patch: Record<string, unknown>, label: string) => {
+    if (!chosen.length) return;
+    if (patch.isPublic === undefined && patch.isPinned === undefined && !window.confirm(`确定删除选中的 ${chosen.length} 条公告吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) =>
+        Object.keys(patch).length
+          ? api.put(`/api/admin/announcements/${item.id}`, patch)
+          : api.del(`/api/admin/announcements/${item.id}`),
+      { id: (item) => item.id, label: (item) => item.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`${label}：成功 ${result.succeeded} 条`);
+    if (result.failures.length) toast.error(`${label}：失败 ${result.failures.length} 条`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -80,6 +109,24 @@ export default function AnnouncementsPanel() {
         </button>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct({ isPinned: true }, '批量置顶')}>
+          置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct({ isPinned: false }, '批量取消置顶')}>
+          取消置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct({ isPublic: true }, '批量公开')}>
+          公开
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct({ isPublic: false }, '批量隐藏')}>
+          隐藏
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkAct({}, '批量删除')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <Section title={`共 ${items.length} 条公告`}>
         {loading ? (
           <Loading />
@@ -88,7 +135,22 @@ export default function AnnouncementsPanel() {
         ) : (
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {items.map((item) => (
-              <li key={item.id} className="flex items-start gap-3 p-4">
+              <li
+                key={item.id}
+                className={classNames('flex items-start gap-3 p-4', selected.includes(item.id) && 'bg-primary/5')}
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`选择公告 ${item.title}`}
+                  checked={selected.includes(item.id)}
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(item.id)
+                        ? current.filter((id) => id !== item.id)
+                        : [...current, item.id],
+                    )
+                  }
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {Boolean(item.is_pinned) && (
@@ -131,6 +193,12 @@ export default function AnnouncementsPanel() {
             ))}
           </ul>
         )}
+        {items.length > 0 ? (
+          <label className="flex items-center gap-2 border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-800">
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+            全选公告
+          </label>
+        ) : null}
       </Section>
 
       <Modal

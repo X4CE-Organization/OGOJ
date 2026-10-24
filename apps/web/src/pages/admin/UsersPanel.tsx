@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { Trash2, UserCog } from 'lucide-react';
 import { api, query } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { runBulk } from '../../lib/bulk';
 import { classNames, formatTime, fromNow } from '../../lib/format';
-import { Avatar, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
+import { Avatar, BulkBar, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function UsersPanel() {
@@ -18,6 +19,9 @@ export default function UsersPanel() {
   const [banned, setBanned] = useState('');
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkRole, setBulkRole] = useState('user');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,6 +41,10 @@ export default function UsersPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [page, search, role, banned]);
 
   const openEditor = (user: any) => {
     setEditing(user);
@@ -100,6 +108,84 @@ export default function UsersPanel() {
     }
   };
 
+  const users: any[] = data?.items ?? [];
+  const selectedUsers = users.filter((item) => selected.includes(item.id));
+  const allSelected = users.length > 0 && users.every((item) => selected.includes(item.id));
+  const toggleOne = (id: number) => {
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  };
+  const toggleAll = () => {
+    const ids = users.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const finishBulk = async (label: string, result: Awaited<ReturnType<typeof runBulk>>) => {
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`${label}：成功 ${result.succeeded} 位用户`);
+    if (result.failures.length) {
+      toast.error(`${label}：失败 ${result.failures.length} 位，${result.failures[0].message}`);
+    }
+    void load();
+  };
+
+  const bulkBan = async (isBanned: boolean) => {
+    const chosen = selectedUsers.filter((item) => item.id !== me?.id && item.role !== 'superadmin');
+    if (!chosen.length) {
+      toast.error('没有可操作的用户（不能批量封禁自己或超级管理员）');
+      return;
+    }
+    const reason = isBanned ? window.prompt('批量封禁原因', '违反社区规范') ?? '' : '';
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => api.put(`/api/admin/users/${item.id}`, { isBanned, banReason: reason }),
+      { id: (item) => item.id, label: (item) => item.username },
+    );
+    await finishBulk(isBanned ? '批量封禁' : '批量解封', result);
+  };
+
+  const bulkDelete = async () => {
+    const chosen = selectedUsers.filter((item) => item.id !== me?.id && item.role !== 'superadmin');
+    if (!chosen.length || !window.confirm(`确定永久删除选中的 ${chosen.length} 位用户及全部数据吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => api.del(`/api/admin/users/${item.id}`),
+      { id: (item) => item.id, label: (item) => item.username },
+    );
+    await finishBulk('批量删除', result);
+  };
+
+  const bulkSetRole = async () => {
+    const chosen = selectedUsers.filter((item) => item.id !== me?.id);
+    if (!chosen.length) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => api.put(`/api/admin/users/${item.id}`, { role: bulkRole }),
+      { id: (item) => item.id, label: (item) => item.username },
+    );
+    await finishBulk('批量调整角色', result);
+  };
+
+  const bulkPoints = async () => {
+    const raw = window.prompt('输入批量调整的积分（正数增加，负数扣减）', '10');
+    if (raw === null) return;
+    const points = Number(raw);
+    if (!Number.isFinite(points) || points === 0) {
+      toast.error('请输入非零数字');
+      return;
+    }
+    setBulkBusy(true);
+    const result = await runBulk(
+      selectedUsers,
+      (item) => api.put(`/api/admin/users/${item.id}`, { points }),
+      { id: (item) => item.id, label: (item) => item.username },
+    );
+    await finishBulk('批量调整积分', result);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,6 +230,33 @@ export default function UsersPanel() {
         </select>
       </div>
 
+      <BulkBar count={selected.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkBan(true)}>
+          封禁
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkBan(false)}>
+          解封
+        </button>
+        {isSuperAdmin && (
+          <>
+            <select className="input !w-32 !py-1 text-xs" value={bulkRole} onChange={(event) => setBulkRole(event.target.value)}>
+              <option value="user">普通用户</option>
+              <option value="admin">普通管理员</option>
+              <option value="superadmin">超级管理员</option>
+            </select>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSetRole()}>
+              应用角色
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkPoints()}>
+              调整积分
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkDelete()}>
+              <Trash2 className="h-3.5 w-3.5" /> 删除
+            </button>
+          </>
+        )}
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -154,6 +267,9 @@ export default function UsersPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页用户" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th className="w-16">ID</th>
                   <th>用户</th>
                   <th className="w-28">角色</th>
@@ -165,7 +281,18 @@ export default function UsersPanel() {
               </thead>
               <tbody>
                 {data.items.map((user: any) => (
-                  <tr key={user.id} className={classNames(user.is_banned && 'opacity-60')}>
+                  <tr
+                    key={user.id}
+                    className={classNames(user.is_banned && 'opacity-60', selected.includes(user.id) && 'bg-primary/5')}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择用户 ${user.username}`}
+                        checked={selected.includes(user.id)}
+                        onChange={() => toggleOne(user.id)}
+                      />
+                    </td>
                     <td className="text-xs text-slate-400">{user.id}</td>
                     <td>
                       <div className="flex items-center gap-2">

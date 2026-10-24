@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Loader2, Sparkles, Star, Trash2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames } from '../../lib/format';
-import { EmptyState, Loading, Pagination, Section, Tabs } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination, Section, Tabs } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 interface Row {
@@ -34,6 +35,8 @@ export default function AdminScratch() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const size = 30;
 
   const load = useCallback(async () => {
@@ -52,6 +55,10 @@ export default function AdminScratch() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [state, page]);
 
   async function act(row: Row, body: { state?: string; featured?: boolean }, message: string) {
     setBusy(row.id);
@@ -78,6 +85,37 @@ export default function AdminScratch() {
     } finally {
       setBusy(null);
     }
+  }
+
+  const chosen = items.filter((row) => selected.includes(row.id));
+  const allSelected = items.length > 0 && items.every((row) => selected.includes(row.id));
+  const toggleAll = () => {
+    const ids = items.map((row) => row.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  async function bulkAct(
+    action: 'publish' | 'reject' | 'feature' | 'unfeature' | 'delete',
+  ) {
+    if (!chosen.length) return;
+    if (action === 'delete' && !window.confirm(`确定删除选中的 ${chosen.length} 个作品吗？文件与封面会一起删除。`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (row) => {
+        if (action === 'publish') return api.put(`/api/admin/scratch/projects/${row.id}`, { state: 'published' });
+        if (action === 'reject') return api.put(`/api/admin/scratch/projects/${row.id}`, { state: 'rejected' });
+        if (action === 'feature') return api.put(`/api/admin/scratch/projects/${row.id}`, { featured: true });
+        if (action === 'unfeature') return api.put(`/api/admin/scratch/projects/${row.id}`, { featured: false });
+        return api.del(`/api/admin/scratch/projects/${row.id}`);
+      },
+      { id: (row) => row.id, label: (row) => row.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 个作品`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个作品操作失败`);
+    await load();
   }
 
   if (loading && !items.length) return <Loading />;
@@ -117,12 +155,45 @@ export default function AdminScratch() {
         </div>
       </Section>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('publish')}>
+          通过并发布
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('reject')}>
+          打回
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('feature')}>
+          <Star className="h-3.5 w-3.5" /> 设为精选
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('unfeature')}>
+          取消精选
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkAct('delete')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       {!items.length ? (
         <EmptyState title="没有符合筛选条件的作品" />
       ) : (
         <div className="card divide-y divide-slate-100 dark:divide-slate-800">
           {items.map((row) => (
-            <div key={row.id} className="flex flex-wrap items-center gap-3 p-3">
+            <div
+              key={row.id}
+              className={classNames('flex flex-wrap items-center gap-3 p-3', selected.includes(row.id) && 'bg-primary/5')}
+            >
+              <input
+                type="checkbox"
+                aria-label={`选择作品 ${row.title}`}
+                checked={selected.includes(row.id)}
+                onChange={() =>
+                  setSelected((current) =>
+                    current.includes(row.id)
+                      ? current.filter((id) => id !== row.id)
+                      : [...current, row.id],
+                  )
+                }
+              />
               <div className="grid h-14 w-20 flex-none place-items-center overflow-hidden rounded border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
                 {row.thumbnail ? <img src={row.thumbnail} alt="" className="h-full w-full object-cover" /> : null}
               </div>
@@ -174,6 +245,13 @@ export default function AdminScratch() {
           ))}
         </div>
       )}
+
+      {items.length > 0 ? (
+        <label className="flex items-center gap-2 px-1 text-xs text-slate-500">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+          全选本页作品
+        </label>
+      ) : null}
 
       <Pagination page={page} size={size} total={total} onChange={setPage} />
     </div>

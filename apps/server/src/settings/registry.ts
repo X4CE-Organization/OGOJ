@@ -1073,6 +1073,7 @@ export const SETTINGS: SettingField[] = [
     type: 'boolean',
     default: true,
     group: 'contest',
+    public: true,
   },
   {
     key: 'user_contest_max_days',

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Pencil, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, formatTime } from '../../lib/format';
-import { EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
+import { BulkBar, EmptyState, Field, Loading, Modal, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 function toInput(value?: string) {
@@ -19,6 +20,8 @@ export default function ContestsPanel() {
   const [review, setReview] = useState('');
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +39,10 @@ export default function ContestsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [page, review]);
 
   const openEditor = (contest?: any) => {
     if (!contest) {
@@ -141,6 +148,48 @@ export default function ContestsPanel() {
     }
   };
 
+  const contests: any[] = data?.items ?? [];
+  const chosen = contests.filter((contest) => selected.includes(contest.id));
+  const allSelected = contests.length > 0 && contests.every((contest) => selected.includes(contest.id));
+  const toggleOne = (id: number) => {
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  };
+  const toggleAll = () => {
+    const ids = contests.map((contest) => contest.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkReview = async (approve: boolean) => {
+    if (!chosen.length) return;
+    const note = approve ? '' : window.prompt('批量驳回原因', '比赛信息需要修改') ?? '';
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (contest) => api.post(`/api/admin/contests/${contest.id}/review`, { approve, note }),
+      { id: (contest) => contest.id, label: (contest) => contest.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量${approve ? '通过' : '驳回'} ${result.succeeded} 场比赛`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 场比赛操作失败`);
+    void load();
+  };
+
+  const bulkDelete = async () => {
+    if (!chosen.length || !window.confirm(`确定删除选中的 ${chosen.length} 场比赛吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (contest) => api.del(`/api/contests/${contest.id}`),
+      { id: (contest) => contest.id, label: (contest) => contest.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已删除 ${result.succeeded} 场比赛`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 场比赛删除失败`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -176,6 +225,18 @@ export default function ContestsPanel() {
         ))}
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview(true)}>
+          <Check className="h-3.5 w-3.5" /> 通过
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview(false)}>
+          <X className="h-3.5 w-3.5" /> 驳回
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkDelete()}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -186,6 +247,9 @@ export default function ContestsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页比赛" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th>比赛</th>
                   <th className="w-20">赛制</th>
                   <th className="w-40">时间</th>
@@ -196,7 +260,15 @@ export default function ContestsPanel() {
               </thead>
               <tbody>
                 {data.items.map((contest: any) => (
-                  <tr key={contest.id}>
+                  <tr key={contest.id} className={selected.includes(contest.id) ? 'bg-primary/5' : undefined}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择比赛 ${contest.title}`}
+                        checked={selected.includes(contest.id)}
+                        onChange={() => toggleOne(contest.id)}
+                      />
+                    </td>
                     <td>
                       <Link to={`/contest/${contest.id}`} className="hover:text-primary">
                         {contest.title}

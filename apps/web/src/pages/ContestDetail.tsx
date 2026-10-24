@@ -134,7 +134,14 @@ export default function ContestDetail() {
             </span>
             <div className="flex items-center gap-2">
               {canEdit && (
-                <Link to="/admin/contests" className="btn-ghost !px-2.5 !py-1 text-xs">
+                <Link
+                  to={
+                    user?.role === 'admin' || user?.role === 'superadmin'
+                      ? '/admin/contests'
+                      : `/contests?edit=${contest.id}`
+                  }
+                  className="btn-ghost !px-2.5 !py-1 text-xs"
+                >
                   <Pencil className="h-3.5 w-3.5" /> 管理比赛
                 </Link>
               )}

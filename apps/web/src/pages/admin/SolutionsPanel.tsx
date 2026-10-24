@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, EyeOff, Trash2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, fromNow } from '../../lib/format';
-import { EmptyState, Loading, Pagination } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function SolutionsPanel() {
@@ -12,6 +13,8 @@ export default function SolutionsPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pendingOnly, setPendingOnly] = useState(true);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +35,10 @@ export default function SolutionsPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected([]);
+  }, [page, pendingOnly]);
+
   const setPublic = async (solution: any, isPublic: boolean) => {
     try {
       await api.put(`/api/solutions/${solution.id}`, { isPublic });
@@ -49,6 +56,44 @@ export default function SolutionsPanel() {
     void load();
   };
 
+  const solutions: any[] = data?.items ?? [];
+  const chosen = solutions.filter((solution) => selected.includes(solution.id));
+  const allSelected = solutions.length > 0 && solutions.every((solution) => selected.includes(solution.id));
+  const toggleAll = () => {
+    const ids = solutions.map((solution) => solution.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkSetPublic = async (isPublic: boolean) => {
+    if (!chosen.length) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (solution) => api.put(`/api/solutions/${solution.id}`, { isPublic }),
+      { id: (solution) => solution.id, label: (solution) => solution.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已${isPublic ? '公开' : '下架'} ${result.succeeded} 篇题解`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 篇题解操作失败`);
+    void load();
+  };
+
+  const bulkDelete = async () => {
+    if (!chosen.length || !window.confirm(`确定删除选中的 ${chosen.length} 篇题解吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (solution) => api.del(`/api/solutions/${solution.id}`),
+      { id: (solution) => solution.id, label: (solution) => solution.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已删除 ${result.succeeded} 篇题解`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 篇题解删除失败`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -58,6 +103,18 @@ export default function SolutionsPanel() {
           只看未公开
         </label>
       </div>
+
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSetPublic(true)}>
+          <Check className="h-3.5 w-3.5" /> 公开
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSetPublic(false)}>
+          <EyeOff className="h-3.5 w-3.5" /> 下架
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkDelete()}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
 
       <div className="card overflow-hidden">
         {loading ? (
@@ -69,6 +126,9 @@ export default function SolutionsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页题解" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th>标题</th>
                   <th className="w-28">作者</th>
                   <th className="w-28">题目</th>
@@ -79,7 +139,21 @@ export default function SolutionsPanel() {
               </thead>
               <tbody>
                 {data.items.map((solution: any) => (
-                  <tr key={solution.id}>
+                  <tr key={solution.id} className={selected.includes(solution.id) ? 'bg-primary/5' : undefined}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择题解 ${solution.title}`}
+                        checked={selected.includes(solution.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(solution.id)
+                              ? current.filter((id) => id !== solution.id)
+                              : [...current, solution.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td>
                       <Link to={`/solution/${solution.id}`} className="hover:text-primary">
                         {solution.title}

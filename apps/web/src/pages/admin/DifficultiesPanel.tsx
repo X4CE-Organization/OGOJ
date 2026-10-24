@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames } from '../../lib/format';
-import { DifficultyBadge, Field, Loading, Modal, Section } from '../../components/ui';
+import { BulkBar, DifficultyBadge, Field, Loading, Modal, Section } from '../../components/ui';
 import { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
@@ -15,6 +16,8 @@ export default function DifficultiesPanel() {
   /** 点铅笔打开的编辑弹窗：上面改名字，下面颜色板 */
   const [editing, setEditing] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', color: '', colorDark: '' });
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +107,29 @@ export default function DifficultiesPanel() {
     }
   };
 
+  const chosen = items.filter((item) => selected.includes(item.id));
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = items.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkDelete = async () => {
+    if (!chosen.length || !window.confirm(`确定删除选中的 ${chosen.length} 个难度吗？仍被题目使用的难度会跳过。`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => api.del(`/api/admin/difficulties/${item.id}`),
+      { id: (item) => item.id, label: (item) => item.name },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已删除 ${result.succeeded} 个难度`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个难度仍在使用或删除失败`);
+    window.dispatchEvent(new CustomEvent('ogoj:difficulties'));
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -118,13 +144,37 @@ export default function DifficultiesPanel() {
         </button>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkDelete()}>
+          <Trash2 className="h-3.5 w-3.5" /> 批量删除
+        </button>
+      </BulkBar>
+
       <Section title={`共 ${items.length} 个难度等级`}>
         {loading ? (
           <Loading />
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {items.map((item, index) => (
-              <div key={item.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+              <div
+                key={item.id}
+                className={classNames(
+                  'flex flex-wrap items-center gap-3 px-4 py-3 text-sm',
+                  selected.includes(item.id) && 'bg-primary/5',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`选择难度 ${item.name}`}
+                  checked={selected.includes(item.id)}
+                  onChange={() =>
+                    setSelected((current) =>
+                      current.includes(item.id)
+                        ? current.filter((id) => id !== item.id)
+                        : [...current, item.id],
+                    )
+                  }
+                />
                 <span className="w-6 text-xs text-slate-400">{index + 1}</span>
                 <DifficultyBadge value={item.value} />
                 <span className="text-xs text-slate-400">题目数据里记的值：{item.value}</span>
@@ -166,6 +216,12 @@ export default function DifficultiesPanel() {
             ))}
           </div>
         )}
+        {items.length > 0 ? (
+          <label className="flex items-center gap-2 border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-800">
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+            全选难度
+          </label>
+        ) : null}
       </Section>
 
       <Modal

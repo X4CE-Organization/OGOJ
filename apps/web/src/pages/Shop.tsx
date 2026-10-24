@@ -46,8 +46,8 @@ export default function Shop() {
       });
       toast.success(
         result.status === 'approved'
-          ? '兑换成功，资格已发放到你的账号'
-          : '兑换申请已提交，等待管理员审核',
+          ? `兑换成功，资格已发放；${selected.kind === 'contest' ? '现在可以去创建比赛' : selected.kind === 'problem' ? '现在可以去出题' : '已发放到你的账号'}`
+          : '兑换申请已提交，管理员通过后资格会发放到你的账号',
       );
       setSelected(null);
       setPayload({});
@@ -93,9 +93,12 @@ export default function Shop() {
             <span className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
               可出题：{grants.problem ?? 0} 次
             </span>
-            <span className="text-xs text-slate-500">
-              创建比赛请到「比赛」页面，出题请到「题库 → 新建题目」。
-            </span>
+            <Link to="/contests?create=1" className="rounded-lg border border-primary/30 px-3 py-2 text-primary hover:bg-primary/5">
+              去创建比赛
+            </Link>
+            <Link to="/submit/problem/new" className="rounded-lg border border-primary/30 px-3 py-2 text-primary hover:bg-primary/5">
+              去出题
+            </Link>
           </div>
         </Section>
       ) : null}
@@ -170,36 +173,18 @@ export default function Shop() {
             当前积分 {user?.points ?? 0}，兑换后将剩余 {(user?.points ?? 0) - (selected?.price ?? 0)} 积分。
           </p>
           {selected?.kind === 'contest' && (
-            <>
-              <Field label="比赛名称" required>
-                <input
-                  className="input"
-                  value={payload.title ?? ''}
-                  onChange={(event) => setPayload({ ...payload, title: event.target.value })}
-                  placeholder="例如：我的第一场比赛"
-                />
-              </Field>
-              <Field label="计划开始时间">
-                <input
-                  className="input"
-                  type="datetime-local"
-                  value={payload.startTime ?? ''}
-                  onChange={(event) => setPayload({ ...payload, startTime: event.target.value })}
-                />
-              </Field>
-              <Field label="备注">
-                <textarea
-                  className="input min-h-[80px]"
-                  value={payload.note ?? ''}
-                  onChange={(event) => setPayload({ ...payload, note: event.target.value })}
-                  placeholder="赛制、题量等说明，方便管理员审核"
-                />
-              </Field>
-            </>
+            <p className="rounded-lg bg-sky-50 p-3 text-xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+              这里只购买「创建比赛资格」。审核通过后，回到比赛页点击「创建比赛」，再填写比赛名称、时间和题目。
+            </p>
           )}
-          {(selected?.kind === 'problem' || selected?.kind === 'custom') && (
+          {selected?.kind === 'problem' && (
+            <p className="rounded-lg bg-sky-50 p-3 text-xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+              这里只购买「出题资格」。审核通过后，回到题库点击「新建题目」，再填写题面和测试数据。
+            </p>
+          )}
+          {selected?.kind === 'custom' && (
             <>
-              <Field label="题目 / 用途名称" required={selected?.kind === 'problem'}>
+              <Field label="用途名称" required>
                 <input
                   className="input"
                   value={payload.title ?? ''}

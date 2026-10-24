@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, Pin, Trash2, Undo2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, fromNow } from '../../lib/format';
-import { EmptyState, Loading, Pagination } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function DiscussionsPanel() {
@@ -13,6 +14,8 @@ export default function DiscussionsPanel() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,6 +36,10 @@ export default function DiscussionsPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected([]);
+  }, [page, search, showDeleted]);
+
   const moderate = async (discussion: any, patch: Record<string, unknown>, message: string) => {
     try {
       await api.post(`/api/admin/discussions/${discussion.id}/moderate`, patch);
@@ -41,6 +48,30 @@ export default function DiscussionsPanel() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
     }
+  };
+
+  const discussions: any[] = data?.items ?? [];
+  const chosen = discussions.filter((discussion) => selected.includes(discussion.id));
+  const allSelected = discussions.length > 0 && discussions.every((discussion) => selected.includes(discussion.id));
+  const toggleAll = () => {
+    const ids = discussions.map((discussion) => discussion.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkModerate = async (patch: Record<string, unknown>, label: string) => {
+    if (!chosen.length) return;
+    if (patch.isDeleted === true && !window.confirm(`确定删除选中的 ${chosen.length} 个帖子吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (discussion) => api.post(`/api/admin/discussions/${discussion.id}/moderate`, patch),
+      { id: (discussion) => discussion.id, label: (discussion) => discussion.title },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`${label}：成功 ${result.succeeded} 个帖子`);
+    if (result.failures.length) toast.error(`${label}：失败 ${result.failures.length} 个`);
+    void load();
   };
 
   return (
@@ -73,6 +104,27 @@ export default function DiscussionsPanel() {
         </label>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkModerate({ isPinned: true }, '批量置顶')}>
+          <Pin className="h-3.5 w-3.5" /> 置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkModerate({ isPinned: false }, '批量取消置顶')}>
+          取消置顶
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkModerate({ isLocked: true }, '批量锁定')}>
+          <Lock className="h-3.5 w-3.5" /> 锁定
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkModerate({ isLocked: false }, '批量解锁')}>
+          解锁
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkModerate({ isDeleted: false }, '批量恢复')}>
+          <Undo2 className="h-3.5 w-3.5" /> 恢复
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkModerate({ isDeleted: true }, '批量删除')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -83,6 +135,9 @@ export default function DiscussionsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页帖子" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th>标题</th>
                   <th className="w-28">作者</th>
                   <th className="w-24">回复</th>
@@ -92,7 +147,27 @@ export default function DiscussionsPanel() {
               </thead>
               <tbody>
                 {data.items.map((discussion: any) => (
-                  <tr key={discussion.id} className={classNames(discussion.is_deleted && 'opacity-60')}>
+                  <tr
+                    key={discussion.id}
+                    className={classNames(
+                      discussion.is_deleted && 'opacity-60',
+                      selected.includes(discussion.id) && 'bg-primary/5',
+                    )}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择帖子 ${discussion.title}`}
+                        checked={selected.includes(discussion.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(discussion.id)
+                              ? current.filter((id) => id !== discussion.id)
+                              : [...current, discussion.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         {Boolean(discussion.is_pinned) && <Pin className="h-3 w-3 text-rose-500" />}

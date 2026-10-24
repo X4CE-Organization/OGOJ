@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames } from '../../lib/format';
-import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import { BulkBar, EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function ShopPanel() {
@@ -11,6 +12,8 @@ export default function ShopPanel() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,6 +85,32 @@ export default function ShopPanel() {
     void load();
   };
 
+  const chosen = items.filter((item) => selected.includes(item.id));
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = items.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkAct = async (action: 'active' | 'inactive' | 'delete') => {
+    if (!chosen.length) return;
+    if (action === 'delete' && !window.confirm(`确定删除选中的 ${chosen.length} 个商品吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => {
+        if (action === 'delete') return api.del(`/api/admin/shop/items/${item.id}`);
+        return api.put(`/api/admin/shop/items/${item.id}`, { isActive: action === 'active' });
+      },
+      { id: (item) => item.id, label: (item) => item.name },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 个商品`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个商品操作失败`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -90,6 +119,18 @@ export default function ShopPanel() {
           <Plus className="h-3.5 w-3.5" /> 新建商品
         </button>
       </div>
+
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('active')}>
+          批量上架
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('inactive')}>
+          批量下架
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkAct('delete')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
 
       <Section title="商品列表">
         {loading ? (
@@ -101,6 +142,9 @@ export default function ShopPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选商品" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th>商品</th>
                   <th className="w-28">类型</th>
                   <th className="w-24">价格</th>
@@ -112,7 +156,21 @@ export default function ShopPanel() {
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.id}>
+                  <tr key={item.id} className={selected.includes(item.id) ? 'bg-primary/5' : undefined}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择商品 ${item.name}`}
+                        checked={selected.includes(item.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(item.id)
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td>
                       <div className="font-medium">{item.name}</div>
                       <div className="max-w-md truncate text-[11px] text-slate-400">{item.description}</div>

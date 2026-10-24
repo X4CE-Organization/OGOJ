@@ -366,3 +366,33 @@ export function Field({
     </label>
   );
 }
+
+export function BulkBar({
+  count,
+  onClear,
+  children,
+  busy = false,
+}: {
+  count: number;
+  onClear: () => void;
+  children: ReactNode;
+  busy?: boolean;
+}) {
+  if (count <= 0) return null;
+  return (
+    <div className="card flex flex-wrap items-center gap-2 border-primary/20 bg-primary/[0.03] p-3 text-sm">
+      <span className="mr-1 font-medium text-slate-700 dark:text-slate-200">
+        已选择 <b className="text-primary">{count}</b> 项
+      </span>
+      {children}
+      <button
+        type="button"
+        className="ml-auto text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
+        disabled={busy}
+        onClick={onClear}
+      >
+        取消选择
+      </button>
+    </div>
+  );
+}

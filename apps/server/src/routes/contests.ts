@@ -185,15 +185,15 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const user = await requireUser(request);
     const body = (request.body ?? {}) as any;
     const isAdmin = hasRole(user, 'admin');
+    let grant: any = null;
     if (!isAdmin) {
       if (!bool('allow_user_contest', true)) throw forbidden('本站未开放用户创建比赛');
-      const grant = await get<any>(
+      grant = await get<any>(
         `SELECT * FROM grants WHERE user_id = ? AND kind = 'contest' AND used < total
            AND (expires_at IS NULL OR expires_at > datetime('now')) ORDER BY id ASC LIMIT 1`,
         [user.id],
       );
       if (!grant) throw forbidden('你需要先在商店兑换「创建一次比赛」资格');
-      await tx(async () => await run('UPDATE grants SET used = used + 1 WHERE id = ?', [grant.id]));
     }
 
     const title = String(body.title ?? '').trim();
@@ -215,31 +215,40 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
       ? body.rules
       : str('default_contest_rules', 'acm');
     const needReview = !isAdmin && bool('user_contest_need_review', true);
-    const info = await run(
-      `INSERT INTO contests
-        (title, subtitle, description, rules, start_time, end_time, freeze_minutes, is_public, need_register,
-         password, show_rank, rated, allow_languages, origin, owner_id, author_id, review_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        title,
-        String(body.subtitle ?? ''),
-        String(body.description ?? ''),
-        rules,
-        startTime,
-        endTime,
-        Math.max(0, Number(body.freezeMinutes ?? num('contest_freeze_default', 0)) || 0),
-        isAdmin ? (body.isPublic === false ? 0 : 1) : needReview ? 0 : 1,
-        body.needRegister === undefined ? (bool('contest_need_register_default', true) ? 1 : 0) : body.needRegister ? 1 : 0,
-        String(body.password ?? ''),
-        body.showRank === undefined ? (bool('contest_show_rank_default', true) ? 1 : 0) : body.showRank ? 1 : 0,
-        body.rated === false ? 0 : 1,
-        JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
-        isAdmin ? 'official' : 'user',
-        user.id,
-        user.id,
-        needReview ? 'pending' : 'approved',
-      ],
-    );
+    const info = await tx(async () => {
+      if (grant) {
+        const consumed = await run(
+          'UPDATE grants SET used = used + 1 WHERE id = ? AND used < total',
+          [grant.id],
+        );
+        if (!consumed.changes) throw conflict('当前没有可用的创建比赛资格');
+      }
+      return run(
+        `INSERT INTO contests
+          (title, subtitle, description, rules, start_time, end_time, freeze_minutes, is_public, need_register,
+           password, show_rank, rated, allow_languages, origin, owner_id, author_id, review_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          title,
+          String(body.subtitle ?? ''),
+          String(body.description ?? ''),
+          rules,
+          startTime,
+          endTime,
+          Math.max(0, Number(body.freezeMinutes ?? num('contest_freeze_default', 0)) || 0),
+          isAdmin ? (body.isPublic === false ? 0 : 1) : needReview ? 0 : 1,
+          body.needRegister === undefined ? (bool('contest_need_register_default', true) ? 1 : 0) : body.needRegister ? 1 : 0,
+          String(body.password ?? ''),
+          body.showRank === undefined ? (bool('contest_show_rank_default', true) ? 1 : 0) : body.showRank ? 1 : 0,
+          body.rated === false ? 0 : 1,
+          JSON.stringify(Array.isArray(body.allowLanguages) ? body.allowLanguages : []),
+          isAdmin ? 'official' : 'user',
+          user.id,
+          user.id,
+          needReview ? 'pending' : 'approved',
+        ],
+      );
+    });
     const contestId = Number(info.lastInsertRowid);
     if (Array.isArray(body.problemIds) && body.problemIds.length) {
       await attachProblems(contestId, body.problemIds);

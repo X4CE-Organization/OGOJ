@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { fromNow } from '../../lib/format';
-import { EmptyState, Loading, Modal, Pagination, Tabs } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Modal, Pagination, Tabs } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 type TabKey = 'articles' | 'posts' | 'comments' | 'messages' | 'solutions' | 'moments';
@@ -82,6 +83,8 @@ export default function AdminContent() {
   const [data, setData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<Record<string, any>>({});
@@ -132,6 +135,10 @@ export default function AdminContent() {
     setCommentType('');
   }, [tab]);
 
+  useEffect(() => {
+    setSelected([]);
+  }, [tab, page, keyword, deleted, commentType]);
+
   function openEdit(row: any) {
     const fields = EDIT_FIELDS[tab];
     const draft: Record<string, any> = {};
@@ -160,6 +167,62 @@ export default function AdminContent() {
   function itemPath(row: any): string {
     if (tab === 'comments') return `/api/admin/content/comments/${row.source}/${row.id}`;
     return `/api/admin/content/${tab}/${row.id}`;
+  }
+
+  function selectionKey(row: any): string {
+    return `${row.source ?? tab}:${row.id}`;
+  }
+
+  const selectedRows: any[] = (data?.items ?? []).filter((row: any) =>
+    selected.includes(selectionKey(row)),
+  );
+  const allSelected =
+    Boolean(data?.items?.length) &&
+    data.items.every((row: any) => selected.includes(selectionKey(row)));
+
+  function toggleAll() {
+    const keys = (data?.items ?? []).map((row: any) => selectionKey(row));
+    setSelected((current) =>
+      allSelected
+        ? current.filter((key) => !keys.includes(key))
+        : [...new Set([...current, ...keys])],
+    );
+  }
+
+  function toggleOne(row: any) {
+    const key = selectionKey(row);
+    setSelected((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+    );
+  }
+
+  async function bulkAction(
+    action: 'delete' | 'restore' | 'pin' | 'unpin' | 'public' | 'private' | 'lock' | 'unlock',
+  ) {
+    if (!selectedRows.length) return;
+    if (action === 'delete' && !window.confirm(`确定删除选中的 ${selectedRows.length} 条内容吗？`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      selectedRows,
+      (row) => {
+        if (action === 'delete') return api.del(itemPath(row));
+        if (action === 'restore') return api.put(itemPath(row), { isDeleted: false });
+        if (action === 'pin') return api.put(itemPath(row), { isPinned: true });
+        if (action === 'unpin') return api.put(itemPath(row), { isPinned: false });
+        if (action === 'public') return api.put(itemPath(row), { isPublic: true });
+        if (action === 'private') return api.put(itemPath(row), { isPublic: false });
+        if (action === 'lock') return api.put(itemPath(row), { isLocked: true });
+        return api.put(itemPath(row), { isLocked: false });
+      },
+      { id: (row) => row.id, label: (row) => row.title || preview(row.content, 24) },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 条`);
+    if (result.failures.length) {
+      toast.error(`批量操作失败 ${result.failures.length} 条：${result.failures[0].message}`);
+    }
+    await Promise.all([load(), loadStats()]);
   }
 
   async function save() {
@@ -260,6 +323,47 @@ export default function AdminContent() {
         ) : null}
       </div>
 
+      <BulkBar count={selectedRows.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('delete')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+        {tab !== 'messages' && (
+          <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('restore')}>
+            <RotateCcw className="h-3.5 w-3.5" /> 恢复
+          </button>
+        )}
+        {['articles', 'posts', 'moments'].includes(tab) && (
+          <>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('pin')}>
+              置顶
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('unpin')}>
+              取消置顶
+            </button>
+          </>
+        )}
+        {['articles', 'solutions'].includes(tab) && (
+          <>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('public')}>
+              公开
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('private')}>
+              隐藏
+            </button>
+          </>
+        )}
+        {tab === 'posts' && (
+          <>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('lock')}>
+              锁定
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('unlock')}>
+              解锁
+            </button>
+          </>
+        )}
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -270,6 +374,14 @@ export default function AdminContent() {
             <table className="table-base min-w-[720px]">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="全选本页内容"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                    />
+                  </th>
                   {tab === 'articles' ? <><th>文章</th><th>作者</th><th>分类</th><th>状态</th><th>时间</th></> : null}
                   {tab === 'posts' ? <><th>帖子</th><th>作者</th><th>回复</th><th>状态</th><th>时间</th></> : null}
                   {tab === 'comments' ? <><th>评论</th><th>位置</th><th>作者</th><th>时间</th></> : null}
@@ -282,8 +394,17 @@ export default function AdminContent() {
               <tbody>
                 {data.items.map((row: any) => {
                   const url = itemUrl(row);
+                  const selectedRow = selected.includes(selectionKey(row));
                   return (
-                    <tr key={`${row.source ?? tab}-${row.id}`}>
+                    <tr key={selectionKey(row)} className={selectedRow ? 'bg-primary/5' : undefined}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label="选择这条内容"
+                          checked={selectedRow}
+                          onChange={() => toggleOne(row)}
+                        />
+                      </td>
                       {tab === 'articles' ? (
                         <>
                           <td>

@@ -29,7 +29,7 @@ const AI_TEST_CONCURRENCY = 2;
 export default function ProblemEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { meta } = useAuth();
+  const { meta, user } = useAuth();
   const toast = useToast();
   const [tab, setTab] = useState('basic');
   const [loading, setLoading] = useState(Boolean(id));
@@ -140,7 +140,8 @@ export default function ProblemEditor() {
       } else {
         const result = await api.post<{ problem: { id: number } }>('/api/problems', payload);
         toast.success('题目已创建');
-        navigate(`/admin/problems/${result.problem.id}/edit`);
+        const prefix = user?.role === 'admin' || user?.role === 'superadmin' ? '/admin/problems' : '/submit/problem';
+        navigate(`${prefix}/${result.problem.id}/edit`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '保存失败');

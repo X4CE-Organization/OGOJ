@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames } from '../../lib/format';
-import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import { BulkBar, EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
 import { COLOR_PRESETS, ColorBoard } from '../../components/ColorPicker';
 import { useToast } from '../../components/Toast';
 
@@ -20,6 +21,12 @@ export default function TagGroupsPanel() {
   /** 点铅笔打开的编辑弹窗：上面改名字，下面颜色板 */
   const [editing, setEditing] = useState<any>(null);
   const [editForm, setEditForm] = useState({ name: '', color: '', group: DEFAULT_GROUP });
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkGroup, setBulkGroup] = useState(DEFAULT_GROUP);
+  const [bulkRecolor, setBulkRecolor] = useState(false);
+  const [bulkColor, setBulkColor] = useState(PRESET_COLORS[0]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -159,6 +166,58 @@ export default function TagGroupsPanel() {
   };
 
   const groupNames = groups.map(([name]) => name);
+  const selectedTags = tags.filter((tag) => selected.includes(tag.id));
+  const allSelected = tags.length > 0 && tags.every((tag) => selected.includes(tag.id));
+
+  const toggleTag = (id: number) => {
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  };
+
+  const toggleAllTags = () => {
+    setSelected(allSelected ? [] : tags.map((tag) => tag.id));
+  };
+
+  const openBulkEdit = () => {
+    setBulkGroup(groupNames[0] ?? DEFAULT_GROUP);
+    setBulkRecolor(false);
+    setBulkEditOpen(true);
+  };
+
+  const applyBulkEdit = async () => {
+    if (!selectedTags.length) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      selectedTags,
+      (tag) =>
+        api.put(`/api/tags/${tag.id}`, {
+          category: bulkGroup.trim() || DEFAULT_GROUP,
+          ...(bulkRecolor ? { color: bulkColor } : {}),
+        }),
+      { id: (tag) => tag.id, label: (tag) => tag.name },
+    );
+    setBulkBusy(false);
+    setBulkEditOpen(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已更新 ${result.succeeded} 个标签`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个标签更新失败`);
+    void load();
+  };
+
+  const removeBulkTags = async () => {
+    if (!selectedTags.length) return;
+    if (!window.confirm(`确定删除选中的 ${selectedTags.length} 个标签吗？题目上的这些标签会同步移除。`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      selectedTags,
+      (tag) => api.del(`/api/tags/${tag.id}`),
+      { id: (tag) => tag.id, label: (tag) => tag.name },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`已删除 ${result.succeeded} 个标签`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个标签删除失败`);
+    void load();
+  };
 
   const recolorGroup = async (group: string) => {
     if (!window.confirm(`把「${group}」里的标签按名称重新配色？会覆盖这个分组里现有的颜色。`)) return;
@@ -181,6 +240,9 @@ export default function TagGroupsPanel() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={toggleAllTags}>
+            {allSelected ? '取消全选' : '全选标签'}
+          </button>
           <button
             type="button"
             className="btn-ghost !py-1.5 text-xs"
@@ -242,7 +304,19 @@ export default function TagGroupsPanel() {
           >
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {list.map((tag) => (
-                <div key={tag.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm">
+                <div
+                  key={tag.id}
+                  className={classNames(
+                    'flex flex-wrap items-center gap-2 px-4 py-2 text-sm',
+                    selected.includes(tag.id) && 'bg-primary/5',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`选择标签 ${tag.name}`}
+                    checked={selected.includes(tag.id)}
+                    onChange={() => toggleTag(tag.id)}
+                  />
                   {/* 颜色只做展示，改颜色请点右侧铅笔 */}
                   <span
                     title={tag.color || '#60a5fa'}
@@ -286,6 +360,15 @@ export default function TagGroupsPanel() {
           </Section>
         ))
       )}
+
+      <BulkBar count={selected.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={openBulkEdit}>
+          <Pencil className="h-3.5 w-3.5" /> 批量编辑
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void removeBulkTags()}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
 
       <Modal
         open={Boolean(editing)}
@@ -340,6 +423,45 @@ export default function TagGroupsPanel() {
               {editForm.name || '标签'}
             </span>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={bulkEditOpen}
+        title={`批量编辑 ${selectedTags.length} 个标签`}
+        onClose={() => setBulkEditOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setBulkEditOpen(false)}>
+              取消
+            </button>
+            <button type="button" className="btn-primary" disabled={bulkBusy} onClick={() => void applyBulkEdit()}>
+              应用到全部
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="统一移动到分组">
+            <input
+              className="input"
+              list="tag-group-options-bulk"
+              value={bulkGroup}
+              onChange={(event) => setBulkGroup(event.target.value)}
+            />
+            <datalist id="tag-group-options-bulk">
+              {groupNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={bulkRecolor} onChange={(event) => setBulkRecolor(event.target.checked)} />
+            同时统一修改颜色
+          </label>
+          {bulkRecolor ? (
+            <ColorBoard label="统一颜色" value={bulkColor} onChange={setBulkColor} />
+          ) : null}
         </div>
       </Modal>
 

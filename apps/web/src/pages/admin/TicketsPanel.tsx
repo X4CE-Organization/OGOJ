@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, Star, UserCheck } from 'lucide-react';
 import { api, query } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { runBulk } from '../../lib/bulk';
 import { classNames, fromNow } from '../../lib/format';
-import { EmptyState, Loading, Pagination, Section, UserLink } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination, Section, UserLink } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { TICKET_PRIORITY, TICKET_STATUS } from '../Tickets';
 
@@ -16,6 +17,8 @@ export default function TicketsPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ status: 'unfinished', category: '', priority: '', assignee: '', q: '' });
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,6 +40,10 @@ export default function TicketsPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+  }, [page, filters]);
 
   const setFilter = (patch: Partial<typeof filters>) => {
     setFilters((current) => ({ ...current, ...patch }));
@@ -70,6 +77,35 @@ export default function TicketsPanel() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
     }
+  };
+
+  const tickets: any[] = data?.items ?? [];
+  const chosen = tickets.filter((ticket) => selected.includes(ticket.id));
+  const allSelected = tickets.length > 0 && tickets.every((ticket) => selected.includes(ticket.id));
+  const toggleAll = () => {
+    const ids = tickets.map((ticket) => ticket.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkAct = async (action: 'assign' | 'resolved' | 'closed' | 'urgent' | 'normal') => {
+    if (!chosen.length) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (ticket) => {
+        if (action === 'assign') return api.post(`/api/admin/tickets/${ticket.id}/assign-me`);
+        if (action === 'urgent' || action === 'normal') {
+          return api.put(`/api/admin/tickets/${ticket.id}`, { isEscalated: action === 'urgent' });
+        }
+        return api.put(`/api/admin/tickets/${ticket.id}`, { status: action });
+      },
+      { id: (ticket) => ticket.id, label: (ticket) => ticket.ticketNo },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 个工单`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个工单操作失败`);
+    void load();
   };
 
   return (
@@ -153,6 +189,24 @@ export default function TicketsPanel() {
         ) : null}
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('assign')}>
+          <UserCheck className="h-3.5 w-3.5" /> 全部受理
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('resolved')}>
+          标记解决
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('closed')}>
+          关闭
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('urgent')}>
+          <AlertTriangle className="h-3.5 w-3.5" /> 升级
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('normal')}>
+          取消升级
+        </button>
+      </BulkBar>
+
       <Section title="工单列表">
         {loading ? (
           <Loading />
@@ -163,6 +217,9 @@ export default function TicketsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选本页工单" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th className="w-36">编号</th>
                   <th>工单</th>
                   <th className="w-36">提交者</th>
@@ -176,7 +233,27 @@ export default function TicketsPanel() {
               </thead>
               <tbody>
                 {data.items.map((ticket: any) => (
-                  <tr key={ticket.id} className={classNames(ticket.unreadForAdmin && 'bg-primary/[0.04]')}>
+                  <tr
+                    key={ticket.id}
+                    className={classNames(
+                      ticket.unreadForAdmin && 'bg-primary/[0.04]',
+                      selected.includes(ticket.id) && 'ring-1 ring-inset ring-primary/20',
+                    )}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择工单 ${ticket.ticketNo}`}
+                        checked={selected.includes(ticket.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(ticket.id)
+                              ? current.filter((id) => id !== ticket.id)
+                              : [...current, ticket.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td>
                       <Link to={`/tickets/${ticket.id}`} className="link font-mono text-xs">
                         {ticket.ticketNo}

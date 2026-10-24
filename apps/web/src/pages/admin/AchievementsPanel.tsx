@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames } from '../../lib/format';
-import { EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
+import { BulkBar, EmptyState, Field, Loading, Modal, Section } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 const CONDITION_TYPES = [
@@ -38,6 +39,8 @@ export default function AchievementsPanel() {
   const [form, setForm] = useState<any>({});
   const [grantFor, setGrantFor] = useState<any>(null);
   const [grantUser, setGrantUser] = useState('');
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +140,33 @@ export default function AchievementsPanel() {
     }
   };
 
+  const items: any[] = data?.items ?? [];
+  const chosen = items.filter((item) => selected.includes(item.id));
+  const allSelected = items.length > 0 && items.every((item) => selected.includes(item.id));
+  const toggleAll = () => {
+    const ids = items.map((item) => item.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkAct = async (action: 'enable' | 'disable' | 'delete') => {
+    if (!chosen.length) return;
+    if (action === 'delete' && !window.confirm(`确定删除选中的 ${chosen.length} 个成就吗？已解锁记录也会一并删除。`)) return;
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (item) => {
+        if (action === 'delete') return api.del(`/api/admin/achievements/${item.id}`);
+        return api.put(`/api/admin/achievements/${item.id}`, { isActive: action === 'enable' });
+      },
+      { id: (item) => item.id, label: (item) => item.name },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量操作成功 ${result.succeeded} 个成就`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个成就操作失败`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -153,6 +183,18 @@ export default function AchievementsPanel() {
         </div>
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('enable')}>
+          批量启用
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAct('disable')}>
+          批量停用
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkAct('delete')}>
+          <Trash2 className="h-3.5 w-3.5" /> 删除
+        </button>
+      </BulkBar>
+
       <Section title="徽章列表">
         {loading ? (
           <Loading />
@@ -163,6 +205,9 @@ export default function AchievementsPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" aria-label="全选成就" checked={allSelected} onChange={toggleAll} />
+                  </th>
                   <th className="w-16">图标</th>
                   <th>成就</th>
                   <th className="w-24">分类</th>
@@ -176,7 +221,24 @@ export default function AchievementsPanel() {
               </thead>
               <tbody>
                 {data.items.map((item: any) => (
-                  <tr key={item.id} className={classNames(!item.is_active && 'opacity-60')}>
+                  <tr
+                    key={item.id}
+                    className={classNames(!item.is_active && 'opacity-60', selected.includes(item.id) && 'bg-primary/5')}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择成就 ${item.name}`}
+                        checked={selected.includes(item.id)}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(item.id)
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td className="text-xl">{item.icon}</td>
                     <td>
                       <div className="font-medium">{item.name}</div>

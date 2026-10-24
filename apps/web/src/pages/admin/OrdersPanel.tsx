@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { api, query } from '../../lib/api';
+import { runBulk } from '../../lib/bulk';
 import { classNames, formatTime } from '../../lib/format';
-import { EmptyState, Loading, Pagination } from '../../components/ui';
+import { BulkBar, EmptyState, Loading, Pagination } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
 export default function OrdersPanel() {
@@ -11,6 +12,8 @@ export default function OrdersPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('pending');
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,6 +32,10 @@ export default function OrdersPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected([]);
+  }, [page, status]);
+
   const review = async (order: any, approve: boolean) => {
     const note = approve ? '' : window.prompt('驳回原因', '申请信息不完整') ?? '';
     try {
@@ -38,6 +45,32 @@ export default function OrdersPanel() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
     }
+  };
+
+  const orders: any[] = data?.items ?? [];
+  const pendingOrders = orders.filter((order) => order.status === 'pending');
+  const chosen = pendingOrders.filter((order) => selected.includes(order.id));
+  const allSelected =
+    pendingOrders.length > 0 && pendingOrders.every((order) => selected.includes(order.id));
+  const toggleAll = () => {
+    const ids = pendingOrders.map((order) => order.id);
+    setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
+  };
+
+  const bulkReview = async (approve: boolean) => {
+    if (!chosen.length) return;
+    const note = approve ? '' : window.prompt('批量驳回原因', '申请信息不完整') ?? '';
+    setBulkBusy(true);
+    const result = await runBulk(
+      chosen,
+      (order) => api.post(`/api/admin/shop/orders/${order.id}/review`, { approve, note }),
+      { id: (order) => order.id, label: (order) => order.order_no },
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    if (result.succeeded) toast.success(`批量${approve ? '通过' : '驳回'} ${result.succeeded} 个订单`);
+    if (result.failures.length) toast.error(`有 ${result.failures.length} 个订单操作失败`);
+    void load();
   };
 
   return (
@@ -76,6 +109,15 @@ export default function OrdersPanel() {
         ))}
       </div>
 
+      <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview(true)}>
+          <Check className="h-3.5 w-3.5" /> 通过
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview(false)}>
+          <X className="h-3.5 w-3.5" /> 驳回
+        </button>
+      </BulkBar>
+
       <div className="card overflow-hidden">
         {loading ? (
           <Loading />
@@ -86,6 +128,15 @@ export default function OrdersPanel() {
             <table className="table-base">
               <thead>
                 <tr>
+                  <th className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="全选本页待审核订单"
+                      checked={allSelected}
+                      disabled={!pendingOrders.length}
+                      onChange={toggleAll}
+                    />
+                  </th>
                   <th className="w-36">订单号</th>
                   <th className="w-32">用户</th>
                   <th>商品 / 申请内容</th>
@@ -96,7 +147,22 @@ export default function OrdersPanel() {
               </thead>
               <tbody>
                 {data.items.map((order: any) => (
-                  <tr key={order.id}>
+                  <tr key={order.id} className={selected.includes(order.id) ? 'bg-primary/5' : undefined}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`选择订单 ${order.order_no}`}
+                        checked={selected.includes(order.id)}
+                        disabled={order.status !== 'pending'}
+                        onChange={() =>
+                          setSelected((current) =>
+                            current.includes(order.id)
+                              ? current.filter((id) => id !== order.id)
+                              : [...current, order.id],
+                          )
+                        }
+                      />
+                    </td>
                     <td className="font-mono text-xs">{order.order_no}</td>
                     <td className="text-sm">
                       {order.username}
