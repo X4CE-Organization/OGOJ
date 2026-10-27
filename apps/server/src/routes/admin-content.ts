@@ -45,7 +45,7 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
   /* --------------------------------------------------------------- 概览 */
   app.get('/api/admin/content/stats', async (request) => {
     await requireAdmin(request);
-    const [articles, posts, comments, messages, solutions, moments] = await Promise.all([
+    const [articles, posts, comments, messages, solutions, moments, lists] = await Promise.all([
       count('SELECT COUNT(*) AS c FROM articles WHERE is_deleted = 0'),
       count('SELECT COUNT(*) AS c FROM discussions WHERE is_deleted = 0'),
       count(
@@ -57,8 +57,9 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       count('SELECT COUNT(*) AS c FROM messages'),
       count('SELECT COUNT(*) AS c FROM solutions WHERE is_deleted = 0'),
       count('SELECT COUNT(*) AS c FROM moments WHERE is_deleted = 0'),
+      count('SELECT COUNT(*) AS c FROM lists WHERE is_deleted = 0'),
     ]);
-    return { articles, posts, comments, messages, solutions, moments };
+    return { articles, posts, comments, messages, solutions, moments, lists };
   });
 
   /* --------------------------------------------------------------- 文章 */
@@ -76,7 +77,8 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
     const where = conditions.join(' AND ');
     const items = await all<any>(
       `SELECT a.id, a.title, a.summary, a.content, a.cover, a.category,
-              a.is_public, a.is_pinned, a.is_deleted, a.views, a.created_at, a.updated_at,
+              a.is_public, a.is_pinned, a.is_deleted, a.review_status, a.review_note,
+              a.views, a.created_at, a.updated_at,
               a.author_id, u.username AS author
          FROM articles a JOIN users u ON u.id = a.author_id
         WHERE ${where}
@@ -125,7 +127,7 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       fields.push('content = ?');
       values.push(content);
     }
-    if (has(body, 'isPublic')) {
+    if (has(body, 'isPublic') && !has(body, 'reviewStatus')) {
       fields.push('is_public = ?');
       values.push(flag(body.isPublic));
     }
@@ -136,6 +138,18 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
     if (has(body, 'isDeleted')) {
       fields.push('is_deleted = ?');
       values.push(flag(body.isDeleted));
+    }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000));
+      if (reviewStatus !== 'approved') {
+        fields.push('is_public = 0');
+      } else {
+        fields.push('is_public = 1');
+      }
     }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     fields.push("updated_at = datetime('now')");
@@ -159,6 +173,93 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       targetId: id,
       detail: { title: row.title },
     });
+    return { ok: true };
+  });
+
+  /* --------------------------------------------------------------- 题单 */
+  app.get('/api/admin/content/lists', async (request) => {
+    await requireAdmin(request);
+    const query = request.query as any;
+    const page = parsePage(query, 30);
+    const conditions = ['l.is_deleted = ?'];
+    const params: unknown[] = [query.deleted === 'true' ? 1 : 0];
+    if (query.keyword) {
+      const like = sqlLike(String(query.keyword));
+      conditions.push(`(l.title LIKE ? ESCAPE '\\' OR l.description LIKE ? ESCAPE '\\')`);
+      params.push(like, like);
+    }
+    const where = conditions.join(' AND ');
+    const items = await all<any>(
+      `SELECT l.id, l.title, l.description, l.cover, l.type, l.is_public, l.is_deleted,
+              l.review_status, l.review_note, l.views, l.created_at, l.updated_at,
+              l.author_id, u.username AS author
+         FROM lists l JOIN users u ON u.id = l.author_id
+        WHERE ${where} ORDER BY l.id DESC LIMIT ? OFFSET ?`,
+      [...params, page.size, page.offset],
+    );
+    return {
+      items: items.map((row) => ({
+        ...row,
+        is_public: Boolean(row.is_public),
+        is_deleted: Boolean(row.is_deleted),
+      })),
+      total: await count(`SELECT COUNT(*) AS c FROM lists l WHERE ${where}`, params),
+      page: page.page,
+      size: page.size,
+    };
+  });
+
+  app.put('/api/admin/content/lists/:id', async (request) => {
+    await requireAdmin(request);
+    const id = parseId((request.params as any).id);
+    const row = await get<any>('SELECT title FROM lists WHERE id = ?', [id]);
+    if (!row) throw notFound('题单不存在');
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (has(body, 'title')) {
+      const title = text(body.title, 120);
+      if (!title) throw badRequest('题单名称不能为空');
+      fields.push('title = ?');
+      values.push(title);
+    }
+    if (has(body, 'description')) {
+      fields.push('description = ?');
+      values.push(text(body.description));
+    }
+    if (has(body, 'isPublic')) {
+      fields.push('is_public = ?');
+      values.push(flag(body.isPublic));
+    }
+    if (has(body, 'isDeleted')) {
+      fields.push('is_deleted = ?');
+      values.push(flag(body.isDeleted));
+    }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?', 'is_public = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000), reviewStatus === 'approved' ? 1 : 0);
+    }
+    if (!fields.length) throw badRequest('没有需要修改的内容');
+    fields.push(`updated_at = datetime('now')`);
+    await run(`UPDATE lists SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    await audit(request, 'admin.content_list_update', {
+      targetType: 'list',
+      targetId: id,
+      detail: { fields: Object.keys(body), title: row.title },
+    });
+    return { ok: true };
+  });
+
+  app.delete('/api/admin/content/lists/:id', async (request) => {
+    await requireAdmin(request);
+    const id = parseId((request.params as any).id);
+    const row = await get<any>('SELECT title FROM lists WHERE id = ?', [id]);
+    if (!row) throw notFound('题单不存在');
+    await run(`UPDATE lists SET is_deleted = 1, is_public = 0, updated_at = datetime('now') WHERE id = ?`, [id]);
+    await audit(request, 'admin.content_list_delete', { targetType: 'list', targetId: id });
     return { ok: true };
   });
 
@@ -229,6 +330,13 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       fields.push('is_deleted = ?');
       values.push(flag(body.isDeleted));
     }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000));
+    }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     fields.push("updated_at = datetime('now')");
     await run(`UPDATE discussions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
@@ -256,9 +364,10 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
 
   /* --------------------------------------------------------------- 评论 */
   /** 三种评论来源合成一张表，便于统一搜索与分页 */
-  const commentUnion = `
+    const commentUnion = `
     SELECT c.id, 'comment' AS source, c.target_type AS type, c.content, c.author_id,
-           u.username AS author, c.created_at, c.is_deleted, c.target_id, c.parent_id,
+           u.username AS author, c.created_at, c.is_deleted, c.review_status, c.review_note,
+           c.target_id, c.parent_id,
            CASE c.target_type
              WHEN 'article' THEN (SELECT title FROM articles WHERE id = c.target_id)
              WHEN 'problem' THEN (SELECT title FROM problems WHERE id = c.target_id)
@@ -270,14 +379,16 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       FROM comments c JOIN users u ON u.id = c.author_id
     UNION ALL
     SELECT r.id, 'discussion' AS source, 'discussion' AS type, r.content, r.author_id,
-           u2.username AS author, r.created_at, r.is_deleted, r.discussion_id AS target_id, r.reply_to_id AS parent_id,
+           u2.username AS author, r.created_at, r.is_deleted, r.review_status, r.review_note,
+           r.discussion_id AS target_id, r.reply_to_id AS parent_id,
            d.title AS target_title
       FROM discussion_replies r
       JOIN users u2 ON u2.id = r.author_id
       LEFT JOIN discussions d ON d.id = r.discussion_id
     UNION ALL
     SELECT mc.id, 'moment' AS source, 'moment' AS type, mc.content, mc.author_id,
-           u3.username AS author, mc.created_at, mc.is_deleted, mc.moment_id AS target_id, mc.parent_id,
+           u3.username AS author, mc.created_at, mc.is_deleted, mc.review_status, mc.review_note,
+           mc.moment_id AS target_id, mc.parent_id,
            substr(m.content, 1, 60) AS target_title
       FROM moment_comments mc
       JOIN users u3 ON u3.id = mc.author_id
@@ -334,8 +445,32 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       fields.push('is_deleted = ?');
       values.push(flag(body.isDeleted));
     }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000));
+    }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     await run(`UPDATE ${source.table} SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
+    if (has(body, 'reviewStatus')) {
+      const wasApproved = row.review_status === 'approved';
+      const isApproved = String(body.reviewStatus) === 'approved';
+      if (params.source === 'discussion' && wasApproved !== isApproved) {
+        await run(
+          `UPDATE discussions SET reply_count = GREATEST(0, reply_count + ?),
+             last_reply_at = datetime('now') WHERE id = ?`,
+          [isApproved ? 1 : -1, row.discussion_id],
+        );
+      }
+      if (params.source === 'moment' && wasApproved !== isApproved) {
+        await run(
+          `UPDATE moments SET comment_count = GREATEST(0, comment_count + ?) WHERE id = ?`,
+          [isApproved ? 1 : -1, row.moment_id],
+        );
+      }
+    }
     await audit(request, 'admin.content_comment_update', {
       targetType: params.source,
       targetId: id,
@@ -477,7 +612,7 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
     }
     const where = conditions.join(' AND ');
     const items = await all<any>(
-      `SELECT s.id, s.problem_id, s.title, s.content, s.is_public, s.is_deleted,
+      `SELECT s.id, s.problem_id, s.title, s.content, s.is_public, s.is_deleted, s.review_status, s.review_note,
               s.upvotes, s.downvotes, s.views, s.created_at, s.updated_at,
               s.author_id, u.username AS author, p.title AS problem_title
          FROM solutions s
@@ -527,6 +662,13 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
       fields.push('is_deleted = ?');
       values.push(flag(body.isDeleted));
     }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?', 'is_public = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000), reviewStatus === 'approved' ? 1 : 0);
+    }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     fields.push("updated_at = datetime('now')");
     await run(`UPDATE solutions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
@@ -566,7 +708,8 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
     }
     const where = conditions.join(' AND ');
     const items = await all<any>(
-      `SELECT m.id, m.content, m.images, m.is_pinned, m.is_deleted, m.like_count, m.comment_count,
+      `SELECT m.id, m.content, m.images, m.is_pinned, m.is_deleted, m.review_status, m.review_note,
+              m.like_count, m.comment_count,
               m.created_at, m.updated_at, m.author_id, u.username AS author
          FROM moments m JOIN users u ON u.id = m.author_id
         WHERE ${where}
@@ -606,6 +749,13 @@ export async function registerAdminContentRoutes(app: FastifyInstance): Promise<
     if (has(body, 'isDeleted')) {
       fields.push('is_deleted = ?');
       values.push(flag(body.isDeleted));
+    }
+    if (has(body, 'reviewStatus')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(String(body.reviewStatus))
+        ? String(body.reviewStatus)
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?');
+      values.push(reviewStatus, text(body.reviewNote, 1000));
     }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     fields.push("updated_at = datetime('now')");

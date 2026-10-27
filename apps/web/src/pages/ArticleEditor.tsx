@@ -47,12 +47,12 @@ export default function ArticleEditor() {
     setSaving(true);
     try {
       if (id) {
-        await api.put(`/api/articles/${id}`, form);
-        toast.success('已保存');
+        const result = await api.put<{ pending?: boolean }>(`/api/articles/${id}`, form);
+        toast.success(result.pending ? '修改已保存，正在等待管理员审核' : '已保存');
         navigate(`/article/${id}`);
       } else {
-        const result = await api.post<{ id: number }>('/api/articles', form);
-        toast.success('发布成功');
+        const result = await api.post<{ id: number; pending?: boolean }>('/api/articles', form);
+        toast.success(result.pending ? '文章已提交，等待管理员审核' : '发布成功');
         navigate(`/article/${result.id}`);
       }
     } catch (err) {

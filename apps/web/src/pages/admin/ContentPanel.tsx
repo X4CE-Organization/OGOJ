@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, ExternalLink, Pencil, RotateCcw, Trash2, X } from 'lucide-react';
 import { api, query } from '../../lib/api';
 import { runBulk } from '../../lib/bulk';
 import { fromNow } from '../../lib/format';
 import { BulkBar, EmptyState, Loading, Modal, Pagination, Tabs } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 
-type TabKey = 'articles' | 'posts' | 'comments' | 'messages' | 'solutions' | 'moments';
+type TabKey = 'articles' | 'posts' | 'comments' | 'messages' | 'solutions' | 'moments' | 'lists';
 
 const TABS: { key: TabKey; label: string; deletedFilter: boolean }[] = [
   { key: 'articles', label: '文章广场', deletedFilter: true },
@@ -16,6 +16,7 @@ const TABS: { key: TabKey; label: string; deletedFilter: boolean }[] = [
   { key: 'messages', label: '私信 / 站内信', deletedFilter: false },
   { key: 'solutions', label: '题解', deletedFilter: true },
   { key: 'moments', label: '动态', deletedFilter: true },
+  { key: 'lists', label: '题单', deletedFilter: true },
 ];
 
 const COMMENT_TYPES = [
@@ -59,6 +60,11 @@ const EDIT_FIELDS: Record<TabKey, { key: string; label: string; type: 'text' | '
     { key: 'content', label: '动态内容', type: 'textarea' },
     { key: 'isPinned', label: '置顶', type: 'bool' },
   ],
+  lists: [
+    { key: 'title', label: '题单名称', type: 'text', max: 120 },
+    { key: 'description', label: '题单介绍（Markdown）', type: 'textarea' },
+    { key: 'isPublic', label: '公开', type: 'bool' },
+  ],
 };
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(COMMENT_TYPES.filter((t) => t.value).map((t) => [t.value, t.label]));
@@ -66,6 +72,16 @@ const TYPE_LABEL: Record<string, string> = Object.fromEntries(COMMENT_TYPES.filt
 function preview(value: unknown, length = 80): string {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
   return text.length > length ? `${text.slice(0, length)}…` : text;
+}
+
+function reviewBadge(status?: string) {
+  if (status === 'pending') {
+    return <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">待审核</span>;
+  }
+  if (status === 'rejected') {
+    return <span className="rounded bg-rose-100 px-1 text-[10px] text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">已驳回</span>;
+  }
+  return null;
 }
 
 /** 表单字段名是 camelCase（isPublic），数据库行是 snake_case（is_public） */
@@ -155,6 +171,7 @@ export default function AdminContent() {
     if (tab === 'posts') return `/discussion/${row.id}`;
     if (tab === 'solutions') return `/solution/${row.id}`;
     if (tab === 'moments') return `/moment/${row.id}`;
+    if (tab === 'lists') return `/list/${row.id}`;
     if (tab === 'comments') {
       if (row.type === 'article') return `/article/${row.target_id}`;
       if (row.type === 'discussion') return `/discussion/${row.target_id}`;
@@ -197,7 +214,17 @@ export default function AdminContent() {
   }
 
   async function bulkAction(
-    action: 'delete' | 'restore' | 'pin' | 'unpin' | 'public' | 'private' | 'lock' | 'unlock',
+    action:
+      | 'delete'
+      | 'restore'
+      | 'pin'
+      | 'unpin'
+      | 'public'
+      | 'private'
+      | 'lock'
+      | 'unlock'
+      | 'approve'
+      | 'reject',
   ) {
     if (!selectedRows.length) return;
     if (action === 'delete' && !window.confirm(`确定删除选中的 ${selectedRows.length} 条内容吗？`)) return;
@@ -212,7 +239,9 @@ export default function AdminContent() {
         if (action === 'public') return api.put(itemPath(row), { isPublic: true });
         if (action === 'private') return api.put(itemPath(row), { isPublic: false });
         if (action === 'lock') return api.put(itemPath(row), { isLocked: true });
-        return api.put(itemPath(row), { isLocked: false });
+        if (action === 'unlock') return api.put(itemPath(row), { isLocked: false });
+        if (action === 'approve') return api.put(itemPath(row), { reviewStatus: 'approved' });
+        return api.put(itemPath(row), { reviewStatus: 'rejected', reviewNote: '管理员驳回' });
       },
       { id: (row) => row.id, label: (row) => row.title || preview(row.content, 24) },
     );
@@ -223,6 +252,20 @@ export default function AdminContent() {
       toast.error(`批量操作失败 ${result.failures.length} 条：${result.failures[0].message}`);
     }
     await Promise.all([load(), loadStats()]);
+  }
+
+  async function reviewOne(row: any, reviewStatus: 'approved' | 'rejected') {
+    const reviewNote =
+      reviewStatus === 'rejected'
+        ? window.prompt('驳回原因', '内容需要修改') ?? ''
+        : '';
+    try {
+      await api.put(itemPath(row), { reviewStatus, reviewNote });
+      toast.success(reviewStatus === 'approved' ? '审核已通过' : '已驳回');
+      await Promise.all([load(), loadStats()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '审核失败');
+    }
   }
 
   async function save() {
@@ -324,6 +367,16 @@ export default function AdminContent() {
       </div>
 
       <BulkBar count={selectedRows.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        {tab !== 'messages' && (
+          <>
+            <button type="button" className="btn-ghost !py-1 text-xs text-emerald-600" disabled={bulkBusy} onClick={() => void bulkAction('approve')}>
+              审核通过
+            </button>
+            <button type="button" className="btn-ghost !py-1 text-xs text-amber-600" disabled={bulkBusy} onClick={() => void bulkAction('reject')}>
+              驳回
+            </button>
+          </>
+        )}
         <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkAction('delete')}>
           <Trash2 className="h-3.5 w-3.5" /> 删除
         </button>
@@ -384,10 +437,11 @@ export default function AdminContent() {
                   </th>
                   {tab === 'articles' ? <><th>文章</th><th>作者</th><th>分类</th><th>状态</th><th>时间</th></> : null}
                   {tab === 'posts' ? <><th>帖子</th><th>作者</th><th>回复</th><th>状态</th><th>时间</th></> : null}
-                  {tab === 'comments' ? <><th>评论</th><th>位置</th><th>作者</th><th>时间</th></> : null}
+                  {tab === 'comments' ? <><th>评论</th><th>位置</th><th>作者</th><th>审核</th><th>时间</th></> : null}
                   {tab === 'messages' ? <><th>发件人 → 收件人</th><th>标题</th><th>内容</th><th>时间</th></> : null}
                   {tab === 'solutions' ? <><th>题解</th><th>题目</th><th>作者</th><th>状态</th><th>时间</th></> : null}
                   {tab === 'moments' ? <><th>动态</th><th>作者</th><th>状态</th><th>时间</th></> : null}
+                  {tab === 'lists' ? <><th>题单</th><th>作者</th><th>类型</th><th>状态</th><th>时间</th></> : null}
                   <th className="text-right">操作</th>
                 </tr>
               </thead>
@@ -413,7 +467,10 @@ export default function AdminContent() {
                           </td>
                           <td>{row.author}</td>
                           <td>{row.category}</td>
-                          <td className="whitespace-nowrap text-xs">{row.is_deleted ? '已删除' : row.is_public ? (row.is_pinned ? '公开 · 置顶' : '公开') : '未公开'}</td>
+                          <td className="whitespace-nowrap text-xs">
+                            {row.is_deleted ? '已删除' : row.is_public ? (row.is_pinned ? '公开 · 置顶' : '公开') : '未公开'}
+                            <span className="ml-1">{reviewBadge(row.review_status)}</span>
+                          </td>
                           <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
                         </>
                       ) : null}
@@ -425,7 +482,10 @@ export default function AdminContent() {
                           </td>
                           <td>{row.author}</td>
                           <td>{row.reply_count}</td>
-                          <td className="whitespace-nowrap text-xs">{row.is_deleted ? '已删除' : row.is_locked ? '已锁定' : row.is_pinned ? '置顶' : '正常'}</td>
+                          <td className="whitespace-nowrap text-xs">
+                            {row.is_deleted ? '已删除' : row.is_locked ? '已锁定' : row.is_pinned ? '置顶' : '正常'}
+                            <span className="ml-1">{reviewBadge(row.review_status)}</span>
+                          </td>
                           <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
                         </>
                       ) : null}
@@ -437,6 +497,7 @@ export default function AdminContent() {
                             <div className="truncate text-slate-400">{preview(row.target_title, 40)}</div>
                           </td>
                           <td>{row.author}</td>
+                          <td className="text-xs">{row.review_status && row.review_status !== 'approved' ? reviewBadge(row.review_status) : '正常'}</td>
                           <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
                         </>
                       ) : null}
@@ -459,7 +520,10 @@ export default function AdminContent() {
                           </td>
                           <td className="max-w-[200px] text-xs">{preview(row.problem_title, 30)}</td>
                           <td>{row.author}</td>
-                          <td className="whitespace-nowrap text-xs">{row.is_deleted ? '已删除' : row.is_public ? '公开' : '未公开'}</td>
+                          <td className="whitespace-nowrap text-xs">
+                            {row.is_deleted ? '已删除' : row.is_public ? '公开' : '未公开'}
+                            <span className="ml-1">{reviewBadge(row.review_status)}</span>
+                          </td>
                           <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
                         </>
                       ) : null}
@@ -467,7 +531,25 @@ export default function AdminContent() {
                         <>
                           <td className="max-w-[520px]">{preview(row.content, 100)}</td>
                           <td>{row.author}</td>
-                          <td className="whitespace-nowrap text-xs">{row.is_deleted ? '已删除' : row.is_pinned ? '置顶' : '正常'}</td>
+                          <td className="whitespace-nowrap text-xs">
+                            {row.is_deleted ? '已删除' : row.is_pinned ? '置顶' : '正常'}
+                            <span className="ml-1">{reviewBadge(row.review_status)}</span>
+                          </td>
+                          <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
+                        </>
+                      ) : null}
+                      {tab === 'lists' ? (
+                        <>
+                          <td>
+                            <div className="font-medium">{url ? <Link to={url} className="hover:text-primary">{row.title}</Link> : row.title}</div>
+                            <div className="text-xs text-slate-400">{preview(row.description, 60)}</div>
+                          </td>
+                          <td>{row.author}</td>
+                          <td className="text-xs">{row.type}</td>
+                          <td className="whitespace-nowrap text-xs">
+                            {row.is_deleted ? '已删除' : row.is_public ? '公开' : '未公开'}
+                            <span className="ml-1">{reviewBadge(row.review_status)}</span>
+                          </td>
                           <td className="whitespace-nowrap text-xs text-slate-500">{fromNow(row.created_at)}</td>
                         </>
                       ) : null}
@@ -484,6 +566,16 @@ export default function AdminContent() {
                             </button>
                           ) : (
                             <>
+                              {tab !== 'messages' && row.review_status !== 'approved' ? (
+                                <button type="button" className="btn-ghost p-1.5 text-emerald-600" title="审核通过" onClick={() => void reviewOne(row, 'approved')}>
+                                  <Check className="h-4 w-4" />
+                                </button>
+                              ) : null}
+                              {tab !== 'messages' ? (
+                                <button type="button" className="btn-ghost p-1.5 text-amber-600" title="驳回" onClick={() => void reviewOne(row, 'rejected')}>
+                                  <X className="h-4 w-4" />
+                                </button>
+                              ) : null}
                               <button type="button" className="btn-ghost p-1.5" title="修改" onClick={() => openEdit(row)}>
                                 <Pencil className="h-4 w-4" />
                               </button>

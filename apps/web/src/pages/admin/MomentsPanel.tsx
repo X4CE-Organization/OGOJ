@@ -95,6 +95,14 @@ export default function MomentsPanel() {
     void load();
   };
 
+  const reviewMoment = async (item: any, reviewStatus: 'approved' | 'rejected') => {
+    const reviewNote =
+      reviewStatus === 'rejected'
+        ? window.prompt('驳回原因', '动态内容需要修改') ?? ''
+        : '';
+    await bulkSet({ reviewStatus, reviewNote }, reviewStatus === 'approved' ? '审核通过' : '驳回');
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -141,6 +149,12 @@ export default function MomentsPanel() {
       </div>
 
       <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
+        <button type="button" className="btn-ghost !py-1 text-xs text-emerald-600" disabled={bulkBusy} onClick={() => void bulkSet({ reviewStatus: 'approved' }, '批量通过')}>
+          通过
+        </button>
+        <button type="button" className="btn-ghost !py-1 text-xs text-amber-600" disabled={bulkBusy} onClick={() => void bulkSet({ reviewStatus: 'rejected', reviewNote: '管理员批量驳回' }, '批量驳回')}>
+          驳回
+        </button>
         <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSet({ isPinned: true }, '批量置顶')}>
           <Pin className="h-3.5 w-3.5" /> 置顶
         </button>
@@ -171,6 +185,7 @@ export default function MomentsPanel() {
                   <th>内容</th>
                   <th className="w-28">作者</th>
                   <th className="w-24">互动</th>
+                  <th className="w-24">审核</th>
                   <th className="w-32">发布时间</th>
                   <th className="w-56">操作</th>
                 </tr>
@@ -215,9 +230,26 @@ export default function MomentsPanel() {
                     <td className="text-xs text-slate-500">
                       {item.likeCount} 赞 · {item.commentCount} 评
                     </td>
+                    <td className="text-xs">
+                      {item.reviewStatus === 'pending'
+                        ? '待审核'
+                        : item.reviewStatus === 'rejected'
+                          ? '已驳回'
+                          : '已通过'}
+                    </td>
                     <td className="text-xs text-slate-400">{fromNow(item.createdAt)}</td>
                     <td>
                       <div className="flex flex-wrap gap-2 text-xs">
+                        {item.reviewStatus !== 'approved' ? (
+                          <button type="button" className="text-emerald-600 hover:underline" onClick={() => void reviewMoment(item, 'approved')}>
+                            通过
+                          </button>
+                        ) : null}
+                        {item.reviewStatus !== 'rejected' ? (
+                          <button type="button" className="text-amber-600 hover:underline" onClick={() => void reviewMoment(item, 'rejected')}>
+                            驳回
+                          </button>
+                        ) : null}
                         <Link to={`/moment/${item.id}`} className="text-slate-500 hover:underline">
                           <ExternalLink className="mr-0.5 inline h-3.5 w-3.5" />
                           查看

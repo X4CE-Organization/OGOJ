@@ -997,7 +997,8 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
               u.username, u.display_name, u.avatar,
               (SELECT value FROM solution_votes v WHERE v.solution_id = s.id AND v.user_id = ?) AS my_vote
          FROM solutions s JOIN users u ON u.id = s.author_id
-        WHERE s.problem_id = ? AND s.is_deleted = 0 AND (s.is_public = 1 OR s.author_id = ?)
+        WHERE s.problem_id = ? AND s.is_deleted = 0
+          AND ((s.is_public = 1 AND s.review_status = 'approved') OR s.author_id = ?)
         ORDER BY s.upvotes DESC, s.id DESC LIMIT ? OFFSET ?`,
       [viewer?.id ?? 0, problem.id, viewer?.id ?? 0, page.size, page.offset],
     );

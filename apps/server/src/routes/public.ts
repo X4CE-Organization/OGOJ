@@ -56,7 +56,7 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       problems: await count(`SELECT COUNT(*) AS c FROM problems WHERE is_public = 1 AND review_status = 'approved' AND deleted_at IS NULL`),
       submissions: await count('SELECT COUNT(*) AS c FROM submissions'),
       accepted: await count(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'AC'`),
-      contests: await count('SELECT COUNT(*) AS c FROM contests WHERE is_public = 1'),
+      contests: await count(`SELECT COUNT(*) AS c FROM contests WHERE is_public = 1 AND review_status = 'approved'`),
       todaySubmissions: await count(`SELECT COUNT(*) AS c FROM submissions WHERE created_at >= date('now')`),
       todayAccepted: await count(`SELECT COUNT(*) AS c FROM submissions WHERE status = 'AC' AND created_at >= date('now')`),
     };
@@ -75,7 +75,7 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
     const recentDiscussions = await all<any>(
       `SELECT d.id, d.title, d.reply_count, d.created_at, d.problem_id, u.username, u.display_name, u.avatar
          FROM discussions d JOIN users u ON u.id = d.author_id
-        WHERE d.is_deleted = 0 AND d.problem_id IS NULL
+        WHERE d.is_deleted = 0 AND d.review_status = 'approved' AND d.problem_id IS NULL
         ORDER BY d.id DESC LIMIT 8`,
     );
     const ranklist = await all<any>(
@@ -219,7 +219,7 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       ? await all<any>(
           `SELECT d.id, d.title, d.reply_count, d.created_at, u.username FROM discussions d
              JOIN users u ON u.id = d.author_id
-            WHERE d.is_deleted = 0 AND d.title LIKE ? ESCAPE '\\' ORDER BY d.id DESC LIMIT ?`,
+            WHERE d.is_deleted = 0 AND d.review_status = 'approved' AND d.title LIKE ? ESCAPE '\\' ORDER BY d.id DESC LIMIT ?`,
           [like, limit],
         )
       : [];
@@ -227,7 +227,8 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
       ? await all<any>(
           `SELECT a.id, a.title, a.summary, a.created_at, u.username FROM articles a
              JOIN users u ON u.id = a.author_id
-            WHERE a.is_public = 1 AND a.is_deleted = 0 AND (a.title LIKE ? ESCAPE '\\' OR a.summary LIKE ? ESCAPE '\\')
+            WHERE a.is_public = 1 AND a.review_status = 'approved' AND a.is_deleted = 0
+              AND (a.title LIKE ? ESCAPE '\\' OR a.summary LIKE ? ESCAPE '\\')
             ORDER BY a.id DESC LIMIT ?`,
           [like, like, limit],
         )
@@ -235,7 +236,8 @@ export async function registerPublicRoutes(app: FastifyInstance): Promise<void> 
     const lists = include('lists')
       ? await all<any>(
           `SELECT id, title, description, type, author_id FROM lists
-            WHERE is_public = 1 AND is_deleted = 0 AND title LIKE ? ESCAPE '\\' LIMIT ?`,
+            WHERE is_public = 1 AND review_status = 'approved' AND is_deleted = 0
+              AND title LIKE ? ESCAPE '\\' LIMIT ?`,
           [like, limit],
         )
       : [];

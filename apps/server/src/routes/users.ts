@@ -303,10 +303,15 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/solutions', async (request) => {
     const row = await findUser(String((request.params as any).username));
+    const canSeePending = Boolean(
+      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
+    );
     const items = await all<any>(
-      `SELECT s.id, s.title, s.upvotes, s.views, s.created_at, s.is_public, p.pid, p.title AS problem_title
+      `SELECT s.id, s.title, s.upvotes, s.views, s.created_at, s.is_public, s.review_status,
+              p.pid, p.title AS problem_title
          FROM solutions s JOIN problems p ON p.id = s.problem_id
-        WHERE s.author_id = ? AND s.is_deleted = 0 ORDER BY s.id DESC LIMIT 100`,
+        WHERE s.author_id = ? AND s.is_deleted = 0 ${canSeePending ? '' : `AND s.review_status = 'approved'`}
+        ORDER BY s.id DESC LIMIT 100`,
       [row.id],
     );
     return { items };
@@ -314,9 +319,13 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/articles', async (request) => {
     const row = await findUser(String((request.params as any).username));
+    const canSeePending = Boolean(
+      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
+    );
     const items = await all<any>(
-      `SELECT id, title, summary, views, category, created_at FROM articles
-        WHERE author_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 100`,
+      `SELECT id, title, summary, views, category, created_at, review_status FROM articles
+        WHERE author_id = ? AND is_deleted = 0 ${canSeePending ? '' : `AND review_status = 'approved'`}
+        ORDER BY id DESC LIMIT 100`,
       [row.id],
     );
     return { items };
@@ -324,9 +333,13 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/discussions', async (request) => {
     const row = await findUser(String((request.params as any).username));
+    const canSeePending = Boolean(
+      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
+    );
     const items = await all<any>(
-      `SELECT d.id, d.title, d.reply_count, d.views, d.created_at FROM discussions d
-        WHERE d.author_id = ? AND d.is_deleted = 0 ORDER BY d.id DESC LIMIT 100`,
+      `SELECT d.id, d.title, d.reply_count, d.views, d.created_at, d.review_status FROM discussions d
+        WHERE d.author_id = ? AND d.is_deleted = 0 ${canSeePending ? '' : `AND d.review_status = 'approved'`}
+        ORDER BY d.id DESC LIMIT 100`,
       [row.id],
     );
     return { items };

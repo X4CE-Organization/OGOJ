@@ -77,6 +77,7 @@ import MomentDetail from './pages/MomentDetail';
 import AdminMoments from './pages/admin/MomentsPanel';
 import AdminScratch from './pages/admin/ScratchPanel';
 import AdminContent from './pages/admin/ContentPanel';
+import AdminReviewSettings from './pages/admin/ReviewSettingsPanel';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -177,6 +178,7 @@ export default function App() {
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="discussions" element={<AdminDiscussions />} />
           <Route path="content" element={<AdminContent />} />
+          <Route path="reviews" element={<AdminReviewSettings />} />
           <Route path="moments" element={<AdminMoments />} />
           <Route path="scratch" element={<AdminScratch />} />
           <Route path="solutions" element={<AdminSolutions />} />

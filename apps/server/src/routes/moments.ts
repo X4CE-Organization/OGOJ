@@ -71,6 +71,8 @@ function formatMoment(row: any, options: { liked?: boolean; viewerId?: number | 
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     edited: row.updated_at && row.updated_at !== row.created_at,
+    reviewStatus: row.review_status ?? 'approved',
+    reviewNote: row.review_note ?? '',
     author: authorOf(row),
     mine: viewerId !== null && row.author_id === viewerId,
     canDelete:
@@ -94,6 +96,12 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     const viewer = request.user;
     const conditions = ['m.is_deleted = 0'];
     const params: unknown[] = [];
+    if (viewer) {
+      conditions.push(`(m.review_status = 'approved' OR m.author_id = ? OR ? = 1)`);
+      params.push(viewer.id, hasRole(viewer, 'admin') ? 1 : 0);
+    } else {
+      conditions.push(`m.review_status = 'approved'`);
+    }
 
     const scope = String(query.scope ?? 'all');
     if (scope === 'mine') {
@@ -165,6 +173,13 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     if (!row) throw notFound('动态不存在');
     const viewer = request.user;
     if (row.is_deleted && !hasRole(viewer, 'admin')) throw notFound('动态不存在');
+    if (
+      ['pending', 'rejected'].includes(row.review_status) &&
+      row.author_id !== viewer?.id &&
+      !hasRole(viewer, 'admin')
+    ) {
+      throw notFound('动态不存在');
+    }
 
     let liked = false;
     if (viewer) {
@@ -174,11 +189,13 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     }
     const comments = await all<any>(
       `SELECT c.id, c.content, c.parent_id, c.created_at, c.author_id,
+              c.review_status, c.review_note,
               u.username, u.display_name, u.avatar, u.solved_count, u.rating
          FROM moment_comments c JOIN users u ON u.id = c.author_id
         WHERE c.moment_id = ? AND c.is_deleted = 0
+          AND (c.review_status = 'approved' OR c.author_id = ? OR ? = 1)
         ORDER BY c.id ASC LIMIT 500`,
-      [id],
+      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
     );
     return {
       moment: formatMoment(row, { liked, viewerId: viewer?.id, viewerRole: viewer?.role }),
@@ -187,6 +204,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
         content: comment.content,
         parentId: comment.parent_id,
         createdAt: comment.created_at,
+        reviewStatus: comment.review_status,
+        reviewNote: comment.review_note,
         author: authorOf(comment),
         mine: Boolean(viewer && comment.author_id === viewer.id),
         canDelete: Boolean(
@@ -226,21 +245,33 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     if (content.length > maxLength) throw badRequest(`动态最多 ${maxLength} 个字符`);
     if (images.length && num('moment_max_images', 9) <= 0) throw badRequest('本站已关闭动态配图');
     checkBannedWords(content);
+    const needReview = !hasRole(user, 'admin') && bool('moment_need_review', true);
 
-    const info = await run('INSERT INTO moments (author_id, content, images) VALUES (?, ?, ?)', [
-      user.id,
-      content,
-      JSON.stringify(images),
-    ]);
+    const info = await run(
+      `INSERT INTO moments (author_id, content, images, review_status, review_note)
+       VALUES (?, ?, ?, ?, '')`,
+      [user.id, content, JSON.stringify(images), needReview ? 'pending' : 'approved'],
+    );
     const momentId = Number(info.lastInsertRowid);
 
     const points = num('points_per_moment', 1);
-    if (points > 0 && bool('enable_points', true)) {
+    if (!needReview && points > 0 && bool('enable_points', true)) {
       await addPoints(user.id, points, '发布动态', { refType: 'moment', refId: momentId });
     }
-    await evaluateAchievements(user.id);
+    if (needReview) {
+      await sendMessage({
+        to: user.id,
+        title: '动态已提交审核',
+        content: '你的动态正在等待管理员审核，通过后才会出现在动态广场。',
+        type: 'system',
+        refType: 'moment',
+        refId: momentId,
+      });
+    } else {
+      await evaluateAchievements(user.id);
+    }
     await audit(request, 'moment.create', { targetType: 'moment', targetId: momentId });
-    return { ok: true, id: momentId };
+    return { ok: true, id: momentId, pending: needReview };
   });
 
   /* ------------------------------------------------------------------ 编辑 */
@@ -257,13 +288,15 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     if (!content && !images.length) throw badRequest('写点内容或者配张图吧');
     if (content.length > maxLength) throw badRequest(`动态最多 ${maxLength} 个字符`);
     checkBannedWords(content);
-    await run(`UPDATE moments SET content = ?, images = ?, updated_at = datetime('now') WHERE id = ?`, [
-      content,
-      JSON.stringify(images),
-      id,
-    ]);
+    const needReview = !hasRole(user, 'admin') && bool('moment_need_review', true);
+    await run(
+      `UPDATE moments SET content = ?, images = ?, updated_at = datetime('now')
+         ${needReview ? ", review_status = 'pending', review_note = ''" : ''}
+       WHERE id = ?`,
+      [content, JSON.stringify(images), id],
+    );
     await audit(request, 'moment.update', { targetType: 'moment', targetId: id });
-    return { ok: true };
+    return { ok: true, pending: needReview };
   });
 
   /* ------------------------------------------------------------------ 删除 */
@@ -311,13 +344,16 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
   /* ------------------------------------------------------------------ 评论 */
   app.get('/api/moments/:id/comments', async (request) => {
     const id = parseId((request.params as any).id);
+    const viewer = request.user;
     const rows = await all<any>(
       `SELECT c.id, c.content, c.parent_id, c.created_at, c.author_id,
+              c.review_status, c.review_note,
               u.username, u.display_name, u.avatar, u.solved_count, u.rating
          FROM moment_comments c JOIN users u ON u.id = c.author_id
         WHERE c.moment_id = ? AND c.is_deleted = 0
+          AND (c.review_status = 'approved' OR c.author_id = ? OR ? = 1)
         ORDER BY c.id ASC LIMIT 500`,
-      [id],
+      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
     );
     return {
       items: rows.map((row) => ({
@@ -325,6 +361,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
         content: row.content,
         parentId: row.parent_id,
         createdAt: row.created_at,
+        reviewStatus: row.review_status,
+        reviewNote: row.review_note,
         author: authorOf(row),
       })),
     };
@@ -348,13 +386,18 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     if (content.length > maxLength) throw badRequest(`评论最多 ${maxLength} 个字符`);
     checkBannedWords(content);
     const parentId = body.parentId ? Number(body.parentId) : null;
+    const needReview = !hasRole(user, 'admin') && bool('comment_need_review', true);
     const info = await run(
-      'INSERT INTO moment_comments (moment_id, author_id, parent_id, content) VALUES (?, ?, ?, ?)',
-      [id, user.id, parentId, content],
+      `INSERT INTO moment_comments
+        (moment_id, author_id, parent_id, content, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, '')`,
+      [id, user.id, parentId, content, needReview ? 'pending' : 'approved'],
     );
-    await run('UPDATE moments SET comment_count = comment_count + 1 WHERE id = ?', [id]);
+    if (!needReview) {
+      await run('UPDATE moments SET comment_count = comment_count + 1 WHERE id = ?', [id]);
+    }
 
-    if (moment.author_id !== user.id) {
+    if (!needReview && moment.author_id !== user.id) {
       await sendMessage({
         to: moment.author_id,
         from: user.id,
@@ -366,7 +409,7 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
         setting: 'moment_notify',
       });
     }
-    if (parentId) {
+    if (!needReview && parentId) {
       const parent = await get<{ author_id: number }>(
         'SELECT author_id FROM moment_comments WHERE id = ? AND is_deleted = 0',
         [parentId],
@@ -384,15 +427,15 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
         });
       }
     }
-    await evaluateAchievements(user.id);
-    return { ok: true, id: Number(info.lastInsertRowid) };
+    if (!needReview) await evaluateAchievements(user.id);
+    return { ok: true, id: Number(info.lastInsertRowid), pending: needReview };
   });
 
   app.delete('/api/moments/comments/:id', async (request) => {
     const user = await requireUser(request);
     const id = parseId((request.params as any).id);
     const row = await get<any>(
-      `SELECT c.id, c.author_id, c.moment_id, m.author_id AS moment_author
+      `SELECT c.id, c.author_id, c.moment_id, c.review_status, m.author_id AS moment_author
          FROM moment_comments c JOIN moments m ON m.id = c.moment_id WHERE c.id = ?`,
       [id],
     );
@@ -401,7 +444,9 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
       throw forbidden();
     }
     await run('UPDATE moment_comments SET is_deleted = 1 WHERE id = ?', [id]);
-    await run('UPDATE moments SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = ?', [row.moment_id]);
+    if (row.review_status === 'approved') {
+      await run('UPDATE moments SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = ?', [row.moment_id]);
+    }
     return { ok: true };
   });
 
@@ -431,6 +476,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
         images: parseImageColumn(row.images),
         isPinned: Boolean(row.is_pinned),
         isDeleted: Boolean(row.is_deleted),
+        reviewStatus: row.review_status,
+        reviewNote: row.review_note,
         likeCount: row.like_count,
         commentCount: row.comment_count,
         createdAt: row.created_at,

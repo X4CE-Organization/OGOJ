@@ -117,11 +117,11 @@ export default function MomentCard({
     if (!content) return;
     setSending(true);
     try {
-      await api.post(`/api/moments/${moment.id}/comments`, { content });
+      const result = await api.post<{ pending?: boolean }>(`/api/moments/${moment.id}/comments`, { content });
       setDraft('');
       await loadComments();
-      onUpdate?.({ commentCount: moment.commentCount + 1 });
-      toast.success('评论成功');
+      if (!result.pending) onUpdate?.({ commentCount: moment.commentCount + 1 });
+      toast.success(result.pending ? '评论已提交，等待管理员审核' : '评论成功');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '评论失败');
     } finally {

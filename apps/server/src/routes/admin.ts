@@ -155,6 +155,58 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /* ------------------------------------------------------------- 用户管理 */
+  app.post('/api/admin/users', async (request) => {
+    const admin = await requireSuperAdmin(request);
+    const body = (request.body ?? {}) as any;
+    const username = normalizeUsername(body.username);
+    if (!username) throw badRequest('请填写用户名');
+    validateUsername(username);
+
+    const password = String(body.password ?? '');
+    const passwordMin = num('password_min_length', 8);
+    if (password.length < passwordMin) throw badRequest(`密码至少 ${passwordMin} 位`);
+    if (password.length > 128) throw badRequest('密码过长');
+
+    const email = String(body.email ?? '').trim().toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('邮箱格式不正确');
+    if (await usernameTaken(username)) throw conflict('该用户名已被注册');
+    if (email && await get('SELECT id FROM users WHERE email = ?', [email])) {
+      throw conflict('该邮箱已被注册');
+    }
+
+    const role = ['user', 'admin', 'superadmin'].includes(body.role) ? body.role : 'user';
+    const displayName = String(body.displayName ?? '').trim().slice(0, 32) || username;
+    const points = Math.max(-1_000_000_000, Math.min(1_000_000_000, Number(body.points ?? 0) || 0));
+    const info = await run(
+      `INSERT INTO users (username, email, password_hash, role, display_name, is_private, invite_code, phone, phone_verified)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        username,
+        email || null,
+        await hashPassword(password),
+        role,
+        displayName,
+        body.isPrivate ? 1 : 0,
+        null,
+        null,
+        0,
+      ],
+    );
+    const userId = Number(info.lastInsertRowid);
+    if (points !== 0) {
+      await addPoints(userId, points, `超级管理员 ${admin.username} 创建账号时设置`, {
+        refType: 'admin',
+        refId: admin.id,
+      });
+    }
+    await audit(request, 'admin.user_create', {
+      targetType: 'user',
+      targetId: userId,
+      detail: { username, role, initialPoints: points },
+    });
+    return { ok: true, id: userId };
+  });
+
   app.get('/api/admin/users', async (request) => {
     await requireAdmin(request);
     const query = request.query as any;
@@ -681,6 +733,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/admin/discussions/:id/moderate', async (request) => {
     await requireAdmin(request);
     const id = parseId((request.params as any).id);
+    const discussion = await get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
+    if (!discussion) throw notFound('帖子不存在');
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -695,6 +749,32 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (body.isLocked !== undefined) {
       fields.push('is_locked = ?');
       values.push(body.isLocked ? 1 : 0);
+    }
+    if (body.reviewStatus !== undefined) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(body.reviewStatus)
+        ? body.reviewStatus
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?');
+      values.push(reviewStatus, String(body.reviewNote ?? ''));
+      if (reviewStatus === 'approved' && discussion.review_status !== 'approved') {
+        await sendMessage({
+          to: discussion.author_id,
+          title: '帖子已通过审核',
+          content: `你的帖子「${discussion.title}」已通过审核并公开。`,
+          type: 'system',
+          refType: 'discussion',
+          refId: id,
+        });
+      } else if (reviewStatus === 'rejected' && discussion.review_status !== 'rejected') {
+        await sendMessage({
+          to: discussion.author_id,
+          title: '帖子未通过审核',
+          content: `你的帖子「${discussion.title}」未通过审核：${String(body.reviewNote ?? '请修改后重试')}`,
+          type: 'system',
+          refType: 'discussion',
+          refId: id,
+        });
+      }
     }
     if (!fields.length) throw badRequest('没有需要修改的内容');
     await run(`UPDATE discussions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);

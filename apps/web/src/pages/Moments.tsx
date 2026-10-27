@@ -96,10 +96,10 @@ export default function Moments() {
     }
     setPublishing(true);
     try {
-      await api.post('/api/moments', { content, images });
+      const result = await api.post<{ pending?: boolean }>('/api/moments', { content, images });
       setDraft('');
       setImages([]);
-      toast.success('发布成功');
+      toast.success(result.pending ? '动态已提交，等待管理员审核' : '发布成功');
       if (page === 1) {
         const data = await api.get<any>(`/api/moments${query({ page: 1, size, scope, q: search, user: userFilter })}`);
         setItems(data.items ?? []);

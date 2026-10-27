@@ -35,6 +35,7 @@ const SECTIONS: { title: string; items: { to: string; label: string; icon: any; 
     title: '系统',
     items: [
       { to: '/admin/settings', label: '系统设置', icon: Settings2, superOnly: true },
+      { to: '/admin/reviews', label: '审核设置', icon: Settings2, superOnly: true },
       { to: '/admin/users', label: '用户管理', icon: Users },
       { to: '/admin/logs', label: '操作日志', icon: FileText, superOnly: true },
       { to: '/admin/maintenance', label: '备份与维护', icon: Database, superOnly: true },

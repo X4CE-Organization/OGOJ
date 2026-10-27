@@ -72,6 +72,10 @@ export default function Contests() {
       .finally(() => setLoading(false));
   }, [params.toString(), page, size, status, rules, mine]);
 
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const update = (patch: Record<string, string | number | undefined>) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) {

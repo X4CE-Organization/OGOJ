@@ -61,14 +61,14 @@ export default function Training() {
         .split(/[\s,，]+/)
         .map((value) => Number(value))
         .filter((value) => Number.isInteger(value) && value > 0);
-      const result = await api.post<{ id: number }>('/api/lists', {
+      const result = await api.post<{ id: number; pending?: boolean }>('/api/lists', {
         title: form.title,
         description: form.description,
         isPublic: form.isPublic,
         type: isAdmin ? 'official' : 'user',
         problemIds,
       });
-      toast.success('题单创建成功');
+      toast.success(result.pending ? '题单已提交，等待管理员审核' : '题单创建成功');
       setCreating(false);
       setForm({ title: '', description: '', isPublic: true, problemIds: '' });
       window.location.href = `/list/${result.id}`;

@@ -41,10 +41,10 @@ export default function ArticleDetail() {
       return;
     }
     try {
-      await api.post('/api/comments', { targetType: 'article', targetId: Number(id), content: comment });
+      const result = await api.post<{ pending?: boolean }>('/api/comments', { targetType: 'article', targetId: Number(id), content: comment });
       setComment('');
       loadComments();
-      toast.success('评论成功');
+      toast.success(result.pending ? '评论已提交，等待管理员审核' : '评论成功');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '评论失败');
     }
@@ -67,6 +67,11 @@ export default function ArticleDetail() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <BackButton label="返回文章广场" listKey="articles" fallback="/articles" />
+      {['pending', 'rejected'].includes(article.review_status) ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          {article.review_status === 'pending' ? '这篇文章正在等待管理员审核，目前只有你和管理员可见。' : `文章未通过审核${article.review_note ? `：${article.review_note}` : ''}`}
+        </div>
+      ) : null}
       <article className="card p-6">
         <h1 className="text-2xl font-bold">{article.title}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">

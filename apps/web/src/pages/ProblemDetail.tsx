@@ -372,13 +372,13 @@ export default function ProblemDetail() {
 
   const createPost = async () => {
     try {
-      const result = await api.post<{ id: number }>('/api/discussions', {
+      const result = await api.post<{ id: number; pending?: boolean }>('/api/discussions', {
         title: newPost.title,
         content: newPost.content,
         problemId: data.problem.id,
         board: 'help',
       });
-      toast.success('讨论已发布');
+      toast.success(result.pending ? '讨论已提交，等待管理员审核' : '讨论已发布');
       setNewPost({ open: false, title: '', content: '' });
       navigate(`/discussion/${result.id}`);
     } catch (err) {

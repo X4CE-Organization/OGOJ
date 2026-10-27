@@ -292,6 +292,22 @@ export async function tx<T>(fn: () => Promise<T>): Promise<T> {
 const COLUMN_MIGRATIONS: string[] = [
   `ALTER TABLE users ADD COLUMN phone TEXT`,
   `ALTER TABLE users ADD COLUMN phone_verified INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE discussions ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE discussions ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE discussion_replies ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE discussion_replies ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE solutions ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE solutions ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE articles ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE articles ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE comments ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE comments ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE lists ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE lists ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE moments ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE moments ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE moment_comments ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'`,
+  `ALTER TABLE moment_comments ADD COLUMN review_note TEXT NOT NULL DEFAULT ''`,
 ];
 
 const INDEX_MIGRATIONS: string[] = [

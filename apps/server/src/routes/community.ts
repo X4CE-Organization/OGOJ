@@ -26,6 +26,10 @@ function userBrief(row: any) {
   };
 }
 
+function needsReview(key: string, user: any): boolean {
+  return !hasRole(user, 'admin') && bool(key, true);
+}
+
 export async function registerCommunityRoutes(app: FastifyInstance): Promise<void> {
   /* ---------------------------------------------------------------- boards */
   app.get('/api/boards', async () => {
@@ -40,6 +44,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const page = parsePage(query, num('discussion_page_size', 30));
     const conditions = ['d.is_deleted = 0'];
     const params: unknown[] = [];
+    if (!hasRole(request.user, 'admin')) {
+      conditions.push(`(d.review_status = 'approved' OR d.author_id = ?)`);
+      params.push(request.user?.id ?? 0);
+    }
     if (query.board) {
       conditions.push('b.slug = ?');
       params.push(String(query.board));
@@ -116,19 +124,28 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         WHERE d.id = ?`,
       [id],
     );
-    if (!row || (row.is_deleted && !hasRole(request.user, 'admin'))) throw notFound('帖子不存在');
+    const viewer = request.user;
+    const canSeePending = Boolean(viewer && (viewer.id === row?.author_id || hasRole(viewer, 'admin')));
+    if (
+      !row ||
+      (row.is_deleted && !hasRole(viewer, 'admin')) ||
+      (['pending', 'rejected'].includes(row.review_status) && !canSeePending)
+    ) {
+      throw notFound('帖子不存在');
+    }
     await run('UPDATE discussions SET views = views + 1 WHERE id = ?', [id]);
     const replies = await all<any>(
       `SELECT r.id, r.content, r.floor, r.created_at, r.is_deleted, r.reply_to_id,
+              r.review_status, r.review_note,
               u.id AS author_id, u.username, u.display_name, u.avatar, u.solved_count,
               s.username AS reply_to_username
          FROM discussion_replies r JOIN users u ON u.id = r.author_id
          LEFT JOIN discussion_replies parent ON parent.id = r.reply_to_id
          LEFT JOIN users s ON s.id = parent.author_id
-        WHERE r.discussion_id = ? ORDER BY r.floor ASC LIMIT 1000`,
-      [id],
+        WHERE r.discussion_id = ? AND (r.review_status = 'approved' OR r.author_id = ? OR ? = 1)
+        ORDER BY r.floor ASC LIMIT 1000`,
+      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
     );
-    const viewer = request.user;
     return {
       discussion: {
         id: row.id,
@@ -142,6 +159,8 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         views: row.views + 1,
         replyCount: row.reply_count,
         createdAt: row.created_at,
+        reviewStatus: row.review_status,
+        reviewNote: canSeePending ? row.review_note : '',
         author: userBrief(row),
         canEdit: Boolean(viewer && (viewer.id === row.author_id || hasRole(viewer, 'admin'))),
       },
@@ -151,6 +170,8 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         content: reply.content,
         createdAt: reply.created_at,
         isDeleted: Boolean(reply.is_deleted),
+        reviewStatus: reply.review_status,
+        reviewNote: reply.review_note,
         author: userBrief(reply),
         replyTo: reply.reply_to_id ? { id: reply.reply_to_id, username: reply.reply_to_username } : null,
         canEdit: Boolean(viewer && (viewer.id === reply.author_id || hasRole(viewer, 'admin'))),
@@ -177,6 +198,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (title.length > 150) throw badRequest('标题最多 150 个字符');
     if (!content) throw badRequest('内容不能为空');
     checkBannedWords(`${title}\n${content}`);
+    const needReview = needsReview('discussion_need_review', user);
 
     let boardId: number | null = null;
     if (body.board) {
@@ -197,8 +219,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     }
 
     const info = await run(
-      `INSERT INTO discussions (board_id, problem_id, contest_id, title, content, author_id, last_reply_at, last_reply_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
+      `INSERT INTO discussions
+        (board_id, problem_id, contest_id, title, content, author_id, last_reply_at, last_reply_user_id,
+         review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, '')`,
       [
         boardId,
         body.problemId ? Number(body.problemId) : null,
@@ -207,16 +231,28 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         content,
         user.id,
         user.id,
+        needReview ? 'pending' : 'approved',
       ],
     );
     const discussionId = Number(info.lastInsertRowid);
     const points = num('points_per_discussion', 0);
-    if (points > 0 && bool('enable_points', true)) {
+    if (!needReview && points > 0 && bool('enable_points', true)) {
       await addPoints(user.id, points, '发布讨论', { refType: 'discussion', refId: discussionId });
     }
-    await evaluateAchievements(user.id);
+    if (needReview) {
+      await sendMessage({
+        to: user.id,
+        title: '帖子已提交审核',
+        content: `你的帖子「${title}」正在等待管理员审核，通过后才会公开。`,
+        type: 'system',
+        refType: 'discussion',
+        refId: discussionId,
+      });
+    } else {
+      await evaluateAchievements(user.id);
+    }
     await audit(request, 'discussion.create', { targetType: 'discussion', targetId: discussionId });
-    return { ok: true, id: discussionId };
+    return { ok: true, id: discussionId, pending: needReview };
   });
 
   app.put('/api/discussions/:id', async (request) => {
@@ -251,12 +287,25 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         values.push(body.isLocked ? 1 : 0);
       }
     }
+    if (
+      !hasRole(user, 'admin') &&
+      (body.title !== undefined || body.content !== undefined) &&
+      bool('discussion_need_review', true)
+    ) {
+      fields.push(`review_status = 'pending'`, `review_note = ''`);
+    }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
       await run(`UPDATE discussions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
     await audit(request, 'discussion.update', { targetType: 'discussion', targetId: id });
-    return { ok: true };
+    return {
+      ok: true,
+      pending:
+        !hasRole(user, 'admin') &&
+        (body.title !== undefined || body.content !== undefined) &&
+        bool('discussion_need_review', true),
+    };
   });
 
   app.delete('/api/discussions/:id', async (request) => {
@@ -283,22 +332,33 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (!content) throw badRequest('回复内容不能为空');
     if (content.length > 10000) throw badRequest('回复内容过长');
     checkBannedWords(content);
+    const needReview = needsReview('comment_need_review', user);
 
     const floor = ((await get<{ maxFloor: number | null }>(
       'SELECT MAX(floor) AS maxFloor FROM discussion_replies WHERE discussion_id = ?',
       [id],
     ))?.maxFloor ?? 0) + 1;
     const info = await run(
-      `INSERT INTO discussion_replies (discussion_id, author_id, content, floor, reply_to_id)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, user.id, content, floor, body.replyToId ? Number(body.replyToId) : null],
+      `INSERT INTO discussion_replies
+        (discussion_id, author_id, content, floor, reply_to_id, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, '')`,
+      [
+        id,
+        user.id,
+        content,
+        floor,
+        body.replyToId ? Number(body.replyToId) : null,
+        needReview ? 'pending' : 'approved',
+      ],
     );
-    await run(
-      `UPDATE discussions SET reply_count = reply_count + 1, last_reply_at = datetime('now'),
-         last_reply_user_id = ? WHERE id = ?`,
-      [user.id, id],
-    );
-    if (discussion.author_id !== user.id && bool('notify_on_reply', true)) {
+    if (!needReview) {
+      await run(
+        `UPDATE discussions SET reply_count = reply_count + 1, last_reply_at = datetime('now'),
+           last_reply_user_id = ? WHERE id = ?`,
+        [user.id, id],
+      );
+    }
+    if (!needReview && discussion.author_id !== user.id && bool('notify_on_reply', true)) {
       await sendMessage({
         to: discussion.author_id,
         from: user.id,
@@ -309,7 +369,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         refId: id,
       });
     }
-    if (body.replyToId) {
+    if (!needReview && body.replyToId) {
       const parent = await get<any>('SELECT author_id FROM discussion_replies WHERE id = ?', [Number(body.replyToId)]);
       if (parent && parent.author_id !== user.id && parent.author_id !== discussion.author_id) {
         await sendMessage({
@@ -324,7 +384,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       }
     }
     await evaluateAchievements(user.id, { silent: true });
-    return { ok: true, id: Number(info.lastInsertRowid), floor };
+    return { ok: true, id: Number(info.lastInsertRowid), floor, pending: needReview };
   });
 
   app.delete('/api/discussion-replies/:id', async (request) => {
@@ -334,7 +394,9 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (!row) throw notFound('回复不存在');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己的回复');
     await run('UPDATE discussion_replies SET is_deleted = 1, content = ? WHERE id = ?', ['[该回复已被删除]', id]);
-    await run('UPDATE discussions SET reply_count = MAX(0, reply_count - 1) WHERE id = ?', [row.discussion_id]);
+    if (row.review_status === 'approved') {
+      await run('UPDATE discussions SET reply_count = MAX(0, reply_count - 1) WHERE id = ?', [row.discussion_id]);
+    }
     await audit(request, 'reply.delete', { targetType: 'reply', targetId: id });
     return { ok: true };
   });
@@ -387,17 +449,30 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const title = String(body.title ?? '').trim() || '题解';
     const content = String(body.content ?? '').trim();
     if (content.length < 10) throw badRequest('题解内容太短');
-    const needApprove = bool('solution_need_approved', false) && !hasRole(user, 'admin');
+    const needApprove = needsReview('solution_need_approved', user);
     const info = await run(
-      `INSERT INTO solutions (problem_id, author_id, title, content, is_public) VALUES (?, ?, ?, ?, ?)`,
-      [problemId, user.id, title.slice(0, 150), content, needApprove ? 0 : 1],
+      `INSERT INTO solutions
+        (problem_id, author_id, title, content, is_public, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, '')`,
+      [problemId, user.id, title.slice(0, 150), content, needApprove ? 0 : 1, needApprove ? 'pending' : 'approved'],
     );
     const solutionId = Number(info.lastInsertRowid);
     const points = num('points_per_solution', 0);
-    if (points > 0 && bool('enable_points', true)) {
+    if (!needApprove && points > 0 && bool('enable_points', true)) {
       await addPoints(user.id, points, '发布题解', { refType: 'solution', refId: solutionId });
     }
-    await evaluateAchievements(user.id);
+    if (needApprove) {
+      await sendMessage({
+        to: user.id,
+        title: '题解已提交审核',
+        content: `你的题解「${title}」正在等待管理员审核，通过后才会公开。`,
+        type: 'system',
+        refType: 'solution',
+        refId: solutionId,
+      });
+    } else {
+      await evaluateAchievements(user.id);
+    }
     await audit(request, 'solution.create', { targetType: 'solution', targetId: solutionId });
     return { ok: true, id: solutionId, pending: needApprove };
   });
@@ -419,15 +494,38 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       fields.push('content = ?');
       values.push(String(body.content));
     }
-    if (body.isPublic !== undefined && hasRole(user, 'admin')) {
+    if (
+      body.isPublic !== undefined &&
+      (hasRole(user, 'admin') || body.isPublic === false || !bool('solution_need_approved', true))
+    ) {
       fields.push('is_public = ?');
       values.push(body.isPublic ? 1 : 0);
+    }
+    if (body.reviewStatus !== undefined && hasRole(user, 'admin')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(body.reviewStatus)
+        ? body.reviewStatus
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?', 'is_public = ?');
+      values.push(reviewStatus, String(body.reviewNote ?? ''), reviewStatus === 'approved' ? 1 : 0);
+    }
+    if (
+      !hasRole(user, 'admin') &&
+      (body.title !== undefined || body.content !== undefined) &&
+      bool('solution_need_approved', true)
+    ) {
+      fields.push(`review_status = 'pending'`, `review_note = ''`, 'is_public = 0');
     }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
       await run(`UPDATE solutions SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
-    return { ok: true };
+    return {
+      ok: true,
+      pending:
+        !hasRole(user, 'admin') &&
+        (body.title !== undefined || body.content !== undefined) &&
+        bool('solution_need_approved', true),
+    };
   });
 
   app.delete('/api/solutions/:id', async (request) => {
@@ -482,8 +580,14 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (!bool('enable_article', true)) return { items: [], total: 0, page: 1, size: 0 };
     const query = request.query as any;
     const page = parsePage(query, 20);
-    const conditions = ['a.is_deleted = 0', 'a.is_public = 1'];
+    const conditions = ['a.is_deleted = 0'];
     const params: unknown[] = [];
+    if (hasRole(request.user, 'admin')) {
+      conditions.push('a.is_public = 1');
+    } else {
+      conditions.push('(a.is_public = 1 AND a.review_status = \'approved\' OR a.author_id = ?)');
+      params.push(request.user?.id ?? 0);
+    }
     if (query.category) {
       conditions.push('a.category = ?');
       params.push(String(query.category));
@@ -547,9 +651,12 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (title.length < 3) throw badRequest('标题至少 3 个字符');
     if (content.length < 20) throw badRequest('正文太短');
     checkBannedWords(`${title}\n${content}`);
+    const needReview = needsReview('article_need_review', user);
+    const requestedPublic = body.isPublic !== false;
     const info = await run(
-      `INSERT INTO articles (title, summary, content, cover, category, author_id, is_public)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO articles
+        (title, summary, content, cover, category, author_id, is_public, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '')`,
       [
         title.slice(0, 150),
         String(body.summary ?? content.replace(/[#>*`]/g, '').slice(0, 200)),
@@ -557,11 +664,24 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         String(body.cover ?? ''),
         String(body.category ?? '学习'),
         user.id,
-        body.isPublic === false ? 0 : 1,
+        requestedPublic && !needReview ? 1 : 0,
+        needReview ? 'pending' : 'approved',
       ],
     );
-    await evaluateAchievements(user.id);
-    return { ok: true, id: Number(info.lastInsertRowid) };
+    const articleId = Number(info.lastInsertRowid);
+    if (needReview) {
+      await sendMessage({
+        to: user.id,
+        title: '文章已提交审核',
+        content: `你的文章「${title}」正在等待管理员审核，通过后才会公开。`,
+        type: 'system',
+        refType: 'article',
+        refId: articleId,
+      });
+    } else {
+      await evaluateAchievements(user.id);
+    }
+    return { ok: true, id: articleId, pending: needReview };
   });
 
   app.put('/api/articles/:id', async (request) => {
@@ -585,7 +705,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
         values.push(String(body[key]));
       }
     }
-    if (body.isPublic !== undefined) {
+    if (
+      body.isPublic !== undefined &&
+      (hasRole(user, 'admin') || body.isPublic === false || !bool('article_need_review', true))
+    ) {
       fields.push('is_public = ?');
       values.push(body.isPublic ? 1 : 0);
     }
@@ -593,11 +716,31 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       fields.push('is_pinned = ?');
       values.push(body.isPinned ? 1 : 0);
     }
+    if (body.reviewStatus !== undefined && hasRole(user, 'admin')) {
+      const reviewStatus = ['approved', 'pending', 'rejected'].includes(body.reviewStatus)
+        ? body.reviewStatus
+        : 'pending';
+      fields.push('review_status = ?', 'review_note = ?', 'is_public = ?');
+      values.push(reviewStatus, String(body.reviewNote ?? ''), reviewStatus === 'approved' ? 1 : 0);
+    }
+    if (
+      !hasRole(user, 'admin') &&
+      ['title', 'summary', 'content', 'cover', 'category'].some((key) => body[key] !== undefined) &&
+      bool('article_need_review', true)
+    ) {
+      fields.push(`review_status = 'pending'`, `review_note = ''`, 'is_public = 0');
+    }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
       await run(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
-    return { ok: true };
+    return {
+      ok: true,
+      pending:
+        !hasRole(user, 'admin') &&
+        ['title', 'summary', 'content', 'cover', 'category'].some((key) => body[key] !== undefined) &&
+        bool('article_need_review', true),
+    };
   });
 
   app.delete('/api/articles/:id', async (request) => {
@@ -618,11 +761,13 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const targetId = Number(query.targetId ?? 0);
     if (!targetType || !targetId) throw badRequest('缺少评论目标');
     const rows = await all<any>(
-      `SELECT c.id, c.content, c.created_at, c.parent_id, c.is_deleted,
+      `SELECT c.id, c.content, c.created_at, c.parent_id, c.is_deleted, c.review_status, c.review_note,
               u.id AS author_id, u.username, u.display_name, u.avatar
          FROM comments c JOIN users u ON u.id = c.author_id
-        WHERE c.target_type = ? AND c.target_id = ? ORDER BY c.id ASC LIMIT 500`,
-      [targetType, targetId],
+        WHERE c.target_type = ? AND c.target_id = ?
+          AND (c.review_status = 'approved' OR c.author_id = ? OR ? = 1)
+        ORDER BY c.id ASC LIMIT 500`,
+      [targetType, targetId, request.user?.id ?? 0, hasRole(request.user, 'admin') ? 1 : 0],
     );
     return { items: rows.map((row) => ({ ...row, author: userBrief(row) })) };
   });
@@ -637,11 +782,21 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const content = String(body.content ?? '').trim();
     if (!content) throw badRequest('评论内容不能为空');
     checkBannedWords(content);
+    const needReview = needsReview('comment_need_review', user);
     const info = await run(
-      `INSERT INTO comments (target_type, target_id, author_id, content, parent_id) VALUES (?, ?, ?, ?, ?)`,
-      [targetType, targetId, user.id, content.slice(0, 2000), body.parentId ? Number(body.parentId) : null],
+      `INSERT INTO comments
+        (target_type, target_id, author_id, content, parent_id, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, '')`,
+      [
+        targetType,
+        targetId,
+        user.id,
+        content.slice(0, 2000),
+        body.parentId ? Number(body.parentId) : null,
+        needReview ? 'pending' : 'approved',
+      ],
     );
-    return { ok: true, id: Number(info.lastInsertRowid) };
+    return { ok: true, id: Number(info.lastInsertRowid), pending: needReview };
   });
 
   app.delete('/api/comments/:id', async (request) => {
@@ -661,7 +816,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const page = parsePage(query, 30);
     const conditions = ['s.is_deleted = 0'];
     const params: unknown[] = [];
-    if (query.pending === 'true') conditions.push('s.is_public = 0');
+    if (query.pending === 'true') conditions.push(`s.review_status = 'pending'`);
     if (query.q) {
       conditions.push(`s.title LIKE ? ESCAPE '\\'`);
       params.push(sqlLike(String(query.q)));

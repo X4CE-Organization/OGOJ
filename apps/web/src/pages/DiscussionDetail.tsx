@@ -49,11 +49,11 @@ export default function DiscussionDetail() {
     }
     setSending(true);
     try {
-      await api.post(`/api/discussions/${id}/replies`, { content, replyToId: replyTo });
+      const result = await api.post<{ pending?: boolean }>(`/api/discussions/${id}/replies`, { content, replyToId: replyTo });
       setContent('');
       setReplyTo(null);
       await load();
-      toast.success('回复成功');
+      toast.success(result.pending ? '回复已提交，等待管理员审核' : '回复成功');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '回复失败');
     } finally {
@@ -99,6 +99,11 @@ export default function DiscussionDetail() {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <BackButton label="返回讨论区" listKey="discussions" fallback="/discussions" />
+      {['pending', 'rejected'].includes(discussion.reviewStatus) ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          {discussion.reviewStatus === 'pending' ? '这篇帖子正在等待管理员审核，目前只有你和管理员可见。' : `帖子未通过审核${discussion.reviewNote ? `：${discussion.reviewNote}` : ''}`}
+        </div>
+      ) : null}
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-bold">

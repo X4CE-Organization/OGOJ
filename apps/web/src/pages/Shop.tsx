@@ -21,17 +21,25 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
   const [payload, setPayload] = useState<Record<string, string>>({});
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const result = await api.get<any>('/api/shop/items');
+      const [result, orders] = await Promise.all([
+        api.get<any>('/api/shop/items'),
+        user
+          ? api.get<any>('/api/shop/orders?status=pending&size=50').catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
+      ]);
       setData(result);
+      setPendingOrders(orders.items ?? []);
     } catch {
       setData({ items: [], enabled: false });
+      setPendingOrders([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
@@ -103,6 +111,22 @@ export default function Shop() {
         </Section>
       ) : null}
 
+      {user && pendingOrders.length > 0 ? (
+        <Section title="待审核的资格订单">
+          <div className="space-y-2 p-4 text-sm">
+            {pendingOrders.map((order) => (
+              <div key={order.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-3 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                <span className="font-medium">{order.item_name}</span>
+                <span className="text-xs">已提交，管理员审核通过后资格才会到账</span>
+                <Link to="/shop/orders" className="ml-auto text-xs underline">
+                  查看订单
+                </Link>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+
       {data?.items.length === 0 ? (
         <div className="card">
           <EmptyState title="商店暂未上架商品" description="管理员可以在控制面板中添加商品" />
@@ -111,6 +135,7 @@ export default function Shop() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data?.items.map((item: any) => {
             const Icon = ICONS[item.icon] ?? Package;
+            const pending = pendingOrders.some((order) => order.item_id === item.id);
             return (
               <div key={item.id} className="card flex flex-col p-4">
                 <div className="flex items-center gap-2">
@@ -129,13 +154,13 @@ export default function Shop() {
                 </div>
                 <button
                   type="button"
-                  className={classNames('mt-3 w-full', item.soldOut ? 'btn-ghost' : 'btn-primary')}
-                  disabled={item.soldOut || !data.enabled}
+                  className={classNames('mt-3 w-full', item.soldOut || pending ? 'btn-ghost' : 'btn-primary')}
+                  disabled={item.soldOut || pending || !data.enabled}
                   onClick={() =>
                     user ? setSelected(item) : (window.location.href = '/login')
                   }
                 >
-                  {item.soldOut ? '已售罄' : user ? '立即兑换' : '登录后兑换'}
+                  {item.soldOut ? '已售罄' : pending ? '已提交审核' : user ? '立即兑换' : '登录后兑换'}
                 </button>
               </div>
             );

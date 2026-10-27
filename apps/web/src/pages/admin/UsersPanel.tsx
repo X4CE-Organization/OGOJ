@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Trash2, UserCog } from 'lucide-react';
+import { Plus, Trash2, UserCog } from 'lucide-react';
 import { api, query } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { runBulk } from '../../lib/bulk';
@@ -22,6 +22,17 @@ export default function UsersPanel() {
   const [selected, setSelected] = useState<number[]>([]);
   const [bulkRole, setBulkRole] = useState('user');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    password: '',
+    displayName: '',
+    email: '',
+    role: 'user',
+    points: 0,
+    isPrivate: false,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -186,11 +197,41 @@ export default function UsersPanel() {
     await finishBulk('批量调整积分', result);
   };
 
+  const createUser = async () => {
+    setCreating(true);
+    try {
+      await api.post('/api/admin/users', createForm);
+      toast.success(`用户 ${createForm.username} 已创建`);
+      setCreateOpen(false);
+      setCreateForm({
+        username: '',
+        password: '',
+        displayName: '',
+        email: '',
+        role: 'user',
+        points: 0,
+        isPrivate: false,
+      });
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '创建用户失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">用户管理</h1>
-        <span className="text-sm text-slate-500">共 {data?.total ?? 0} 位用户</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">共 {data?.total ?? 0} 位用户</span>
+          {isSuperAdmin ? (
+            <button type="button" className="btn-primary !py-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> 新增用户
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="card flex flex-wrap items-center gap-2 p-3">
@@ -446,6 +487,85 @@ export default function UsersPanel() {
               注册于 {formatTime(editing.created_at)} · 提交 {editing.submission_count} 次
             </p>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={createOpen}
+        title="新增用户"
+        onClose={() => setCreateOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn-ghost" onClick={() => setCreateOpen(false)}>
+              取消
+            </button>
+            <button type="button" className="btn-primary" disabled={creating} onClick={() => void createUser()}>
+              {creating ? '创建中…' : '创建用户'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="用户名" required hint="登录名，区分大小写">
+              <input
+                className="input"
+                value={createForm.username}
+                onChange={(event) => setCreateForm({ ...createForm, username: event.target.value })}
+              />
+            </Field>
+            <Field label="初始密码" required>
+              <input
+                className="input"
+                type="text"
+                value={createForm.password}
+                onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })}
+              />
+            </Field>
+            <Field label="昵称">
+              <input
+                className="input"
+                value={createForm.displayName}
+                onChange={(event) => setCreateForm({ ...createForm, displayName: event.target.value })}
+                placeholder="留空则与用户名相同"
+              />
+            </Field>
+            <Field label="邮箱">
+              <input
+                className="input"
+                type="email"
+                value={createForm.email}
+                onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })}
+              />
+            </Field>
+            <Field label="角色">
+              <select
+                className="input"
+                value={createForm.role}
+                onChange={(event) => setCreateForm({ ...createForm, role: event.target.value })}
+              >
+                <option value="user">普通用户</option>
+                <option value="admin">普通管理员</option>
+                <option value="superadmin">超级管理员</option>
+              </select>
+            </Field>
+            <Field label="初始积分">
+              <input
+                className="input"
+                type="number"
+                value={createForm.points}
+                onChange={(event) => setCreateForm({ ...createForm, points: Number(event.target.value) })}
+              />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-500">
+            <input
+              type="checkbox"
+              checked={createForm.isPrivate}
+              onChange={(event) => setCreateForm({ ...createForm, isPrivate: event.target.checked })}
+            />
+            默认隐藏个人主页
+          </label>
         </div>
       </Modal>
     </div>

@@ -62,8 +62,8 @@ export default function Discussions() {
 
   const create = async () => {
     try {
-      const result = await api.post<{ id: number }>('/api/discussions', form);
-      toast.success('发布成功');
+      const result = await api.post<{ id: number; pending?: boolean }>('/api/discussions', form);
+      toast.success(result.pending ? '帖子已提交，等待管理员审核' : '发布成功');
       setCreating(false);
       setForm({ title: '', content: '', board: form.board });
       window.location.href = `/discussion/${result.id}`;

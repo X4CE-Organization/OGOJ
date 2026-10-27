@@ -21,7 +21,7 @@ interface ProblemItem {
 }
 
 export default function Problems() {
-  const { user, settings, grants } = useAuth();
+  const { user, settings, grants, refresh } = useAuth();
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<ProblemItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -44,6 +44,10 @@ export default function Problems() {
   useEffect(() => {
     api.get<{ tags: any[] }>('/api/tags').then((data) => setTags(data.tags)).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   // 记住当前这一屏的筛选条件，题目详情页的「返回题库」会回到这里
   useEffect(() => {

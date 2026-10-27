@@ -158,6 +158,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, [refresh, refreshMeta]);
 
+  // 商店审核、后台授予资格或角色可能在另一个页面完成；回到站点时自动同步。
+  useEffect(() => {
+    if (!user) return undefined;
+    const sync = () => void refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', onVisibility);
+    const timer = window.setInterval(sync, 60_000);
+    return () => {
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(timer);
+    };
+  }, [user?.id, refresh]);
+
   // Apply the theme colour + document title coming from the system settings.
   useEffect(() => {
     if (!meta) return;

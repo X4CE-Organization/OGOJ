@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { bool } from '../settings/index.js';
 import { parseId, parsePage, slugify, sqlLike, uniqueSlug } from '../lib/util.js';
 import { problemSummary, tagRows } from './helpers.js';
+import { sendMessage } from '../lib/notify.js';
 
 export async function registerListRoutes(app: FastifyInstance): Promise<void> {
   /* ----------------------------------------------------------------- 题单 */
@@ -14,11 +15,14 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const page = parsePage(query, 20);
     const conditions = ['l.is_deleted = 0'];
     const params: unknown[] = [];
+    if (!hasRole(request.user, 'admin')) {
+      conditions.push(`(l.review_status = 'approved' OR l.author_id = ?)`);
+      conditions.push(`(l.is_public = 1 OR l.author_id = ?)`);
+      params.push(request.user?.id ?? 0, request.user?.id ?? 0);
+    }
     if (query.type && ['official', 'user', 'training'].includes(query.type)) {
       conditions.push('l.type = ?');
       params.push(String(query.type));
-    } else if (!hasRole(request.user, 'admin')) {
-      conditions.push('l.is_public = 1');
     }
     if (query.mine === 'true') {
       const user = await requireUser(request);
@@ -53,6 +57,9 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const viewer = request.user;
     const canEdit = Boolean(viewer && (viewer.id === list.author_id || hasRole(viewer, 'admin')));
     if (!list.is_public && !canEdit) throw forbidden('该题单未公开');
+    if (['pending', 'rejected'].includes(list.review_status) && !canEdit) {
+      throw forbidden('该题单尚未通过审核');
+    }
     await run('UPDATE lists SET views = views + 1 WHERE id = ?', [id]);
 
     const problems = await all<any>(
@@ -99,9 +106,12 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const title = String(body.title ?? '').trim();
     if (title.length < 2) throw badRequest('题单名称至少 2 个字符');
     const type = hasRole(user, 'admin') && body.type === 'official' ? 'official' : 'user';
+    const needReview = !hasRole(user, 'admin') && bool('list_need_review', true);
+    const requestedPublic = body.isPublic !== false;
     const info = await run(
-      `INSERT INTO lists (title, description, cover, type, difficulty, author_id, is_public)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO lists
+        (title, description, cover, type, difficulty, author_id, is_public, review_status, review_note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '')`,
       [
         title.slice(0, 120),
         String(body.description ?? ''),
@@ -109,13 +119,24 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
         type,
         Math.max(0, Number(body.difficulty ?? 0) || 0),
         user.id,
-        body.isPublic === false ? 0 : 1,
+        requestedPublic && !needReview ? 1 : 0,
+        needReview ? 'pending' : 'approved',
       ],
     );
     const listId = Number(info.lastInsertRowid);
     if (Array.isArray(body.problemIds)) await setListProblems(listId, body.problemIds);
     await audit(request, 'list.create', { targetType: 'list', targetId: listId, detail: { title } });
-    return { ok: true, id: listId };
+    if (needReview) {
+      await sendMessage({
+        to: user.id,
+        title: '题单已提交审核',
+        content: `你的题单「${title}」正在等待管理员审核，通过后才会公开。`,
+        type: 'system',
+        refType: 'list',
+        refId: listId,
+      });
+    }
+    return { ok: true, id: listId, pending: needReview };
   });
 
   app.put('/api/lists/:id', async (request) => {
@@ -141,7 +162,10 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
       fields.push('difficulty = ?');
       values.push(Math.max(0, Number(body.difficulty) || 0));
     }
-    if (body.isPublic !== undefined) {
+    if (
+      body.isPublic !== undefined &&
+      (hasRole(user, 'admin') || body.isPublic === false || !bool('list_need_review', true))
+    ) {
       fields.push('is_public = ?');
       values.push(body.isPublic ? 1 : 0);
     }
@@ -149,12 +173,19 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
       fields.push('type = ?');
       values.push(String(body.type));
     }
+    const pendingReview =
+      !hasRole(user, 'admin') &&
+      ['title', 'description', 'cover'].some((key) => body[key] !== undefined) &&
+      bool('list_need_review', true);
+    if (pendingReview) {
+      fields.push(`review_status = 'pending'`, `review_note = ''`, 'is_public = 0');
+    }
     if (fields.length) {
       fields.push(`updated_at = datetime('now')`);
       await run(`UPDATE lists SET ${fields.join(', ')} WHERE id = ?`, [...values, id]);
     }
     if (Array.isArray(body.problemIds)) await setListProblems(id, body.problemIds);
-    return { ok: true };
+    return { ok: true, pending: pendingReview };
   });
 
   app.delete('/api/lists/:id', async (request) => {

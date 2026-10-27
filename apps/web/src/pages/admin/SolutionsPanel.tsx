@@ -39,10 +39,14 @@ export default function SolutionsPanel() {
     setSelected([]);
   }, [page, pendingOnly]);
 
-  const setPublic = async (solution: any, isPublic: boolean) => {
+  const reviewSolution = async (solution: any, reviewStatus: 'approved' | 'rejected') => {
+    const reviewNote =
+      reviewStatus === 'rejected'
+        ? window.prompt('驳回原因', '题解内容需要修改') ?? ''
+        : '';
     try {
-      await api.put(`/api/solutions/${solution.id}`, { isPublic });
-      toast.success(isPublic ? '题解已公开' : '题解已下架');
+      await api.put(`/api/solutions/${solution.id}`, { reviewStatus, reviewNote });
+      toast.success(reviewStatus === 'approved' ? '题解已通过审核' : '题解已驳回');
       void load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
@@ -64,17 +68,21 @@ export default function SolutionsPanel() {
     setSelected((current) => (allSelected ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]));
   };
 
-  const bulkSetPublic = async (isPublic: boolean) => {
+  const bulkReview = async (reviewStatus: 'approved' | 'rejected') => {
     if (!chosen.length) return;
+    const reviewNote =
+      reviewStatus === 'rejected'
+        ? window.prompt('批量驳回原因', '题解内容需要修改') ?? ''
+        : '';
     setBulkBusy(true);
     const result = await runBulk(
       chosen,
-      (solution) => api.put(`/api/solutions/${solution.id}`, { isPublic }),
+      (solution) => api.put(`/api/solutions/${solution.id}`, { reviewStatus, reviewNote }),
       { id: (solution) => solution.id, label: (solution) => solution.title },
     );
     setBulkBusy(false);
     setSelected([]);
-    if (result.succeeded) toast.success(`已${isPublic ? '公开' : '下架'} ${result.succeeded} 篇题解`);
+    if (result.succeeded) toast.success(`已${reviewStatus === 'approved' ? '通过' : '驳回'} ${result.succeeded} 篇题解`);
     if (result.failures.length) toast.error(`有 ${result.failures.length} 篇题解操作失败`);
     void load();
   };
@@ -105,11 +113,11 @@ export default function SolutionsPanel() {
       </div>
 
       <BulkBar count={chosen.length} onClear={() => setSelected([])} busy={bulkBusy}>
-        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSetPublic(true)}>
-          <Check className="h-3.5 w-3.5" /> 公开
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview('approved')}>
+          <Check className="h-3.5 w-3.5" /> 通过
         </button>
-        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkSetPublic(false)}>
-          <EyeOff className="h-3.5 w-3.5" /> 下架
+        <button type="button" className="btn-ghost !py-1 text-xs" disabled={bulkBusy} onClick={() => void bulkReview('rejected')}>
+          <EyeOff className="h-3.5 w-3.5" /> 驳回
         </button>
         <button type="button" className="btn-ghost !py-1 text-xs text-rose-600" disabled={bulkBusy} onClick={() => void bulkDelete()}>
           <Trash2 className="h-3.5 w-3.5" /> 删除
@@ -169,28 +177,33 @@ export default function SolutionsPanel() {
                       <span
                         className={classNames(
                           'rounded px-1.5 py-0.5 text-xs',
-                          solution.is_public
+                          solution.review_status === 'approved'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
                             : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
                         )}
                       >
-                        {solution.is_public ? '已公开' : '待审核'}
+                        {solution.review_status === 'approved'
+                          ? '已公开'
+                          : solution.review_status === 'rejected'
+                            ? '已驳回'
+                            : '待审核'}
                       </span>
                     </td>
                     <td className="text-xs text-slate-400">{fromNow(solution.created_at)}</td>
                     <td>
                       <div className="flex gap-2 text-xs">
-                        {!solution.is_public ? (
-                          <button type="button" className="text-emerald-600 hover:underline" onClick={() => setPublic(solution, true)}>
+                        {solution.review_status !== 'approved' ? (
+                          <button type="button" className="text-emerald-600 hover:underline" onClick={() => void reviewSolution(solution, 'approved')}>
                             <Check className="mr-0.5 inline h-3.5 w-3.5" />
                             通过
                           </button>
-                        ) : (
-                          <button type="button" className="text-amber-600 hover:underline" onClick={() => setPublic(solution, false)}>
+                        ) : null}
+                        {solution.review_status !== 'rejected' ? (
+                          <button type="button" className="text-amber-600 hover:underline" onClick={() => void reviewSolution(solution, 'rejected')}>
                             <EyeOff className="mr-0.5 inline h-3.5 w-3.5" />
-                            下架
+                            驳回
                           </button>
-                        )}
+                        ) : null}
                         <button type="button" className="text-rose-500 hover:underline" onClick={() => remove(solution)}>
                           <Trash2 className="mr-0.5 inline h-3.5 w-3.5" />
                           删除

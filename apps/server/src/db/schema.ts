@@ -315,6 +315,8 @@ CREATE TABLE IF NOT EXISTS discussions (
   is_pinned     INTEGER NOT NULL DEFAULT 0,
   is_locked     INTEGER NOT NULL DEFAULT 0,
   is_deleted    INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   views         INTEGER NOT NULL DEFAULT 0,
   reply_count   INTEGER NOT NULL DEFAULT 0,
   last_reply_at TEXT,
@@ -333,6 +335,8 @@ CREATE TABLE IF NOT EXISTS discussion_replies (
   floor         INTEGER NOT NULL DEFAULT 1,
   reply_to_id   INTEGER,
   is_deleted    INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_replies_discussion ON discussion_replies(discussion_id, id);
@@ -344,6 +348,8 @@ CREATE TABLE IF NOT EXISTS solutions (
   title         TEXT NOT NULL,
   content       TEXT NOT NULL,
   is_public     INTEGER NOT NULL DEFAULT 1,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   is_deleted    INTEGER NOT NULL DEFAULT 0,
   upvotes       INTEGER NOT NULL DEFAULT 0,
   downvotes     INTEGER NOT NULL DEFAULT 0,
@@ -369,6 +375,8 @@ CREATE TABLE IF NOT EXISTS articles (
   category   TEXT NOT NULL DEFAULT '学习',
   author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   is_public  INTEGER NOT NULL DEFAULT 1,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   is_pinned  INTEGER NOT NULL DEFAULT 0,
   is_deleted INTEGER NOT NULL DEFAULT 0,
   views      INTEGER NOT NULL DEFAULT 0,
@@ -385,6 +393,8 @@ CREATE TABLE IF NOT EXISTS comments (
   content     TEXT NOT NULL,
   parent_id   INTEGER,
   is_deleted  INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_comments_target ON comments(target_type, target_id, is_deleted);
@@ -401,6 +411,8 @@ CREATE TABLE IF NOT EXISTS lists (
   difficulty  INTEGER NOT NULL DEFAULT 0,
   author_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   is_public   INTEGER NOT NULL DEFAULT 1,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   is_deleted  INTEGER NOT NULL DEFAULT 0,
   views       INTEGER NOT NULL DEFAULT 0,
   favorites   INTEGER NOT NULL DEFAULT 0,
@@ -847,6 +859,8 @@ CREATE TABLE IF NOT EXISTS moments (
   images        TEXT NOT NULL DEFAULT '[]',        -- JSON 数组，最多若干张图片
   is_pinned     INTEGER NOT NULL DEFAULT 0,        -- 管理员置顶
   is_deleted    INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   like_count    INTEGER NOT NULL DEFAULT 0,
   comment_count INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -870,6 +884,8 @@ CREATE TABLE IF NOT EXISTS moment_comments (
   parent_id  INTEGER,
   content    TEXT NOT NULL,
   is_deleted INTEGER NOT NULL DEFAULT 0,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  review_note   TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_moment_comments ON moment_comments(moment_id, id);
@@ -960,7 +976,7 @@ CREATE TABLE IF NOT EXISTS scratch_likes (
 `;
 
 /** Bumped whenever a destructive/manual migration is required. */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * Small, idempotent column additions for databases created by older builds.
