@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { classNames, fromNow } from '../../lib/format';
@@ -31,13 +32,14 @@ interface Group {
 }
 
 export default function SettingsPanel() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { refreshMeta } = useAuth();
   const toast = useToast();
   const [fields, setFields] = useState<Field[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [values, setValues] = useState<Record<string, any>>({});
   const [dirty, setDirty] = useState<Record<string, any>>({});
-  const [active, setActive] = useState('site');
+  const [active, setActive] = useState(() => searchParams.get('group') || 'site');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState('');
@@ -107,6 +109,14 @@ export default function SettingsPanel() {
 
   const setValue = (field: Field, value: unknown) => {
     setDirty((currentDirty) => ({ ...currentDirty, [field.key]: value }));
+  };
+
+  const chooseGroup = (key: string) => {
+    setActive(key);
+    setFilter('');
+    const next = new URLSearchParams(searchParams);
+    next.set('group', key);
+    setSearchParams(next, { replace: true });
   };
 
   const visibleFields = useMemo(() => {
@@ -202,10 +212,7 @@ export default function SettingsPanel() {
               <button
                 key={group.key}
                 type="button"
-                onClick={() => {
-                  setActive(group.key);
-                  setFilter('');
-                }}
+                onClick={() => chooseGroup(group.key)}
                 className={classNames(
                   'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm',
                   active === group.key && !filter
