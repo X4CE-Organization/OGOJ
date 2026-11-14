@@ -101,7 +101,7 @@ export default function DiscussionDetail() {
       <BackButton label="返回讨论区" listKey="discussions" fallback="/discussions" />
       {['pending', 'rejected'].includes(discussion.reviewStatus) ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-          {discussion.reviewStatus === 'pending' ? '这篇帖子正在等待管理员审核，目前仅管理员可预览。' : `帖子未通过审核${discussion.reviewNote ? `：${discussion.reviewNote}` : ''}`}
+          {discussion.reviewStatus === 'pending' ? '这篇帖子正在等待管理员审核，目前只有你和管理员可见。' : `帖子未通过审核${discussion.reviewNote ? `：${discussion.reviewNote}` : ''}`}
         </div>
       ) : null}
       <div className="card p-5">

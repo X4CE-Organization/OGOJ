@@ -66,7 +66,7 @@ export default function Discussions() {
       toast.success(result.pending ? '帖子已提交，等待管理员审核' : '发布成功');
       setCreating(false);
       setForm({ title: '', content: '', board: form.board });
-      window.location.href = result.pending ? '/discussions' : `/discussion/${result.id}`;
+      window.location.href = `/discussion/${result.id}`;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发布失败');
     }

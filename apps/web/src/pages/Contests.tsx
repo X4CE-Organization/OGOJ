@@ -164,7 +164,7 @@ export default function Contests() {
         toast.success(result.reviewStatus === 'pending' ? '比赛已创建，等待管理员审核' : '比赛已创建');
         await refresh();
         closeContestModal();
-        navigate(result.reviewStatus === 'pending' ? '/contests?mine=true' : `/contest/${result.id}`);
+        navigate(`/contest/${result.id}`);
       } else {
         await api.put(`/api/contests/${contestModal.id}`, payload);
         toast.success('比赛已保存');

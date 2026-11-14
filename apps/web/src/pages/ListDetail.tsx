@@ -99,7 +99,7 @@ export default function ListDetail() {
       <div className="space-y-4">
         {['pending', 'rejected'].includes(list.review_status) ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-            {list.review_status === 'pending' ? '这个题单正在等待管理员审核，目前仅管理员可预览。' : `题单未通过审核${list.review_note ? `：${list.review_note}` : ''}`}
+            {list.review_status === 'pending' ? '这个题单正在等待管理员审核，目前只有你和管理员可见。' : `题单未通过审核${list.review_note ? `：${list.review_note}` : ''}`}
           </div>
         ) : null}
         <div className="card p-5">

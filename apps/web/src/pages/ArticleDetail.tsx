@@ -69,7 +69,7 @@ export default function ArticleDetail() {
       <BackButton label="返回文章广场" listKey="articles" fallback="/articles" />
       {['pending', 'rejected'].includes(article.review_status) ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-          {article.review_status === 'pending' ? '这篇文章正在等待管理员审核，目前仅管理员可预览。' : `文章未通过审核${article.review_note ? `：${article.review_note}` : ''}`}
+          {article.review_status === 'pending' ? '这篇文章正在等待管理员审核，目前只有你和管理员可见。' : `文章未通过审核${article.review_note ? `：${article.review_note}` : ''}`}
         </div>
       ) : null}
       <article className="card p-6">

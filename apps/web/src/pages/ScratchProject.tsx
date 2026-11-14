@@ -55,7 +55,7 @@ export default function ScratchProject() {
   if (!data) return null;
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
-  const canPlay = data.state === 'published' || isAdmin || (data.isMine && data.state !== 'pending');
+  const canPlay = data.state === 'published' || data.isMine || isAdmin;
   const isAdminPreview = isAdmin && data.state !== 'published';
   /** 下载文件名用作品标题，去掉文件系统不接受的字符 */
   const downloadName = `${String(data.title ?? 'scratch-project').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'scratch-project'}.sb3`;

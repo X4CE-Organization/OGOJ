@@ -154,10 +154,7 @@ export function isProblemVisibleTo(row: any, user: AuthUser | null): boolean {
   if (row.is_public && row.review_status === 'approved' && !row.deleted_at) return true;
   if (!user) return false;
   if (user.role === 'admin' || user.role === 'superadmin') return true;
-  if (row.deleted_at) return false;
-  if (row.owner_id === user.id || row.author_id === user.id) {
-    return row.review_status !== 'pending';
-  }
+  if (row.owner_id === user.id || row.author_id === user.id) return true;
   return false;
 }
 

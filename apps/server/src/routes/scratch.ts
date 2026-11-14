@@ -50,12 +50,11 @@ function summary(row: any, viewerId?: number, liked = false) {
   };
 }
 
-/** 已发布对所有人可见；待审核仅管理员可见；草稿与驳回作品由作者和管理员管理 */
+/** 作品可见性：已发布对所有人可见，其余只有本人和管理员可见 */
 function canView(row: any, viewer: any): boolean {
   if (!row || row.is_deleted) return false;
   if (row.state === 'published') return true;
   if (!viewer) return false;
-  if (row.state === 'pending') return hasRole(viewer, 'admin');
   return viewer.id === row.user_id || hasRole(viewer, 'admin');
 }
 

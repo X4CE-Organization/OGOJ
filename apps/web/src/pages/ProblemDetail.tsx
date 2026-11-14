@@ -380,7 +380,7 @@ export default function ProblemDetail() {
       });
       toast.success(result.pending ? '讨论已提交，等待管理员审核' : '讨论已发布');
       setNewPost({ open: false, title: '', content: '' });
-      if (!result.pending) navigate(`/discussion/${result.id}`);
+      navigate(`/discussion/${result.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发布失败');
     }
