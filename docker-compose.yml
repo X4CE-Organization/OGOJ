@@ -36,18 +36,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - '${PGADMIN_PORT:-5050}:80'
+    expose:
+      - '80'
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
-      PGADMIN_INTERNAL_URL: http://pgadmin:80
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
+      SCRIPT_NAME: /pgadmin
+      PGADMIN_CONFIG_AUTHENTICATION_SOURCES: "['webserver']"
+      PGADMIN_CONFIG_WEBSERVER_REMOTE_USER: "'HTTP_REMOTE_USER'"
+      PGADMIN_CONFIG_WEBSERVER_REMOTE_USER_EMAIL: "'HTTP_REMOTE_USER_EMAIL'"
+      PGADMIN_CONFIG_WEBSERVER_AUTO_CREATE_USER: 'True'
       PGADMIN_CONFIG_SERVER_MODE: 'True'
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
       PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: 'False'
     volumes:
       - ogoj-pgadmin:/var/lib/pgadmin
       - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: ogoj-gateway
+    restart: unless-stopped
+    depends_on:
+      ogoj:
+        condition: service_started
+      pgadmin:
+        condition: service_started
+    ports:
+      - '8080:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
   ogoj:
     build:
@@ -63,8 +81,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - '8080:8080'
+    expose:
+      - '8080'
     environment:
       NODE_ENV: production
       PORT: 8080
@@ -81,11 +99,8 @@ services:
       ROOT_USERNAME: root
       ROOT_PASSWORD: ogoj123456
       PGADMIN_ENABLED: 'true'
-      PGADMIN_PORT: ${PGADMIN_PORT:-5050}
       PGADMIN_EXTERNAL_URL: ${PGADMIN_EXTERNAL_URL:-}
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
-      PGADMIN_INTERNAL_URL: http://pgadmin:80
     volumes:
       - ./data:/app/data
     healthcheck:

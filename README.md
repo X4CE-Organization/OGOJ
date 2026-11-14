@@ -697,22 +697,23 @@ tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 ### pgAdmin 数据库管理
 
 `docker compose` 会同时启动 pgAdmin。超级管理员可在「控制面板 → 备份与维护 → 数据库信息」
-点击「打开 pgAdmin」。OGOJ 后端会先验证当前超级管理员身份，再自动完成 pgAdmin 登录，
-新标签页直接进入数据库管理界面，不需要手工填写 pgAdmin 账号密码。
+点击「打开 pgAdmin」。pgAdmin 通过 OGOJ 同域的 `/pgadmin/` 反向代理提供，Nginx 会先把
+当前登录身份交给 OGOJ 验证；只有超级管理员才能进入，并自动完成 pgAdmin 登录。新标签页
+直接打开数据库管理界面，不需要手工填写 pgAdmin 账号密码，也不需要额外开放端口。
 
 部署前在 `.env` 中设置：
 
 ```dotenv
-PGADMIN_PORT=5050
 PGADMIN_DEFAULT_EMAIL=admin@ogoj.dev
-PGADMIN_DEFAULT_PASSWORD=请换成强密码（只供 OGOJ 后端自动登录使用）
-# 走反向代理时可指定完整地址
+PGADMIN_DEFAULT_PASSWORD=请换成强密码（正常入口通过 OGOJ SSO，不需要手工输入）
+# 如果使用额外的 HTTPS 反向代理，可填写完整地址
 PGADMIN_EXTERNAL_URL=
 ```
 
 pgAdmin 内已预置名为 `OGOJ PostgreSQL` 的服务器，主机为 `db`、数据库和用户均为 `ogoj`。
-第一次连接时会要求输入 `POSTGRES_PASSWORD`。直接开放 `PGADMIN_PORT` 时，请确保云服务器安全组
-允许该端口；使用 HTTPS 反向代理时，把 `PGADMIN_EXTERNAL_URL` 设成对外的完整地址。
+第一次连接时会要求输入 `POSTGRES_PASSWORD`。PostgreSQL 与 pgAdmin 本身都不直接暴露公网端口，
+统一通过 OGOJ 的 `8080` 端口访问；使用额外的 HTTPS 反向代理时，把 `PGADMIN_EXTERNAL_URL`
+设成对外的完整地址。
 
 ### 从 SQLite 升级到 3.0（PostgreSQL）
 
