@@ -41,7 +41,9 @@ async function findProblem(idOrPid: string): Promise<any> {
 
 function assertProblemAccess(problem: any, user: any): void {
   const isOwner = user && (problem.owner_id === user.id || problem.author_id === user.id);
-  if (!hasRole(user, 'admin') && !isOwner) throw forbidden('只能修改自己创建的题目');
+  if (hasRole(user, 'admin')) return;
+  if (problem.review_status === 'pending') throw forbidden('待审核题目仅管理员可见');
+  if (!isOwner) throw forbidden('只能修改自己创建的题目');
 }
 
 function normalizeSubtask(raw: unknown): any[] {
@@ -998,7 +1000,10 @@ export async function registerProblemRoutes(app: FastifyInstance): Promise<void>
               (SELECT value FROM solution_votes v WHERE v.solution_id = s.id AND v.user_id = ?) AS my_vote
          FROM solutions s JOIN users u ON u.id = s.author_id
         WHERE s.problem_id = ? AND s.is_deleted = 0
-          AND ((s.is_public = 1 AND s.review_status = 'approved') OR s.author_id = ?)
+          AND (
+            (s.is_public = 1 AND s.review_status = 'approved')
+            OR (s.author_id = ? AND s.review_status = 'rejected')
+          )
         ORDER BY s.upvotes DESC, s.id DESC LIMIT ? OFFSET ?`,
       [viewer?.id ?? 0, problem.id, viewer?.id ?? 0, page.size, page.offset],
     );

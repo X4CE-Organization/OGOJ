@@ -106,8 +106,10 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const viewer = request.user;
     const isAdmin = hasRole(viewer, 'admin');
     const isOwner = Boolean(viewer && contest.owner_id === viewer.id);
-    if ((!contest.is_public || contest.review_status !== 'approved') && !isAdmin && !isOwner) {
-      throw notFound('比赛不存在或尚未公开');
+    if (!contest.is_public || contest.review_status !== 'approved') {
+      const ownerCanManage =
+        isOwner && contest.review_status === 'rejected';
+      if (!isAdmin && !ownerCanManage) throw notFound('比赛不存在或尚未公开');
     }
     const status = contestStatus(contest.start_time, contest.end_time);
     const registration = viewer
@@ -272,6 +274,9 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const user = await requireUser(request);
     const contest = await findContest(String((request.params as any).id));
     assertContestAccess(contest, user);
+    if (contest.review_status === 'pending' && !hasRole(user, 'admin')) {
+      throw forbidden('待审核比赛仅管理员可见');
+    }
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -319,6 +324,9 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const user = await requireUser(request);
     const contest = await findContest(String((request.params as any).id));
     assertContestAccess(contest, user);
+    if (contest.review_status === 'pending' && !hasRole(user, 'admin')) {
+      throw forbidden('待审核比赛仅管理员可见');
+    }
     const hard = (request.query as any)?.hard === 'true' && hasRole(user, 'superadmin');
     if (hard) {
       await run('DELETE FROM contests WHERE id = ?', [contest.id]);
@@ -337,7 +345,6 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
     const contest = await findContest(String((request.params as any).id));
     if (
       (!contest.is_public || contest.review_status !== 'approved') &&
-      contest.owner_id !== user.id &&
       !hasRole(user, 'admin')
     ) {
       throw notFound('比赛不存在或尚未公开');

@@ -11,7 +11,9 @@ import { sendMessage } from '../lib/notify.js';
 function canViewList(list: any, viewer: any): boolean {
   if (!list || list.is_deleted) return false;
   if (list.is_public && list.review_status === 'approved') return true;
-  return Boolean(viewer && (viewer.id === list.author_id || hasRole(viewer, 'admin')));
+  if (!viewer) return false;
+  if (hasRole(viewer, 'admin')) return true;
+  return viewer.id === list.author_id && list.review_status === 'rejected';
 }
 
 export async function registerListRoutes(app: FastifyInstance): Promise<void> {
@@ -22,9 +24,10 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const conditions = ['l.is_deleted = 0'];
     const params: unknown[] = [];
     if (!hasRole(request.user, 'admin')) {
-      conditions.push(`(l.review_status = 'approved' OR l.author_id = ?)`);
-      conditions.push(`(l.is_public = 1 OR l.author_id = ?)`);
-      params.push(request.user?.id ?? 0, request.user?.id ?? 0);
+      conditions.push(
+        `((l.is_public = 1 AND l.review_status = 'approved') OR (l.author_id = ? AND l.review_status = 'rejected'))`,
+      );
+      params.push(request.user?.id ?? 0);
     }
     if (query.type && ['official', 'user', 'training'].includes(query.type)) {
       conditions.push('l.type = ?');
@@ -149,6 +152,7 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const id = parseId((request.params as any).id);
     const list = await get<any>('SELECT * FROM lists WHERE id = ? AND is_deleted = 0', [id]);
     if (!list) throw notFound('题单不存在');
+    if (list.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核题单仅管理员可见');
     if (list.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -198,6 +202,7 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     const id = parseId((request.params as any).id);
     const list = await get<any>('SELECT * FROM lists WHERE id = ?', [id]);
     if (!list) throw notFound('题单不存在');
+    if (list.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核题单仅管理员可见');
     if (list.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     await run('UPDATE lists SET is_deleted = 1, is_public = 0 WHERE id = ?', [id]);
     return { ok: true };

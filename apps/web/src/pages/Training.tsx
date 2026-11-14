@@ -71,7 +71,7 @@ export default function Training() {
       toast.success(result.pending ? '题单已提交，等待管理员审核' : '题单创建成功');
       setCreating(false);
       setForm({ title: '', description: '', isPublic: true, problemIds: '' });
-      window.location.href = `/list/${result.id}`;
+      window.location.href = result.pending ? '/training' : `/list/${result.id}`;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '创建失败');
     }

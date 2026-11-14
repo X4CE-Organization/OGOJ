@@ -138,7 +138,7 @@ export default function ScratchEditor() {
       if (andPublish) {
         const published = await api.post<{ state: string }>(`/api/scratch/projects/${result.id}/publish`);
         toast.success(published.state === 'pending' ? '已保存并提交审核' : '已保存并发布到作品中心');
-        navigate(`/scratch/${result.id}`);
+        navigate(published.state === 'pending' ? '/scratch' : `/scratch/${result.id}`);
         return;
       }
       toast.success('已保存');

@@ -41,7 +41,7 @@ export default function MomentDetail() {
           {['pending', 'rejected'].includes((moment as any).reviewStatus) ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
               {(moment as any).reviewStatus === 'pending'
-                ? '这条动态正在等待管理员审核，目前只有你和管理员可见。'
+                ? '这条动态正在等待管理员审核，目前仅管理员可预览。'
                 : `动态未通过审核${(moment as any).reviewNote ? `：${(moment as any).reviewNote}` : ''}`}
             </div>
           ) : null}

@@ -138,8 +138,12 @@ export default function ProblemEditor() {
         toast.success('题目已保存');
         void loadTestcases(id);
       } else {
-        const result = await api.post<{ problem: { id: number } }>('/api/problems', payload);
-        toast.success('题目已创建');
+        const result = await api.post<{ problem: { id: number; reviewStatus: string } }>('/api/problems', payload);
+        toast.success(result.problem.reviewStatus === 'pending' ? '题目已提交，等待管理员审核' : '题目已创建');
+        if (result.problem.reviewStatus === 'pending') {
+          navigate('/problems');
+          return;
+        }
         const prefix = user?.role === 'admin' || user?.role === 'superadmin' ? '/admin/problems' : '/submit/problem';
         navigate(`${prefix}/${result.problem.id}/edit`);
       }

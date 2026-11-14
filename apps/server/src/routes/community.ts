@@ -44,7 +44,8 @@ async function assertCommentTargetVisible(targetType: string, targetId: number, 
   if (!row || row.deleted_at || row.is_deleted) throw notFound('评论目标不存在');
   const visible = row.is_public && row.review_status === 'approved';
   const ownerId = row[config.owner] ?? row.author_id;
-  if (visible || (viewer && (viewer.id === ownerId || hasRole(viewer, 'admin')))) return;
+  if (visible || hasRole(viewer, 'admin')) return;
+  if (viewer && viewer.id === ownerId && row.review_status === 'rejected') return;
   throw forbidden('该内容尚未通过审核');
 }
 
@@ -63,8 +64,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const conditions = ['d.is_deleted = 0'];
     const params: unknown[] = [];
     if (!hasRole(request.user, 'admin')) {
-      conditions.push(`(d.review_status = 'approved' OR d.author_id = ?)`);
-      params.push(request.user?.id ?? 0);
+      conditions.push(`d.review_status = 'approved'`);
     }
     if (query.board) {
       conditions.push('b.slug = ?');
@@ -143,7 +143,11 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       [id],
     );
     const viewer = request.user;
-    const canSeePending = Boolean(viewer && (viewer.id === row?.author_id || hasRole(viewer, 'admin')));
+    const canSeePending = Boolean(
+      viewer &&
+        (hasRole(viewer, 'admin') ||
+          (row?.review_status === 'rejected' && viewer.id === row.author_id)),
+    );
     if (
       !row ||
       (row.is_deleted && !hasRole(viewer, 'admin')) ||
@@ -160,9 +164,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
          FROM discussion_replies r JOIN users u ON u.id = r.author_id
          LEFT JOIN discussion_replies parent ON parent.id = r.reply_to_id
          LEFT JOIN users s ON s.id = parent.author_id
-        WHERE r.discussion_id = ? AND (r.review_status = 'approved' OR r.author_id = ? OR ? = 1)
+        WHERE r.discussion_id = ?
+          AND (r.review_status = 'approved' OR ? = 1 OR (r.review_status = 'rejected' AND r.author_id = ?))
         ORDER BY r.floor ASC LIMIT 1000`,
-      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
+      [id, hasRole(viewer, 'admin') ? 1 : 0, viewer?.id ?? 0],
     );
     return {
       discussion: {
@@ -278,6 +283,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
     if (!row) throw notFound('帖子不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核帖子仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -331,6 +337,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM discussions WHERE id = ?', [id]);
     if (!row) throw notFound('帖子不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核帖子仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己的帖子');
     await run('UPDATE discussions SET is_deleted = 1 WHERE id = ?', [id]);
     await audit(request, 'discussion.delete', { targetType: 'discussion', targetId: id });
@@ -343,8 +350,8 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const discussion = await get<any>('SELECT * FROM discussions WHERE id = ? AND is_deleted = 0', [id]);
     if (!discussion) throw notFound('帖子不存在');
     if (
-      ['pending', 'rejected'].includes(discussion.review_status) &&
-      discussion.author_id !== user.id &&
+      (discussion.review_status === 'pending' ||
+        (discussion.review_status === 'rejected' && discussion.author_id !== user.id)) &&
       !hasRole(user, 'admin')
     ) {
       throw forbidden('该帖子尚未通过审核');
@@ -417,6 +424,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM discussion_replies WHERE id = ?', [id]);
     if (!row) throw notFound('回复不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核回复仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden('只能删除自己的回复');
     await run('UPDATE discussion_replies SET is_deleted = 1, content = ? WHERE id = ?', ['[该回复已被删除]', id]);
     if (row.review_status === 'approved') {
@@ -437,8 +445,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       [request.user?.id ?? 0, id],
     );
     if (!row) throw notFound('题解不存在');
-    if (!row.is_public && row.author_id !== request.user?.id && !hasRole(request.user, 'admin')) {
-      throw forbidden('该题解尚未公开');
+    if (!row.is_public && !hasRole(request.user, 'admin')) {
+      if (row.review_status !== 'rejected' || row.author_id !== request.user?.id) {
+        throw forbidden('该题解尚未公开');
+      }
     }
     await run('UPDATE solutions SET views = views + 1 WHERE id = ?', [id]);
     return {
@@ -507,6 +517,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核题解仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -569,12 +580,14 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
-    if (
-      (!row.is_public || row.review_status !== 'approved') &&
-      row.author_id !== user.id &&
-      !hasRole(user, 'admin')
-    ) {
-      throw forbidden('该题解尚未通过审核');
+    if (!row.is_public || row.review_status !== 'approved') {
+      if (hasRole(user, 'admin')) {
+        // 管理员可以在审核前预览和测试题解
+      } else if (row.review_status === 'rejected' && row.author_id === user.id) {
+        // 被驳回后作者可查看并修改
+      } else {
+        throw forbidden('该题解尚未通过审核');
+      }
     }
     const value = Number((request.body as any)?.value) === -1 ? -1 : 1;
     const existing = await get<any>('SELECT value FROM solution_votes WHERE solution_id = ? AND user_id = ?', [
@@ -617,8 +630,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     if (hasRole(request.user, 'admin')) {
       conditions.push('a.is_public = 1');
     } else {
-      conditions.push('(a.is_public = 1 AND a.review_status = \'approved\' OR a.author_id = ?)');
-      params.push(request.user?.id ?? 0);
+      conditions.push(`a.is_public = 1 AND a.review_status = 'approved'`);
     }
     if (query.category) {
       conditions.push('a.category = ?');
@@ -661,8 +673,10 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
       [id],
     );
     if (!row || (row.is_deleted && !hasRole(request.user, 'admin'))) throw notFound('文章不存在');
-    if (!row.is_public && row.author_id !== request.user?.id && !hasRole(request.user, 'admin')) {
-      throw forbidden('无权查看该文章');
+    if (!row.is_public && !hasRole(request.user, 'admin')) {
+      const authorCanManage =
+        row.author_id === request.user?.id && row.review_status !== 'pending';
+      if (!authorCanManage) throw forbidden('无权查看该文章');
     }
     await run('UPDATE articles SET views = views + 1 WHERE id = ?', [id]);
     return {
@@ -721,6 +735,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM articles WHERE id = ?', [id]);
     if (!row) throw notFound('文章不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核文章仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
     const fields: string[] = [];
@@ -780,6 +795,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM articles WHERE id = ?', [id]);
     if (!row) throw notFound('文章不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核文章仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     await run('UPDATE articles SET is_deleted = 1 WHERE id = ?', [id]);
     await audit(request, 'article.delete', { targetType: 'article', targetId: id });
@@ -838,6 +854,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM comments WHERE id = ?', [id]);
     if (!row) throw notFound('评论不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核评论仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     await run('UPDATE comments SET is_deleted = 1 WHERE id = ?', [id]);
     return { ok: true };

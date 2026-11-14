@@ -90,7 +90,9 @@ function snippet(text: string, length = 60): string {
 function canViewMoment(row: any, viewer: any): boolean {
   if (!row || row.is_deleted) return false;
   if (row.review_status === 'approved') return true;
-  return Boolean(viewer && (viewer.id === row.author_id || hasRole(viewer, 'admin')));
+  if (!viewer) return false;
+  if (hasRole(viewer, 'admin')) return true;
+  return row.review_status === 'rejected' && viewer.id === row.author_id;
 }
 
 export async function registerMomentRoutes(app: FastifyInstance): Promise<void> {
@@ -102,9 +104,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     const viewer = request.user;
     const conditions = ['m.is_deleted = 0'];
     const params: unknown[] = [];
-    if (viewer) {
-      conditions.push(`(m.review_status = 'approved' OR m.author_id = ? OR ? = 1)`);
-      params.push(viewer.id, hasRole(viewer, 'admin') ? 1 : 0);
+    if (hasRole(viewer, 'admin')) {
+      // 管理员可查看所有状态
     } else {
       conditions.push(`m.review_status = 'approved'`);
     }
@@ -191,9 +192,9 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
               u.username, u.display_name, u.avatar, u.solved_count, u.rating
          FROM moment_comments c JOIN users u ON u.id = c.author_id
         WHERE c.moment_id = ? AND c.is_deleted = 0
-          AND (c.review_status = 'approved' OR c.author_id = ? OR ? = 1)
+          AND (c.review_status = 'approved' OR ? = 1 OR (c.review_status = 'rejected' AND c.author_id = ?))
         ORDER BY c.id ASC LIMIT 500`,
-      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
+      [id, hasRole(viewer, 'admin') ? 1 : 0, viewer?.id ?? 0],
     );
     return {
       moment: formatMoment(row, { liked, viewerId: viewer?.id, viewerRole: viewer?.role }),
@@ -278,6 +279,7 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM moments WHERE id = ?', [id]);
     if (!row || row.is_deleted) throw notFound('动态不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核动态仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     const body = (request.body ?? {}) as any;
     const content = String(body.content ?? '').trim();
@@ -303,6 +305,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT id, author_id FROM moments WHERE id = ?', [id]);
     if (!row) throw notFound('动态不存在');
+    const full = await get<any>('SELECT review_status FROM moments WHERE id = ?', [id]);
+    if (full?.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核动态仅管理员可见');
     if (row.author_id !== user.id && !hasRole(user, 'admin')) throw forbidden();
     await run('UPDATE moments SET is_deleted = 1 WHERE id = ?', [id]);
     await audit(request, 'moment.delete', { targetType: 'moment', targetId: id });
@@ -351,9 +355,9 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
               u.username, u.display_name, u.avatar, u.solved_count, u.rating
          FROM moment_comments c JOIN users u ON u.id = c.author_id
         WHERE c.moment_id = ? AND c.is_deleted = 0
-          AND (c.review_status = 'approved' OR c.author_id = ? OR ? = 1)
+          AND (c.review_status = 'approved' OR ? = 1 OR (c.review_status = 'rejected' AND c.author_id = ?))
         ORDER BY c.id ASC LIMIT 500`,
-      [id, viewer?.id ?? 0, hasRole(viewer, 'admin') ? 1 : 0],
+      [id, hasRole(viewer, 'admin') ? 1 : 0, viewer?.id ?? 0],
     );
     return {
       items: rows.map((row) => ({
@@ -440,6 +444,7 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
       [id],
     );
     if (!row) throw notFound('评论不存在');
+    if (row.review_status === 'pending' && !hasRole(user, 'admin')) throw forbidden('待审核评论仅管理员可见');
     if (row.author_id !== user.id && row.moment_author !== user.id && !hasRole(user, 'admin')) {
       throw forbidden();
     }

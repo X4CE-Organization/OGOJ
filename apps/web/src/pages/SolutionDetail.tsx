@@ -64,7 +64,7 @@ export default function SolutionDetail() {
       <BackButton label="返回题目" fallback={solution.pid ? `/problem/${solution.pid}` : '/problems'} />
       {['pending', 'rejected'].includes(solution.review_status) ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-          {solution.review_status === 'pending' ? '这篇题解正在等待管理员审核，目前只有你和管理员可见。' : `题解未通过审核${solution.review_note ? `：${solution.review_note}` : ''}`}
+          {solution.review_status === 'pending' ? '这篇题解正在等待管理员审核，目前仅管理员可预览。' : `题解未通过审核${solution.review_note ? `：${solution.review_note}` : ''}`}
         </div>
       ) : null}
       <article className="card p-6">

@@ -53,7 +53,7 @@ export default function ArticleEditor() {
       } else {
         const result = await api.post<{ id: number; pending?: boolean }>('/api/articles', form);
         toast.success(result.pending ? '文章已提交，等待管理员审核' : '发布成功');
-        navigate(`/article/${result.id}`);
+        navigate(result.pending ? '/articles' : `/article/${result.id}`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '保存失败');

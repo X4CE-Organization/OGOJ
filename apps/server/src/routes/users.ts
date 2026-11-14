@@ -303,14 +303,14 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/solutions', async (request) => {
     const row = await findUser(String((request.params as any).username));
-    const canSeePending = Boolean(
-      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
-    );
+    const canSeeAll = hasRole(request.user, 'admin');
+    const canSeeRejected = Boolean(request.user && request.user.id === row.id);
     const items = await all<any>(
       `SELECT s.id, s.title, s.upvotes, s.views, s.created_at, s.is_public, s.review_status,
               p.pid, p.title AS problem_title
          FROM solutions s JOIN problems p ON p.id = s.problem_id
-        WHERE s.author_id = ? AND s.is_deleted = 0 ${canSeePending ? '' : `AND s.review_status = 'approved'`}
+        WHERE s.author_id = ? AND s.is_deleted = 0
+          ${canSeeAll ? '' : `AND (s.review_status = 'approved'${canSeeRejected ? ` OR s.review_status = 'rejected'` : ''})`}
         ORDER BY s.id DESC LIMIT 100`,
       [row.id],
     );
@@ -319,12 +319,12 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/articles', async (request) => {
     const row = await findUser(String((request.params as any).username));
-    const canSeePending = Boolean(
-      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
-    );
+    const canSeeAll = hasRole(request.user, 'admin');
+    const canSeeRejected = Boolean(request.user && request.user.id === row.id);
     const items = await all<any>(
       `SELECT id, title, summary, views, category, created_at, review_status FROM articles
-        WHERE author_id = ? AND is_deleted = 0 ${canSeePending ? '' : `AND review_status = 'approved'`}
+        WHERE author_id = ? AND is_deleted = 0
+          ${canSeeAll ? '' : `AND (review_status = 'approved'${canSeeRejected ? ` OR review_status = 'rejected'` : ''})`}
         ORDER BY id DESC LIMIT 100`,
       [row.id],
     );
@@ -333,12 +333,12 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/users/:username/discussions', async (request) => {
     const row = await findUser(String((request.params as any).username));
-    const canSeePending = Boolean(
-      request.user && (request.user.id === row.id || hasRole(request.user, 'admin')),
-    );
+    const canSeeAll = hasRole(request.user, 'admin');
+    const canSeeRejected = Boolean(request.user && request.user.id === row.id);
     const items = await all<any>(
       `SELECT d.id, d.title, d.reply_count, d.views, d.created_at, d.review_status FROM discussions d
-        WHERE d.author_id = ? AND d.is_deleted = 0 ${canSeePending ? '' : `AND d.review_status = 'approved'`}
+        WHERE d.author_id = ? AND d.is_deleted = 0
+          ${canSeeAll ? '' : `AND (d.review_status = 'approved'${canSeeRejected ? ` OR d.review_status = 'rejected'` : ''})`}
         ORDER BY d.id DESC LIMIT 100`,
       [row.id],
     );
