@@ -39,7 +39,7 @@ services:
     ports:
       - '${PGADMIN_PORT:-5050}:80'
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
       PGADMIN_CONFIG_SERVER_MODE: 'True'
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
@@ -82,7 +82,7 @@ services:
       PGADMIN_ENABLED: 'true'
       PGADMIN_PORT: ${PGADMIN_PORT:-5050}
       PGADMIN_EXTERNAL_URL: ${PGADMIN_EXTERNAL_URL:-}
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
     volumes:
       - ./data:/app/data
     healthcheck:

@@ -693,7 +693,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         return {
           enabled: process.env.PGADMIN_ENABLED !== 'false',
           url: String(process.env.PGADMIN_EXTERNAL_URL || '').trim() || `${request.protocol}://${host}:${port}`,
-          email: String(process.env.PGADMIN_DEFAULT_EMAIL || 'admin@ogoj.local'),
+          email: String(process.env.PGADMIN_DEFAULT_EMAIL || 'admin@ogoj.dev'),
         };
       })(),
     };

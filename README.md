@@ -703,7 +703,7 @@ tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 
 ```dotenv
 PGADMIN_PORT=5050
-PGADMIN_DEFAULT_EMAIL=admin@ogoj.local
+PGADMIN_DEFAULT_EMAIL=admin@ogoj.dev
 PGADMIN_DEFAULT_PASSWORD=请换成强密码
 # 走反向代理时可指定完整地址
 PGADMIN_EXTERNAL_URL=
