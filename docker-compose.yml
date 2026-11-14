@@ -84,6 +84,8 @@ services:
       PGADMIN_PORT: ${PGADMIN_PORT:-5050}
       PGADMIN_EXTERNAL_URL: ${PGADMIN_EXTERNAL_URL:-}
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
+      PGADMIN_INTERNAL_URL: http://pgadmin:80
     volumes:
       - ./data:/app/data
     healthcheck:
