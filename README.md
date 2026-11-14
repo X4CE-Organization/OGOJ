@@ -694,6 +694,25 @@ tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 
 系统默认每天自动备份数据库到 `data/backups/`（可在系统设置中调整间隔与保留份数）。
 
+### pgAdmin 数据库管理
+
+`docker compose` 会同时启动 pgAdmin。超级管理员可在「控制面板 → 备份与维护 → 数据库信息」
+点击「打开 pgAdmin」，新标签页会访问同一主机的 `PGADMIN_PORT`（默认 `5050`）。
+
+部署前在 `.env` 中设置：
+
+```dotenv
+PGADMIN_PORT=5050
+PGADMIN_DEFAULT_EMAIL=admin@ogoj.local
+PGADMIN_DEFAULT_PASSWORD=请换成强密码
+# 走反向代理时可指定完整地址
+PGADMIN_EXTERNAL_URL=
+```
+
+pgAdmin 内已预置名为 `OGOJ PostgreSQL` 的服务器，主机为 `db`、数据库和用户均为 `ogoj`。
+第一次连接时会要求输入 `POSTGRES_PASSWORD`。直接开放 `PGADMIN_PORT` 时，请确保云服务器安全组
+允许该端口；使用 HTTPS 反向代理时，把 `PGADMIN_EXTERNAL_URL` 设成对外的完整地址。
+
 ### 从 SQLite 升级到 3.0（PostgreSQL）
 
 3.0 起数据库改为 PostgreSQL。旧的 `data/ogoj.db` 可以整体导入，不会丢数据：

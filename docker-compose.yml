@@ -29,6 +29,25 @@ services:
       timeout: 5s
       retries: 10
 
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: ogoj-pgadmin
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${PGADMIN_PORT:-5050}:80'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
+      PGADMIN_CONFIG_SERVER_MODE: 'True'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: 'False'
+    volumes:
+      - ogoj-pgadmin:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
   ogoj:
     build:
       context: .
@@ -60,6 +79,10 @@ services:
       JUDGE_ENABLED: 'true'
       ROOT_USERNAME: root
       ROOT_PASSWORD: ogoj123456
+      PGADMIN_ENABLED: 'true'
+      PGADMIN_PORT: ${PGADMIN_PORT:-5050}
+      PGADMIN_EXTERNAL_URL: ${PGADMIN_EXTERNAL_URL:-}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.local}
     volumes:
       - ./data:/app/data
     healthcheck:
@@ -71,3 +94,4 @@ services:
 volumes:
   ogoj-db:
   ogoj-redis:
+  ogoj-pgadmin:

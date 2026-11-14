@@ -687,6 +687,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       backups: listBackups(),
       redis: await redisInfo(),
       uptime: Math.round(process.uptime()),
+      pgadmin: (() => {
+        const host = String(request.headers.host ?? 'localhost').replace(/:\d+$/, '');
+        const port = String(process.env.PGADMIN_PORT || '5050');
+        return {
+          enabled: process.env.PGADMIN_ENABLED !== 'false',
+          url: String(process.env.PGADMIN_EXTERNAL_URL || '').trim() || `${request.protocol}://${host}:${port}`,
+          email: String(process.env.PGADMIN_DEFAULT_EMAIL || 'admin@ogoj.local'),
+        };
+      })(),
     };
   });
 

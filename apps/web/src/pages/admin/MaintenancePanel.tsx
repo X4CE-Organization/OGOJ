@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Database, Download, Eraser, Megaphone, Upload } from 'lucide-react';
+import { Database, Download, Eraser, ExternalLink, Megaphone, Upload } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatBytes, formatTime } from '../../lib/format';
 import { EmptyState, Field, Loading, Section } from '../../components/ui';
@@ -129,6 +129,21 @@ export default function MaintenancePanel() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="space-y-2 border-t border-slate-100 p-4 dark:border-slate-800">
+            <button
+              type="button"
+              className="btn-primary w-full"
+              disabled={!info?.pgadmin?.enabled || !info?.pgadmin?.url}
+              onClick={() => window.open(info.pgadmin.url, '_blank', 'noopener,noreferrer')}
+            >
+              <ExternalLink className="h-4 w-4" />
+              打开 pgAdmin
+            </button>
+            <p className="text-xs text-slate-400">
+              在新标签页中打开。登录账号：{info?.pgadmin?.email ?? '—'}，密码为部署时设置的
+              <code className="mx-1">PGADMIN_DEFAULT_PASSWORD</code>。
+            </p>
           </div>
         </Section>
 
