@@ -335,6 +335,13 @@ export async function registerContestRoutes(app: FastifyInstance): Promise<void>
   app.post('/api/contests/:id/register', async (request) => {
     const user = await requireUser(request);
     const contest = await findContest(String((request.params as any).id));
+    if (
+      (!contest.is_public || contest.review_status !== 'approved') &&
+      contest.owner_id !== user.id &&
+      !hasRole(user, 'admin')
+    ) {
+      throw notFound('比赛不存在或尚未公开');
+    }
     const status = contestStatus(contest.start_time, contest.end_time);
     if (status === 'ended') throw forbidden('比赛已经结束');
     if (contest.password) {

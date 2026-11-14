@@ -30,6 +30,24 @@ function needsReview(key: string, user: any): boolean {
   return !hasRole(user, 'admin') && bool(key, true);
 }
 
+async function assertCommentTargetVisible(targetType: string, targetId: number, viewer: any): Promise<void> {
+  const configs: Record<string, { table: string; owner: string }> = {
+    problem: { table: 'problems', owner: 'owner_id' },
+    article: { table: 'articles', owner: 'author_id' },
+    solution: { table: 'solutions', owner: 'author_id' },
+    contest: { table: 'contests', owner: 'owner_id' },
+    list: { table: 'lists', owner: 'author_id' },
+  };
+  const config = configs[targetType];
+  if (!config) return;
+  const row = await get<any>(`SELECT * FROM ${config.table} WHERE id = ?`, [targetId]);
+  if (!row || row.deleted_at || row.is_deleted) throw notFound('评论目标不存在');
+  const visible = row.is_public && row.review_status === 'approved';
+  const ownerId = row[config.owner] ?? row.author_id;
+  if (visible || (viewer && (viewer.id === ownerId || hasRole(viewer, 'admin')))) return;
+  throw forbidden('该内容尚未通过审核');
+}
+
 export async function registerCommunityRoutes(app: FastifyInstance): Promise<void> {
   /* ---------------------------------------------------------------- boards */
   app.get('/api/boards', async () => {
@@ -324,6 +342,13 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const discussion = await get<any>('SELECT * FROM discussions WHERE id = ? AND is_deleted = 0', [id]);
     if (!discussion) throw notFound('帖子不存在');
+    if (
+      ['pending', 'rejected'].includes(discussion.review_status) &&
+      discussion.author_id !== user.id &&
+      !hasRole(user, 'admin')
+    ) {
+      throw forbidden('该帖子尚未通过审核');
+    }
     if (discussion.is_locked && !hasRole(user, 'admin')) throw forbidden('该帖子已锁定，无法回复');
     const interval = num('post_interval_seconds', 15);
     if (!rateLimit(`reply:${user.id}`, Math.min(interval, 5))) throw tooMany('回复过于频繁');
@@ -544,6 +569,13 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const id = parseId((request.params as any).id);
     const row = await get<any>('SELECT * FROM solutions WHERE id = ?', [id]);
     if (!row) throw notFound('题解不存在');
+    if (
+      (!row.is_public || row.review_status !== 'approved') &&
+      row.author_id !== user.id &&
+      !hasRole(user, 'admin')
+    ) {
+      throw forbidden('该题解尚未通过审核');
+    }
     const value = Number((request.body as any)?.value) === -1 ? -1 : 1;
     const existing = await get<any>('SELECT value FROM solution_votes WHERE solution_id = ? AND user_id = ?', [
       id,
@@ -760,6 +792,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const targetType = String(query.targetType ?? '');
     const targetId = Number(query.targetId ?? 0);
     if (!targetType || !targetId) throw badRequest('缺少评论目标');
+    await assertCommentTargetVisible(targetType, targetId, request.user);
     const rows = await all<any>(
       `SELECT c.id, c.content, c.created_at, c.parent_id, c.is_deleted, c.review_status, c.review_note,
               u.id AS author_id, u.username, u.display_name, u.avatar
@@ -779,6 +812,7 @@ export async function registerCommunityRoutes(app: FastifyInstance): Promise<voi
     const targetType = String(body.targetType ?? '');
     const targetId = Number(body.targetId ?? 0);
     if (!targetType || !targetId) throw badRequest('缺少评论目标');
+    await assertCommentTargetVisible(targetType, targetId, user);
     const content = String(body.content ?? '').trim();
     if (!content) throw badRequest('评论内容不能为空');
     checkBannedWords(content);

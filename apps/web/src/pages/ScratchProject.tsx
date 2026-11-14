@@ -54,7 +54,9 @@ export default function ScratchProject() {
   if (loading) return <Loading />;
   if (!data) return null;
 
-  const canPlay = data.state === 'published' || data.isMine;
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const canPlay = data.state === 'published' || data.isMine || isAdmin;
+  const isAdminPreview = isAdmin && data.state !== 'published';
   /** 下载文件名用作品标题，去掉文件系统不接受的字符 */
   const downloadName = `${String(data.title ?? 'scratch-project').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'scratch-project'}.sb3`;
   const downloadUrl = `/api/scratch/projects/${data.id}/file?download=1`;
@@ -71,6 +73,11 @@ export default function ScratchProject() {
         {data.state !== 'published' ? (
           <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
             {STATE_LABEL[data.state] ?? data.state}
+          </span>
+        ) : null}
+        {isAdminPreview ? (
+          <span className="rounded bg-sky-100 px-2 py-0.5 text-[11px] text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+            管理员预览
           </span>
         ) : null}
         {data.isFeatured ? (
@@ -117,6 +124,7 @@ export default function ScratchProject() {
                   </button>
                 </div>
                 {!canPlay ? <p className="text-xs text-slate-500">作品还未公开，暂时不能试玩</p> : null}
+                {isAdminPreview ? <p className="text-xs text-sky-600 dark:text-sky-300">你正在以管理员身份预览待审核作品</p> : null}
               </div>
             </div>
           ) : (
@@ -159,7 +167,7 @@ export default function ScratchProject() {
           </div>
           {data.notes ? (
             <div className="card space-y-2 p-4">
-              <h2 className="text-sm font-semibold">作者备注（仅自己可见）</h2>
+              <h2 className="text-sm font-semibold">作者备注（作者与管理员可见）</h2>
               <p className="whitespace-pre-wrap text-xs text-slate-500">{data.notes}</p>
             </div>
           ) : null}

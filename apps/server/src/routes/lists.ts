@@ -8,6 +8,12 @@ import { parseId, parsePage, slugify, sqlLike, uniqueSlug } from '../lib/util.js
 import { problemSummary, tagRows } from './helpers.js';
 import { sendMessage } from '../lib/notify.js';
 
+function canViewList(list: any, viewer: any): boolean {
+  if (!list || list.is_deleted) return false;
+  if (list.is_public && list.review_status === 'approved') return true;
+  return Boolean(viewer && (viewer.id === list.author_id || hasRole(viewer, 'admin')));
+}
+
 export async function registerListRoutes(app: FastifyInstance): Promise<void> {
   /* ----------------------------------------------------------------- 题单 */
   app.get('/api/lists', async (request) => {
@@ -56,8 +62,7 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
     if (!list) throw notFound('题单不存在');
     const viewer = request.user;
     const canEdit = Boolean(viewer && (viewer.id === list.author_id || hasRole(viewer, 'admin')));
-    if (!list.is_public && !canEdit) throw forbidden('该题单未公开');
-    if (['pending', 'rejected'].includes(list.review_status) && !canEdit) {
+    if (!canViewList(list, viewer)) {
       throw forbidden('该题单尚未通过审核');
     }
     await run('UPDATE lists SET views = views + 1 WHERE id = ?', [id]);
@@ -201,6 +206,8 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/lists/:id/favorite', async (request) => {
     const user = await requireUser(request);
     const id = parseId((request.params as any).id);
+    const list = await get<any>('SELECT * FROM lists WHERE id = ?', [id]);
+    if (!canViewList(list, user)) throw notFound('题单不存在或尚未公开');
     const existing = await get('SELECT 1 AS x FROM list_favorites WHERE list_id = ? AND user_id = ?', [id, user.id]);
     if (existing) {
       await run('DELETE FROM list_favorites WHERE list_id = ? AND user_id = ?', [id, user.id]);
@@ -215,6 +222,8 @@ export async function registerListRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/lists/:id/progress', async (request) => {
     const user = await requireUser(request);
     const id = parseId((request.params as any).id);
+    const list = await get<any>('SELECT * FROM lists WHERE id = ?', [id]);
+    if (!canViewList(list, user)) throw notFound('题单不存在或尚未公开');
     const body = (request.body ?? {}) as any;
     const problemId = Number(body.problemId);
     const status = ['todo', 'doing', 'done'].includes(body.status) ? body.status : 'todo';

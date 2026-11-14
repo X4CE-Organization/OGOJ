@@ -87,6 +87,12 @@ function snippet(text: string, length = 60): string {
   return clean.length > length ? `${clean.slice(0, length)}…` : clean;
 }
 
+function canViewMoment(row: any, viewer: any): boolean {
+  if (!row || row.is_deleted) return false;
+  if (row.review_status === 'approved') return true;
+  return Boolean(viewer && (viewer.id === row.author_id || hasRole(viewer, 'admin')));
+}
+
 export async function registerMomentRoutes(app: FastifyInstance): Promise<void> {
   /* ------------------------------------------------------------------ 列表 */
   app.get('/api/moments', async (request) => {
@@ -170,16 +176,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
          FROM moments m JOIN users u ON u.id = m.author_id WHERE m.id = ?`,
       [id],
     );
-    if (!row) throw notFound('动态不存在');
     const viewer = request.user;
-    if (row.is_deleted && !hasRole(viewer, 'admin')) throw notFound('动态不存在');
-    if (
-      ['pending', 'rejected'].includes(row.review_status) &&
-      row.author_id !== viewer?.id &&
-      !hasRole(viewer, 'admin')
-    ) {
-      throw notFound('动态不存在');
-    }
+    if (!canViewMoment(row, viewer)) throw notFound('动态不存在');
 
     let liked = false;
     if (viewer) {
@@ -316,8 +314,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     const user = await requireUser(request);
     if (!bool('moment_allow_like', true)) throw forbidden('本站已关闭动态点赞');
     const id = parseId((request.params as any).id);
-    const row = await get<any>('SELECT id, author_id, content FROM moments WHERE id = ?', [id]);
-    if (!row || row.is_deleted) throw notFound('动态不存在');
+    const row = await get<any>('SELECT * FROM moments WHERE id = ?', [id]);
+    if (!canViewMoment(row, user)) throw notFound('动态不存在');
     const existing = await get('SELECT 1 AS x FROM moment_likes WHERE moment_id = ? AND user_id = ?', [id, user.id]);
     if (existing) {
       await run('DELETE FROM moment_likes WHERE moment_id = ? AND user_id = ?', [id, user.id]);
@@ -345,6 +343,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/moments/:id/comments', async (request) => {
     const id = parseId((request.params as any).id);
     const viewer = request.user;
+    const moment = await get<any>('SELECT * FROM moments WHERE id = ?', [id]);
+    if (!canViewMoment(moment, viewer)) throw notFound('动态不存在');
     const rows = await all<any>(
       `SELECT c.id, c.content, c.parent_id, c.created_at, c.author_id,
               c.review_status, c.review_note,
@@ -373,8 +373,8 @@ export async function registerMomentRoutes(app: FastifyInstance): Promise<void> 
     if (!momentEnabled()) throw forbidden('动态功能已关闭');
     if (!bool('moment_allow_comment', true)) throw forbidden('本站已关闭动态评论');
     const id = parseId((request.params as any).id);
-    const moment = await get<any>('SELECT id, author_id, content FROM moments WHERE id = ?', [id]);
-    if (!moment || moment.is_deleted) throw notFound('动态不存在');
+    const moment = await get<any>('SELECT * FROM moments WHERE id = ?', [id]);
+    if (!canViewMoment(moment, user)) throw notFound('动态不存在');
     const interval = num('post_interval_seconds', 15);
     if (interval > 0 && !rateLimit(`moment-comment:${user.id}`, interval)) {
       throw tooMany(`回复过于频繁，请 ${interval} 秒后再试`);
