@@ -42,6 +42,7 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
+      PGADMIN_MASTER_PASSWORD: ${PGADMIN_MASTER_PASSWORD:-ogoj-pgadmin-master-change-me}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ogoj-change-me}
       SCRIPT_NAME: /pgadmin
       PGADMIN_CONFIG_AUTHENTICATION_SOURCES: "['webserver']"
@@ -50,7 +51,8 @@ services:
       PGADMIN_CONFIG_WEBSERVER_AUTO_CREATE_USER: 'True'
       PGADMIN_CONFIG_ENABLE_SERVER_PASS_EXEC_CMD: 'True'
       PGADMIN_CONFIG_SERVER_MODE: 'True'
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'True'
+      PGADMIN_CONFIG_MASTER_PASSWORD_HOOK: "'cat /var/lib/pgadmin/masterpass'"
       PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: 'False'
     volumes:
       - ogoj-pgadmin:/var/lib/pgadmin

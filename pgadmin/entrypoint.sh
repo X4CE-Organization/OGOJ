@@ -55,6 +55,10 @@ if os.path.exists(db_path):
             "INSERT INTO user_preferences (pid, uid, value) VALUES (?, ?, ?)",
             (preference[0], user[0], "zh_Hans_CN"),
         )
+    if user:
+        connection.execute(
+            "UPDATE user SET masterpass_check = NULL WHERE id = ?", (user[0],)
+        )
     connection.commit()
     connection.close()
 PY
@@ -62,8 +66,9 @@ PY
 umask 077
 printf 'db:5432:*:ogoj:%s\n' "${POSTGRES_PASSWORD:-ogoj-change-me}" > "$config_dir/pgpass"
 printf '%s' "${POSTGRES_PASSWORD:-ogoj-change-me}" > "$config_dir/dbpass"
-chown pgadmin:root "$server_json" "$config_dir/pgpass" "$config_dir/dbpass"
-chmod 600 "$config_dir/pgpass" "$config_dir/dbpass"
+printf '%s' "${PGADMIN_MASTER_PASSWORD:-ogoj-pgadmin-master-change-me}" > "$config_dir/masterpass"
+chown pgadmin:root "$server_json" "$config_dir/pgpass" "$config_dir/dbpass" "$config_dir/masterpass"
+chmod 600 "$config_dir/pgpass" "$config_dir/dbpass" "$config_dir/masterpass"
 
 (
   sleep 15

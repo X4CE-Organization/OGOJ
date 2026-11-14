@@ -706,6 +706,7 @@ tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 ```dotenv
 PGADMIN_DEFAULT_EMAIL=admin@ogoj.dev
 PGADMIN_DEFAULT_PASSWORD=请换成强密码（正常入口通过 OGOJ SSO，不需要手工输入）
+PGADMIN_MASTER_PASSWORD=请换成另一个强密码（由 pgAdmin 启动钩子自动读取）
 # 如果使用额外的 HTTPS 反向代理，可填写完整地址
 PGADMIN_EXTERNAL_URL=
 ```
