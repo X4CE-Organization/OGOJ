@@ -33,6 +33,7 @@ services:
     image: dpage/pgadmin4:8
     container_name: ogoj-pgadmin
     restart: unless-stopped
+    entrypoint: ['/pgadmin-entrypoint.sh']
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +42,7 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@ogoj.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-ogoj-pgadmin-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ogoj-change-me}
       SCRIPT_NAME: /pgadmin
       PGADMIN_CONFIG_AUTHENTICATION_SOURCES: "['webserver']"
       PGADMIN_CONFIG_WEBSERVER_REMOTE_USER: "'HTTP_REMOTE_USER'"
@@ -51,7 +53,7 @@ services:
       PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: 'False'
     volumes:
       - ogoj-pgadmin:/var/lib/pgadmin
-      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./pgadmin/entrypoint.sh:/pgadmin-entrypoint.sh:ro
 
   gateway:
     image: nginx:1.27-alpine

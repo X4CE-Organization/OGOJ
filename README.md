@@ -710,10 +710,10 @@ PGADMIN_DEFAULT_PASSWORD=请换成强密码（正常入口通过 OGOJ SSO，不�
 PGADMIN_EXTERNAL_URL=
 ```
 
-pgAdmin 内已预置名为 `OGOJ PostgreSQL` 的服务器，主机为 `db`、数据库和用户均为 `ogoj`。
-第一次连接时会要求输入 `POSTGRES_PASSWORD`。PostgreSQL 与 pgAdmin 本身都不直接暴露公网端口，
-统一通过 OGOJ 的 `8080` 端口访问；使用额外的 HTTPS 反向代理时，把 `PGADMIN_EXTERNAL_URL`
-设成对外的完整地址。
+pgAdmin 内已预置并自动登录名为 `OGOJ PostgreSQL` 的服务器，主机为 `db`、数据库和用户均为
+`ogoj`；容器启动时会根据 `POSTGRES_PASSWORD` 生成连接密码，第一次打开即可直接管理数据库。
+PostgreSQL 与 pgAdmin 本身都不直接暴露公网端口，统一通过 OGOJ 的 `8080` 端口访问；使用额外
+的 HTTPS 反向代理时，把 `PGADMIN_EXTERNAL_URL` 设成对外的完整地址。
 
 ### 从 SQLite 升级到 3.0（PostgreSQL）
 
