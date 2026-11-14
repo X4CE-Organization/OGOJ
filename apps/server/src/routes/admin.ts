@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { all, backupDatabase, count, get, listBackups, run, tx } from '../db/index.js';
 import { hasRole, requireAdmin, requireSuperAdmin, requireUser } from '../lib/auth.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
@@ -27,6 +27,14 @@ import {
 import { normalizeUsername, usernameTaken, validateUsername } from '../lib/username.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
+  function pgadminPublicUrl(request: FastifyRequest): string {
+    const configured = String(process.env.PGADMIN_EXTERNAL_URL || '').trim();
+    if (configured) return configured.replace(/\/+$/, '');
+    const host = String(request.headers.host ?? 'localhost').replace(/:\d+$/, '');
+    const port = String(process.env.PGADMIN_PORT || '5050');
+    return `${request.protocol}://${host}:${port}`;
+  }
+
   /** Total size of the SQLite database file in bytes. */
   async function databaseSize(): Promise<number> {
     const row = await get<{ size: number }>('SELECT pg_database_size(current_database()) AS size');
@@ -688,15 +696,76 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       redis: await redisInfo(),
       uptime: Math.round(process.uptime()),
       pgadmin: (() => {
-        const host = String(request.headers.host ?? 'localhost').replace(/:\d+$/, '');
-        const port = String(process.env.PGADMIN_PORT || '5050');
         return {
           enabled: process.env.PGADMIN_ENABLED !== 'false',
-          url: String(process.env.PGADMIN_EXTERNAL_URL || '').trim() || `${request.protocol}://${host}:${port}`,
+          url: pgadminPublicUrl(request),
+          launchUrl: '/api/admin/pgadmin/login',
           email: String(process.env.PGADMIN_DEFAULT_EMAIL || 'admin@ogoj.dev'),
         };
       })(),
     };
+  });
+
+  app.get('/api/admin/pgadmin/login', async (request, reply) => {
+    await requireSuperAdmin(request);
+    const email = String(process.env.PGADMIN_DEFAULT_EMAIL || 'admin@ogoj.dev');
+    const password = String(process.env.PGADMIN_DEFAULT_PASSWORD || '');
+    if (!password) throw badRequest('pgAdmin 登录密码尚未配置');
+
+    const internal = String(process.env.PGADMIN_INTERNAL_URL || 'http://pgadmin:80').replace(/\/+$/, '');
+    const userAgent = String(request.headers['user-agent'] || 'Mozilla/5.0 OGOJ-pgAdmin-launcher');
+    let loginResponse: Response;
+    try {
+      loginResponse = await fetch(`${internal}/login`, {
+        headers: { 'User-Agent': userAgent },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      throw badRequest(`无法连接 pgAdmin：${error instanceof Error ? error.message : String(error)}`);
+    }
+    const loginHtml = await loginResponse.text();
+    const csrf = /"csrfToken"\s*:\s*"([^"]+)"/.exec(loginHtml)?.[1];
+    if (!csrf) throw badRequest('pgAdmin 登录页没有返回 CSRF Token');
+
+    const getSetCookies = (response: Response): string[] =>
+      typeof (response.headers as any).getSetCookie === 'function'
+        ? (response.headers as any).getSetCookie()
+        : (response.headers.get('set-cookie') ? [String(response.headers.get('set-cookie'))] : []);
+    const loginCookies = getSetCookies(loginResponse);
+    const cookieHeader = loginCookies.map((cookie) => cookie.split(';', 1)[0]).join('; ');
+
+    let authResponse: Response;
+    try {
+      authResponse = await fetch(`${internal}/authenticate/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': userAgent,
+          Cookie: cookieHeader,
+        },
+        body: new URLSearchParams({ email, password, csrf_token: csrf }),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (error) {
+      throw badRequest(`pgAdmin 登录失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+    const authCookies = getSetCookies(authResponse);
+    const cookies = [...new Set([...authCookies, ...loginCookies])];
+    if (![200, 302].includes(authResponse.status) || !cookies.length) {
+      const body = await authResponse.text().catch(() => '');
+      throw badRequest(`pgAdmin 自动登录失败（${authResponse.status}）${body ? `：${body.slice(0, 200)}` : ''}`);
+    }
+
+    reply.hijack();
+    reply.raw.writeHead(302, {
+      Location: `${pgadminPublicUrl(request)}/browser/`,
+      'Set-Cookie': cookies,
+      'Cache-Control': 'no-store',
+    });
+    reply.raw.end();
+    return reply;
   });
 
   app.post('/api/admin/maintenance/vacuum', async (request) => {

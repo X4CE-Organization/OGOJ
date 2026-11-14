@@ -697,14 +697,15 @@ tar czf ogoj-data-$(date +%F).tar.gz data/testdata data/uploads
 ### pgAdmin 数据库管理
 
 `docker compose` 会同时启动 pgAdmin。超级管理员可在「控制面板 → 备份与维护 → 数据库信息」
-点击「打开 pgAdmin」，新标签页会访问同一主机的 `PGADMIN_PORT`（默认 `5050`）。
+点击「打开 pgAdmin」。OGOJ 后端会先验证当前超级管理员身份，再自动完成 pgAdmin 登录，
+新标签页直接进入数据库管理界面，不需要手工填写 pgAdmin 账号密码。
 
 部署前在 `.env` 中设置：
 
 ```dotenv
 PGADMIN_PORT=5050
 PGADMIN_DEFAULT_EMAIL=admin@ogoj.dev
-PGADMIN_DEFAULT_PASSWORD=请换成强密码
+PGADMIN_DEFAULT_PASSWORD=请换成强密码（只供 OGOJ 后端自动登录使用）
 # 走反向代理时可指定完整地址
 PGADMIN_EXTERNAL_URL=
 ```

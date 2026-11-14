@@ -135,14 +135,13 @@ export default function MaintenancePanel() {
               type="button"
               className="btn-primary w-full"
               disabled={!info?.pgadmin?.enabled || !info?.pgadmin?.url}
-              onClick={() => window.open(info.pgadmin.url, '_blank', 'noopener,noreferrer')}
+              onClick={() => window.open(info.pgadmin.launchUrl, '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="h-4 w-4" />
               打开 pgAdmin
             </button>
             <p className="text-xs text-slate-400">
-              在新标签页中打开。登录账号：{info?.pgadmin?.email ?? '—'}，密码为部署时设置的
-              <code className="mx-1">PGADMIN_DEFAULT_PASSWORD</code>。
+              新标签页会自动验证当前 OGOJ 超级管理员身份并登录 pgAdmin，无需手工输入账号密码。
             </p>
           </div>
         </Section>
